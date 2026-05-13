@@ -1,0 +1,3 @@
+# Finwall
+
+Initial project structure.
