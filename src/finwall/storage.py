@@ -160,7 +160,12 @@ class SQLitePortfolioStore:
             portfolio_id = self._require_portfolio_id(connection, portfolio_name)
             return self._read_trade_transactions(connection, portfolio_id)
 
-    def record_cash_history(self, portfolio_name: str, cash_balance: CashBalance, recorded_on: date) -> None:
+    def record_cash_history(
+        self,
+        portfolio_name: str,
+        cash_balance: CashBalance,
+        recorded_on: date,
+    ) -> None:
         with self._connect() as connection:
             portfolio_id = self._require_portfolio_id(connection, portfolio_name)
             connection.execute(
@@ -168,7 +173,12 @@ class SQLitePortfolioStore:
                 INSERT INTO cash_history (portfolio_id, currency, amount, recorded_on)
                 VALUES (?, ?, ?, ?)
                 """,
-                (portfolio_id, cash_balance.currency, str(cash_balance.amount), recorded_on.isoformat()),
+                (
+                    portfolio_id,
+                    cash_balance.currency,
+                    str(cash_balance.amount),
+                    recorded_on.isoformat(),
+                ),
             )
 
     def list_cash_history(self, portfolio_name: str) -> tuple[tuple[CashBalance, date], ...]:
@@ -184,7 +194,10 @@ class SQLitePortfolioStore:
                 (portfolio_id,),
             ).fetchall()
             return tuple(
-                (CashBalance(row["currency"], Decimal(row["amount"])), date.fromisoformat(row["recorded_on"]))
+                (
+                    CashBalance(row["currency"], Decimal(row["amount"])),
+                    date.fromisoformat(row["recorded_on"]),
+                )
                 for row in rows
             )
 
@@ -195,8 +208,16 @@ class SQLitePortfolioStore:
         return connection
 
     def _upsert_portfolio(self, connection: sqlite3.Connection, portfolio: Portfolio) -> int:
-        risk_level = portfolio.risk_profile.level.value if portfolio.risk_profile is not None else None
-        risk_notes = portfolio.risk_profile.notes if portfolio.risk_profile is not None else None
+        risk_level = (
+            portfolio.risk_profile.level.value
+            if portfolio.risk_profile is not None
+            else None
+        )
+        risk_notes = (
+            portfolio.risk_profile.notes
+            if portfolio.risk_profile is not None
+            else None
+        )
         connection.execute(
             """
             INSERT INTO portfolios (name, risk_level, risk_notes)
@@ -281,8 +302,16 @@ class SQLitePortfolioStore:
             )
 
         for goal in portfolio.goals:
-            start_date = goal.timeline.start_date.isoformat() if goal.timeline is not None else None
-            target_date = goal.timeline.target_date.isoformat() if goal.timeline and goal.timeline.target_date else None
+            start_date = (
+                goal.timeline.start_date.isoformat()
+                if goal.timeline is not None
+                else None
+            )
+            target_date = (
+                goal.timeline.target_date.isoformat()
+                if goal.timeline and goal.timeline.target_date
+                else None
+            )
             connection.execute(
                 """
                 INSERT INTO investment_goals (
@@ -505,8 +534,15 @@ class SQLitePortfolioStore:
         self._validate_items(portfolio.active_orders, ActiveOrder, "active_orders")
         self._validate_items(portfolio.watchlist, WatchlistItem, "watchlist")
         self._validate_items(portfolio.goals, InvestmentGoal, "goals")
-        self._validate_items(portfolio.recommendations, RecommendationRecord, "recommendations")
-        if portfolio.risk_profile is not None and not isinstance(portfolio.risk_profile, RiskProfile):
+        self._validate_items(
+            portfolio.recommendations,
+            RecommendationRecord,
+            "recommendations",
+        )
+        if (
+            portfolio.risk_profile is not None
+            and not isinstance(portfolio.risk_profile, RiskProfile)
+        ):
             raise ValueError("risk_profile must be a RiskProfile instance")
 
     def _validate_items(self, items: Iterable[Any], item_type: type, field_name: str) -> None:
