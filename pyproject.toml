@@ -1,0 +1,28 @@
+[tool.poetry]
+name = "finwall"
+version = "0.1.0"
+description = "Portfolio decision-support application"
+authors = ["Pooria Taghdiri"]
+readme = "README.md"
+packages = [{ include = "finwall", from = "src" }]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.4.0"
+ruff = "^0.11.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
