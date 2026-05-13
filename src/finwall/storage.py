@@ -218,7 +218,6 @@ class SQLitePortfolioStore:
         for table in (
             "cash_balances",
             "holdings",
-            "trade_transactions",
             "active_orders",
             "watchlist_items",
             "investment_goals",
