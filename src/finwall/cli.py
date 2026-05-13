@@ -67,7 +67,9 @@ def record_buy(
 ) -> Portfolio:
     cost = share_count * price
     portfolio = upsert_cash(portfolio, currency, -cost)
-    existing = next((item for item in portfolio.holdings if item.ticker == ticker), None)
+    existing = next(
+        (item for item in portfolio.holdings if item.ticker == ticker), None
+    )
     if existing is None:
         portfolio = add_holding(portfolio, ticker, share_count, price)
     else:
@@ -92,7 +94,9 @@ def record_sell(
     currency: str,
     traded_on: date,
 ) -> Portfolio:
-    existing = next((item for item in portfolio.holdings if item.ticker == ticker), None)
+    existing = next(
+        (item for item in portfolio.holdings if item.ticker == ticker), None
+    )
     if existing is None or existing.share_count < share_count:
         raise ValueError("cannot sell more shares than available")
     portfolio = upsert_cash(portfolio, currency, share_count * price)
@@ -106,7 +110,9 @@ def record_sell(
             existing.sector,
         )
         holdings = holdings + (holding,)
-    transaction = TradeTransaction(ticker, TradeSide.SELL, share_count, price, traded_on)
+    transaction = TradeTransaction(
+        ticker, TradeSide.SELL, share_count, price, traded_on
+    )
     return replace(
         portfolio,
         holdings=holdings,
@@ -115,7 +121,9 @@ def record_sell(
 
 
 def add_or_update_order(portfolio: Portfolio, order: ActiveOrder) -> Portfolio:
-    orders = tuple(item for item in portfolio.active_orders if item.ticker != order.ticker)
+    orders = tuple(
+        item for item in portfolio.active_orders if item.ticker != order.ticker
+    )
     return replace(portfolio, active_orders=orders + (order,))
 
 
@@ -124,7 +132,9 @@ def remove_order(portfolio: Portfolio, ticker: str) -> Portfolio:
     return replace(portfolio, active_orders=orders)
 
 
-def add_watchlist_item(portfolio: Portfolio, ticker: str, note: str | None) -> Portfolio:
+def add_watchlist_item(
+    portfolio: Portfolio, ticker: str, note: str | None
+) -> Portfolio:
     items = tuple(item for item in portfolio.watchlist if item.ticker != ticker)
     return replace(portfolio, watchlist=items + (WatchlistItem(ticker, note),))
 
