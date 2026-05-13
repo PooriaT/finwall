@@ -28,7 +28,7 @@ jobs:
         run: poetry run ruff check .
 
       - name: Run formatting check
-        run: poetry run ruff format --check .
+        run: poetry run ruff format --check --line-length 88 .
 
       - name: Run tests
         run: poetry run pytest
