@@ -131,6 +131,35 @@ def test_trade_history_is_stored_separately(store) -> None:
     assert transactions == (transaction,)
 
 
+def test_trade_history_survives_portfolio_state_updates(store) -> None:
+    store.save_portfolio(Portfolio(name="Primary"))
+
+    transaction = TradeTransaction(
+        ticker="AMD",
+        side=TradeSide.BUY,
+        share_count=Decimal("5"),
+        price=Decimal("120"),
+        traded_on=date(2026, 4, 1),
+    )
+
+    store.add_trade_transaction("Primary", transaction)
+
+    updated = Portfolio(
+        name="Primary",
+        holdings=(
+            Holding(
+                ticker="AMD",
+                share_count=Decimal("5"),
+                average_purchase_price=Decimal("120"),
+            ),
+        ),
+    )
+
+    store.save_portfolio(updated)
+
+    assert store.list_trade_transactions("Primary") == (transaction,)
+
+
 def test_cash_history_is_stored_separately(store) -> None:
     portfolio = Portfolio(name="Primary")
     cash_balance = CashBalance(currency="USD", amount=Decimal("1200"))
