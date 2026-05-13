@@ -95,6 +95,12 @@ class ActiveOrder:
         _require_non_empty(self.ticker, "ticker")
         _require_positive(self.share_count, "share_count")
 
+        try:
+            order_type = OrderType(self.order_type)
+        except ValueError as exc:
+            raise ValueError(f"unsupported order_type: {self.order_type}") from exc
+        object.__setattr__(self, "order_type", order_type)
+
         if self.limit_price is not None:
             _require_positive(self.limit_price, "limit_price")
         if self.stop_price is not None:
@@ -166,14 +172,21 @@ class RecommendationRecord:
 @dataclass(frozen=True)
 class Portfolio:
     name: str
-    cash_balances: list[CashBalance] = field(default_factory=list)
-    holdings: list[Holding] = field(default_factory=list)
-    transactions: list[TradeTransaction] = field(default_factory=list)
-    active_orders: list[ActiveOrder] = field(default_factory=list)
-    watchlist: list[WatchlistItem] = field(default_factory=list)
-    goals: list[InvestmentGoal] = field(default_factory=list)
+    cash_balances: tuple[CashBalance, ...] = field(default_factory=tuple)
+    holdings: tuple[Holding, ...] = field(default_factory=tuple)
+    transactions: tuple[TradeTransaction, ...] = field(default_factory=tuple)
+    active_orders: tuple[ActiveOrder, ...] = field(default_factory=tuple)
+    watchlist: tuple[WatchlistItem, ...] = field(default_factory=tuple)
+    goals: tuple[InvestmentGoal, ...] = field(default_factory=tuple)
     risk_profile: RiskProfile | None = None
-    recommendations: list[RecommendationRecord] = field(default_factory=list)
+    recommendations: tuple[RecommendationRecord, ...] = field(default_factory=tuple)
 
     def __post_init__(self) -> None:
         _require_non_empty(self.name, "name")
+        object.__setattr__(self, "cash_balances", tuple(self.cash_balances))
+        object.__setattr__(self, "holdings", tuple(self.holdings))
+        object.__setattr__(self, "transactions", tuple(self.transactions))
+        object.__setattr__(self, "active_orders", tuple(self.active_orders))
+        object.__setattr__(self, "watchlist", tuple(self.watchlist))
+        object.__setattr__(self, "goals", tuple(self.goals))
+        object.__setattr__(self, "recommendations", tuple(self.recommendations))
