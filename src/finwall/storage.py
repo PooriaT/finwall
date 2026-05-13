@@ -150,17 +150,26 @@ class SQLitePortfolioStore:
         with self._connect() as connection:
             connection.execute("DELETE FROM portfolios WHERE name = ?", (name,))
 
-    def add_trade_transaction(self, portfolio_name: str, transaction: TradeTransaction) -> None:
+    def add_trade_transaction(
+        self, portfolio_name: str, transaction: TradeTransaction
+    ) -> None:
         with self._connect() as connection:
             portfolio_id = self._require_portfolio_id(connection, portfolio_name)
             self._insert_trade_transaction(connection, portfolio_id, transaction)
 
-    def list_trade_transactions(self, portfolio_name: str) -> tuple[TradeTransaction, ...]:
+    def list_trade_transactions(
+        self, portfolio_name: str
+    ) -> tuple[TradeTransaction, ...]:
         with self._connect() as connection:
             portfolio_id = self._require_portfolio_id(connection, portfolio_name)
             return self._read_trade_transactions(connection, portfolio_id)
 
-    def record_cash_history(self, portfolio_name: str, cash_balance: CashBalance, recorded_on: date) -> None:
+    def record_cash_history(
+        self,
+        portfolio_name: str,
+        cash_balance: CashBalance,
+        recorded_on: date,
+    ) -> None:
         with self._connect() as connection:
             portfolio_id = self._require_portfolio_id(connection, portfolio_name)
             connection.execute(
@@ -168,10 +177,17 @@ class SQLitePortfolioStore:
                 INSERT INTO cash_history (portfolio_id, currency, amount, recorded_on)
                 VALUES (?, ?, ?, ?)
                 """,
-                (portfolio_id, cash_balance.currency, str(cash_balance.amount), recorded_on.isoformat()),
+                (
+                    portfolio_id,
+                    cash_balance.currency,
+                    str(cash_balance.amount),
+                    recorded_on.isoformat(),
+                ),
             )
 
-    def list_cash_history(self, portfolio_name: str) -> tuple[tuple[CashBalance, date], ...]:
+    def list_cash_history(
+        self, portfolio_name: str
+    ) -> tuple[tuple[CashBalance, date], ...]:
         with self._connect() as connection:
             portfolio_id = self._require_portfolio_id(connection, portfolio_name)
             rows = connection.execute(
@@ -184,7 +200,10 @@ class SQLitePortfolioStore:
                 (portfolio_id,),
             ).fetchall()
             return tuple(
-                (CashBalance(row["currency"], Decimal(row["amount"])), date.fromisoformat(row["recorded_on"]))
+                (
+                    CashBalance(row["currency"], Decimal(row["amount"])),
+                    date.fromisoformat(row["recorded_on"]),
+                )
                 for row in rows
             )
 
@@ -194,9 +213,17 @@ class SQLitePortfolioStore:
         connection.execute("PRAGMA foreign_keys = ON")
         return connection
 
-    def _upsert_portfolio(self, connection: sqlite3.Connection, portfolio: Portfolio) -> int:
-        risk_level = portfolio.risk_profile.level.value if portfolio.risk_profile is not None else None
-        risk_notes = portfolio.risk_profile.notes if portfolio.risk_profile is not None else None
+    def _upsert_portfolio(
+        self, connection: sqlite3.Connection, portfolio: Portfolio
+    ) -> int:
+        risk_level = (
+            portfolio.risk_profile.level.value
+            if portfolio.risk_profile is not None
+            else None
+        )
+        risk_notes = (
+            portfolio.risk_profile.notes if portfolio.risk_profile is not None else None
+        )
         connection.execute(
             """
             INSERT INTO portfolios (name, risk_level, risk_notes)
@@ -223,7 +250,9 @@ class SQLitePortfolioStore:
             "investment_goals",
             "recommendation_records",
         ):
-            connection.execute(f"DELETE FROM {table} WHERE portfolio_id = ?", (portfolio_id,))
+            connection.execute(
+                f"DELETE FROM {table} WHERE portfolio_id = ?", (portfolio_id,)
+            )
 
         for cash_balance in portfolio.cash_balances:
             connection.execute(
@@ -281,8 +310,16 @@ class SQLitePortfolioStore:
             )
 
         for goal in portfolio.goals:
-            start_date = goal.timeline.start_date.isoformat() if goal.timeline is not None else None
-            target_date = goal.timeline.target_date.isoformat() if goal.timeline and goal.timeline.target_date else None
+            start_date = (
+                goal.timeline.start_date.isoformat()
+                if goal.timeline is not None
+                else None
+            )
+            target_date = (
+                goal.timeline.target_date.isoformat()
+                if goal.timeline and goal.timeline.target_date
+                else None
+            )
             connection.execute(
                 """
                 INSERT INTO investment_goals (
@@ -336,7 +373,9 @@ class SQLitePortfolioStore:
         )
 
     def _require_portfolio_id(self, connection: sqlite3.Connection, name: str) -> int:
-        row = connection.execute("SELECT id FROM portfolios WHERE name = ?", (name,)).fetchone()
+        row = connection.execute(
+            "SELECT id FROM portfolios WHERE name = ?", (name,)
+        ).fetchone()
         if row is None:
             raise ValueError(f"portfolio does not exist: {name}")
         return int(row["id"])
@@ -355,7 +394,9 @@ class SQLitePortfolioStore:
             "SELECT currency, amount FROM cash_balances WHERE portfolio_id = ? ORDER BY currency",
             (portfolio_id,),
         ).fetchall()
-        return tuple(CashBalance(row["currency"], Decimal(row["amount"])) for row in rows)
+        return tuple(
+            CashBalance(row["currency"], Decimal(row["amount"])) for row in rows
+        )
 
     def _read_holdings(
         self,
@@ -442,7 +483,9 @@ class SQLitePortfolioStore:
             "SELECT ticker, note FROM watchlist_items WHERE portfolio_id = ? ORDER BY ticker",
             (portfolio_id,),
         ).fetchall()
-        return tuple(WatchlistItem(ticker=row["ticker"], note=row["note"]) for row in rows)
+        return tuple(
+            WatchlistItem(ticker=row["ticker"], note=row["note"]) for row in rows
+        )
 
     def _read_goals(
         self,
@@ -493,8 +536,12 @@ class SQLitePortfolioStore:
     def _read_timeline(self, row: sqlite3.Row) -> Timeline | None:
         if row["start_date"] is None:
             return None
-        target_date = date.fromisoformat(row["target_date"]) if row["target_date"] else None
-        return Timeline(start_date=date.fromisoformat(row["start_date"]), target_date=target_date)
+        target_date = (
+            date.fromisoformat(row["target_date"]) if row["target_date"] else None
+        )
+        return Timeline(
+            start_date=date.fromisoformat(row["start_date"]), target_date=target_date
+        )
 
     def _validate_portfolio(self, portfolio: Portfolio) -> None:
         if not isinstance(portfolio, Portfolio):
@@ -505,11 +552,19 @@ class SQLitePortfolioStore:
         self._validate_items(portfolio.active_orders, ActiveOrder, "active_orders")
         self._validate_items(portfolio.watchlist, WatchlistItem, "watchlist")
         self._validate_items(portfolio.goals, InvestmentGoal, "goals")
-        self._validate_items(portfolio.recommendations, RecommendationRecord, "recommendations")
-        if portfolio.risk_profile is not None and not isinstance(portfolio.risk_profile, RiskProfile):
+        self._validate_items(
+            portfolio.recommendations,
+            RecommendationRecord,
+            "recommendations",
+        )
+        if portfolio.risk_profile is not None and not isinstance(
+            portfolio.risk_profile, RiskProfile
+        ):
             raise ValueError("risk_profile must be a RiskProfile instance")
 
-    def _validate_items(self, items: Iterable[Any], item_type: type, field_name: str) -> None:
+    def _validate_items(
+        self, items: Iterable[Any], item_type: type, field_name: str
+    ) -> None:
         if not all(isinstance(item, item_type) for item in items):
             raise ValueError(f"{field_name} contains invalid items")
 

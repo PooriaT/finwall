@@ -4,6 +4,7 @@ from decimal import Decimal
 import pytest
 
 from finwall.models import (
+    ActiveOrder,
     CashBalance,
     Holding,
     InvestmentGoal,
@@ -16,7 +17,6 @@ from finwall.models import (
     TradeSide,
     TradeTransaction,
     WatchlistItem,
-    ActiveOrder,
 )
 from finwall.storage import SQLitePortfolioStore
 
