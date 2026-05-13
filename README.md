@@ -2,7 +2,7 @@
 
 Finwall is a local-first portfolio decision-support application.
 
-The project focuses on correctness, testability, and safe local persistence before adding external integrations. It currently provides typed portfolio domain models and SQLite-backed local storage for portfolio state and history.
+The project focuses on correctness, testability, and safe local persistence before adding external integrations. It currently provides typed portfolio domain models, SQLite-backed local storage, and a CLI for maintaining portfolio state.
 
 ## Safety disclaimer
 
@@ -16,6 +16,7 @@ Included:
 - Validation for holdings, active orders, timelines, and risk profiles
 - SQLite local storage for portfolio state
 - Separate storage for trade history and cash history
+- CLI portfolio update commands
 - Poetry-based dependency management
 - Pytest test coverage
 - Ruff linting and formatting configuration
@@ -41,10 +42,12 @@ finwall/
 ├── src/
 │   └── finwall/
 │       ├── __init__.py
+│       ├── cli.py
 │       ├── config.py
 │       ├── models.py
 │       └── storage.py
 ├── tests/
+│   ├── test_cli.py
 │   ├── test_config.py
 │   ├── test_models.py
 │   └── test_storage.py
@@ -75,9 +78,39 @@ Copy the example environment file if you want local overrides:
 cp .env.example .env
 ```
 
-## Usage example
+## CLI usage
 
-The current project is a Python library. There is no CLI or web interface yet.
+Initialize and update a local portfolio database:
+
+```bash
+poetry run finwall --database finwall.db add-cash USD 1000
+```
+
+Record a buy transaction:
+
+```bash
+poetry run finwall --database finwall.db record-buy NVDA 2 100 --currency USD
+```
+
+Record a sell transaction:
+
+```bash
+poetry run finwall --database finwall.db record-sell NVDA 1 120 --currency USD
+```
+
+Add or update an active order:
+
+```bash
+poetry run finwall --database finwall.db add-order PLTR buy limit 2 --limit-price 120
+```
+
+Set a portfolio risk profile:
+
+```bash
+poetry run finwall --database finwall.db set-risk moderate --notes "Long-term growth"
+```
+
+## Python usage example
 
 ```python
 from decimal import Decimal
@@ -122,7 +155,7 @@ poetry run ruff check .
 Run formatting check:
 
 ```bash
-poetry run ruff format --check .
+poetry run ruff format --check --line-length 88 .
 ```
 
 Format code locally:
