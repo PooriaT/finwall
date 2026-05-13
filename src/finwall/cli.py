@@ -188,10 +188,22 @@ def parse_optional_date(value: str | None) -> date | None:
     return date.fromisoformat(value) if value is not None else None
 
 
+def save_portfolio_update(
+    store: SQLitePortfolioStore,
+    portfolio_name: str,
+    portfolio: Portfolio,
+    existing_transactions: tuple[TradeTransaction, ...],
+) -> None:
+    new_transactions = portfolio.transactions[len(existing_transactions) :]
+    store.save_portfolio(replace(portfolio, transactions=()))
+    for transaction in new_transactions:
+        store.add_trade_transaction(portfolio_name, transaction)
+
+
 def save_updated(args: argparse.Namespace, portfolio: Portfolio) -> None:
     store = SQLitePortfolioStore(args.database)
     store.initialize()
-    store.save_portfolio(portfolio)
+    store.save_portfolio(replace(portfolio, transactions=()))
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -273,6 +285,7 @@ def run(argv: list[str] | None = None) -> int:
     store = SQLitePortfolioStore(args.database)
     store.initialize()
     portfolio = load_portfolio(store, args.portfolio)
+    existing_transactions = portfolio.transactions
 
     if args.command == "add-cash":
         portfolio = upsert_cash(portfolio, args.currency, args.amount)
@@ -333,7 +346,7 @@ def run(argv: list[str] | None = None) -> int:
     else:
         parser.error(f"unsupported command: {args.command}")
 
-    store.save_portfolio(portfolio)
+    save_portfolio_update(store, args.portfolio, portfolio, existing_transactions)
     return 0
 
 
