@@ -1,6 +1,6 @@
+import json
 from dataclasses import asdict, dataclass
 from decimal import Decimal
-import json
 
 from finwall.models import ActiveOrder, Holding, Portfolio
 
