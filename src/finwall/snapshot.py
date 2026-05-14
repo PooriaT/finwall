@@ -97,7 +97,9 @@ def build_cash_by_currency(portfolio: Portfolio) -> dict[str, Decimal]:
     cash_by_currency: dict[str, Decimal] = {}
     for balance in portfolio.cash_balances:
         currency = balance.currency.upper()
-        cash_by_currency[currency] = cash_by_currency.get(currency, ZERO) + balance.amount
+        cash_by_currency[currency] = (
+            cash_by_currency.get(currency, ZERO) + balance.amount
+        )
     return cash_by_currency
 
 
