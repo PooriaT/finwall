@@ -15,9 +15,7 @@ def test_generate_snapshot_with_prices() -> None:
     portfolio = Portfolio(
         name="Primary",
         cash_balances=(CashBalance("USD", Decimal("500")),),
-        holdings=(
-            Holding("NVDA", Decimal("2"), Decimal("100")),
-        ),
+        holdings=(Holding("NVDA", Decimal("2"), Decimal("100")),),
         active_orders=(
             ActiveOrder(
                 "NVDA",
@@ -53,9 +51,7 @@ def test_generate_snapshot_with_prices() -> None:
 def test_generate_snapshot_without_prices() -> None:
     portfolio = Portfolio(
         name="Primary",
-        holdings=(
-            Holding("PLTR", Decimal("1"), Decimal("100")),
-        ),
+        holdings=(Holding("PLTR", Decimal("1"), Decimal("100")),),
     )
 
     snapshot = generate_snapshot(portfolio)
@@ -100,9 +96,7 @@ def test_multi_currency_cash_does_not_sum_raw_amounts() -> None:
 def test_price_matching_is_case_insensitive() -> None:
     portfolio = Portfolio(
         name="Primary",
-        holdings=(
-            Holding("nvda", Decimal("1"), Decimal("100")),
-        ),
+        holdings=(Holding("nvda", Decimal("1"), Decimal("100")),),
     )
 
     snapshot = generate_snapshot(
