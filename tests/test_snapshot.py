@@ -34,7 +34,8 @@ def test_generate_snapshot_with_prices() -> None:
         latest_prices={"NVDA": Decimal("120")},
     )
 
-    assert snapshot.cash_balance == "500.00"
+    assert snapshot.cash_balance == "USD 500.00"
+    assert snapshot.cash_balances == {"USD": "500.00"}
     assert snapshot.invested_value == "240.00"
     assert snapshot.total_portfolio_value == "740.00"
     assert snapshot.cash_allocation_percent == "67.57"
@@ -75,5 +76,42 @@ def test_snapshot_json_export() -> None:
     snapshot = generate_snapshot(portfolio)
     payload = snapshot.to_json()
 
-    assert '"cash_balance": "100.00"' in payload
+    assert '"cash_balance": "USD 100.00"' in payload
     assert '"total_portfolio_value": "100.00"' in payload
+
+
+
+def test_multi_currency_cash_does_not_sum_raw_amounts() -> None:
+    portfolio = Portfolio(
+        name="Primary",
+        cash_balances=(
+            CashBalance("USD", Decimal("100")),
+            CashBalance("EUR", Decimal("100")),
+        ),
+    )
+
+    snapshot = generate_snapshot(portfolio)
+
+    assert snapshot.cash_balance == "EUR 100.00, USD 100.00"
+    assert snapshot.total_portfolio_value is None
+    assert snapshot.cash_allocation_percent is None
+    assert snapshot.invested_allocation_percent is None
+
+
+
+def test_price_matching_is_case_insensitive() -> None:
+    portfolio = Portfolio(
+        name="Primary",
+        holdings=(
+            Holding("nvda", Decimal("1"), Decimal("100")),
+        ),
+    )
+
+    snapshot = generate_snapshot(
+        portfolio,
+        latest_prices={"NVDA": Decimal("120")},
+    )
+
+    holding = snapshot.holdings[0]
+    assert holding.current_price == "120.00"
+    assert holding.price_available is True
