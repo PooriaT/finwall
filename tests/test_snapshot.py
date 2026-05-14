@@ -80,7 +80,6 @@ def test_snapshot_json_export() -> None:
     assert '"total_portfolio_value": "100.00"' in payload
 
 
-
 def test_multi_currency_cash_does_not_sum_raw_amounts() -> None:
     portfolio = Portfolio(
         name="Primary",
@@ -96,7 +95,6 @@ def test_multi_currency_cash_does_not_sum_raw_amounts() -> None:
     assert snapshot.total_portfolio_value is None
     assert snapshot.cash_allocation_percent is None
     assert snapshot.invested_allocation_percent is None
-
 
 
 def test_price_matching_is_case_insensitive() -> None:
