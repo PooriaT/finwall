@@ -59,9 +59,15 @@ def generate_snapshot(
     cash_total = single_currency_cash_total(cash_by_currency)
     total_value = cash_total + invested_total if cash_total is not None else None
 
-    cash_percent = calculate_percentage(cash_total, total_value) if cash_total is not None else None
+    cash_percent = (
+        calculate_percentage(cash_total, total_value)
+        if cash_total is not None
+        else None
+    )
     invested_percent = (
-        calculate_percentage(invested_total, total_value) if total_value is not None else None
+        calculate_percentage(invested_total, total_value)
+        if total_value is not None
+        else None
     )
 
     active_orders = tuple(format_order(order) for order in portfolio.active_orders)
@@ -69,11 +75,16 @@ def generate_snapshot(
     return PortfolioSnapshot(
         cash_balance=format_cash_balance(cash_by_currency),
         cash_balances={
-            currency: format_decimal(amount) for currency, amount in cash_by_currency.items()
+            currency: format_decimal(amount)
+            for currency, amount in cash_by_currency.items()
         },
         invested_value=format_decimal(invested_total),
-        total_portfolio_value=format_decimal(total_value) if total_value is not None else None,
-        cash_allocation_percent=format_decimal(cash_percent) if cash_percent is not None else None,
+        total_portfolio_value=format_decimal(total_value)
+        if total_value is not None
+        else None,
+        cash_allocation_percent=format_decimal(cash_percent)
+        if cash_percent is not None
+        else None,
         invested_allocation_percent=format_decimal(invested_percent)
         if invested_percent is not None
         else None,
@@ -125,7 +136,9 @@ def build_holding_snapshot(
         )
 
     estimated_value = holding.share_count * current_price
-    unrealized_gain_loss = (current_price - holding.average_purchase_price) * holding.share_count
+    unrealized_gain_loss = (
+        current_price - holding.average_purchase_price
+    ) * holding.share_count
 
     return HoldingSnapshot(
         ticker=holding.ticker,
