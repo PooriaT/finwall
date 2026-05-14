@@ -2,7 +2,7 @@
 
 Finwall is a local-first portfolio decision-support application.
 
-The project focuses on correctness, testability, and safe local persistence before adding external integrations. It currently provides typed portfolio domain models, SQLite-backed local storage, and a CLI for maintaining portfolio state.
+The project focuses on correctness, testability, and safe local persistence before adding external integrations. It currently provides typed portfolio domain models, SQLite-backed local storage, a CLI for maintaining portfolio state, and local portfolio snapshot generation.
 
 ## Safety disclaimer
 
@@ -17,6 +17,8 @@ Included:
 - SQLite local storage for portfolio state
 - Separate storage for trade history and cash history
 - CLI portfolio update commands
+- Local portfolio snapshot generation
+- JSON snapshot export
 - Poetry-based dependency management
 - Pytest test coverage
 - Ruff linting and formatting configuration
@@ -45,11 +47,13 @@ finwall/
 │       ├── cli.py
 │       ├── config.py
 │       ├── models.py
+│       ├── snapshot.py
 │       └── storage.py
 ├── tests/
 │   ├── test_cli.py
 │   ├── test_config.py
 │   ├── test_models.py
+│   ├── test_snapshot.py
 │   └── test_storage.py
 ├── .env.example
 ├── .gitignore
@@ -108,6 +112,24 @@ Set a portfolio risk profile:
 
 ```bash
 poetry run finwall --database finwall.db set-risk moderate --notes "Long-term growth"
+```
+
+Generate a local portfolio snapshot:
+
+```bash
+poetry run finwall --database finwall.db snapshot
+```
+
+Generate a snapshot with manual prices:
+
+```bash
+poetry run finwall --database finwall.db snapshot --price NVDA=120 --price PLTR=90
+```
+
+Export a snapshot as JSON:
+
+```bash
+poetry run finwall --database finwall.db snapshot --json
 ```
 
 ## Python usage example
