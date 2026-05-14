@@ -18,6 +18,7 @@ from finwall.models import (
     TradeTransaction,
     WatchlistItem,
 )
+from finwall.snapshot import PortfolioSnapshot, generate_snapshot
 from finwall.storage import SQLitePortfolioStore
 
 DEFAULT_PORTFOLIO = "Primary"
@@ -188,6 +189,11 @@ def parse_optional_date(value: str | None) -> date | None:
     return date.fromisoformat(value) if value is not None else None
 
 
+def parse_price(value: str) -> tuple[str, Decimal]:
+    ticker, price = value.split("=", maxsplit=1)
+    return ticker.upper(), Decimal(price)
+
+
 def save_portfolio_update(
     store: SQLitePortfolioStore,
     portfolio_name: str,
@@ -198,12 +204,6 @@ def save_portfolio_update(
     store.save_portfolio(replace(portfolio, transactions=()))
     for transaction in new_transactions:
         store.add_trade_transaction(portfolio_name, transaction)
-
-
-def save_updated(args: argparse.Namespace, portfolio: Portfolio) -> None:
-    store = SQLitePortfolioStore(args.database)
-    store.initialize()
-    store.save_portfolio(replace(portfolio, transactions=()))
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -267,6 +267,15 @@ def build_parser() -> argparse.ArgumentParser:
     risk = subparsers.add_parser("set-risk")
     risk.add_argument("level", choices=[item.value for item in RiskLevel])
     risk.add_argument("--notes")
+
+    snapshot = subparsers.add_parser("snapshot")
+    snapshot.add_argument(
+        "--price",
+        action="append",
+        default=[],
+        help="Manual price in the format TICKER=PRICE",
+    )
+    snapshot.add_argument("--json", action="store_true")
     return parser
 
 
@@ -279,6 +288,35 @@ def add_order_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--stop-price", type=parse_decimal)
 
 
+def print_snapshot(snapshot: PortfolioSnapshot) -> None:
+    print(f"Cash balance: {snapshot.cash_balance}")
+    print(f"Invested value: {snapshot.invested_value}")
+    print(f"Total portfolio value: {snapshot.total_portfolio_value}")
+    print(
+        "Allocation: "
+        f"cash={snapshot.cash_allocation_percent}% "
+        f"invested={snapshot.invested_allocation_percent}%"
+    )
+    print("Holdings:")
+
+    for holding in snapshot.holdings:
+        current_price = holding.current_price or "missing"
+        estimated_value = holding.estimated_value or "missing"
+        gain_loss = holding.unrealized_gain_loss or "missing"
+        print(
+            f"- {holding.ticker}: shares={holding.share_count} "
+            f"avg={holding.average_purchase_price} "
+            f"current={current_price} "
+            f"value={estimated_value} "
+            f"gain_loss={gain_loss}"
+        )
+
+    if snapshot.active_orders:
+        print("Active orders:")
+        for order in snapshot.active_orders:
+            print(f"- {order}")
+
+
 def run(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -286,6 +324,17 @@ def run(argv: list[str] | None = None) -> int:
     store.initialize()
     portfolio = load_portfolio(store, args.portfolio)
     existing_transactions = portfolio.transactions
+
+    if args.command == "snapshot":
+        latest_prices = dict(parse_price(item) for item in args.price)
+        snapshot = generate_snapshot(portfolio, latest_prices)
+
+        if args.json:
+            print(snapshot.to_json())
+        else:
+            print_snapshot(snapshot)
+
+        return 0
 
     if args.command == "add-cash":
         portfolio = upsert_cash(portfolio, args.currency, args.amount)
