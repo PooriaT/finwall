@@ -191,9 +191,7 @@ def assess_portfolio_risk(
             )
 
         cost_basis = (
-            avg_price * shares
-            if avg_price is not None and shares is not None
-            else None
+            avg_price * shares if avg_price is not None and shares is not None else None
         )
         if (
             unrealized is not None
