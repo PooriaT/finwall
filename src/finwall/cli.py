@@ -301,30 +301,78 @@ def add_order_arguments(parser: argparse.ArgumentParser) -> None:
 def print_snapshot(snapshot: PortfolioSnapshot) -> None:
     print(f"Cash balance: {snapshot.cash_balance}")
     print(f"Invested value: {snapshot.invested_value}")
-    print(f"Total portfolio value: {snapshot.total_portfolio_value}")
-    print(
-        "Allocation: "
-        f"cash={snapshot.cash_allocation_percent}% "
-        f"invested={snapshot.invested_allocation_percent}%"
-    )
+
+    if snapshot.total_portfolio_value is None:
+        print("Total portfolio value: unavailable")
+        if snapshot.valuation_status == "multi_currency_cash_unsupported":
+            print(
+                "Reason: multiple cash currencies detected; total valuation and "
+                "allocation require FX conversion (not implemented)."
+            )
+        elif snapshot.valuation_status == "missing_prices":
+            print("Reason: one or more holding prices are missing.")
+    else:
+        print(f"Total portfolio value: {snapshot.total_portfolio_value}")
+
+    if snapshot.total_unrealized_gain_loss_percent is None:
+        print(f"Total unrealized gain/loss: {snapshot.total_unrealized_gain_loss}")
+    else:
+        print(
+            "Total unrealized gain/loss: "
+            f"{snapshot.total_unrealized_gain_loss} "
+            f"({snapshot.total_unrealized_gain_loss_percent}%)"
+        )
+
+    if (
+        snapshot.cash_allocation_percent is None
+        or snapshot.invested_allocation_percent is None
+    ):
+        print("Allocation: unavailable")
+    else:
+        print(
+            "Allocation: "
+            f"cash={snapshot.cash_allocation_percent}% "
+            f"invested={snapshot.invested_allocation_percent}%"
+        )
+
+    print(f"Price coverage: {snapshot.price_completeness_status}")
     print("Holdings:")
 
     for holding in snapshot.holdings:
-        current_price = holding.current_price or "missing"
-        estimated_value = holding.estimated_value or "missing"
-        gain_loss = holding.unrealized_gain_loss or "missing"
+        if not holding.price_available:
+            print(
+                f"- {holding.ticker}: shares={holding.share_count} "
+                f"avg={holding.average_purchase_price} "
+                f"price_status={holding.price_status} "
+                f"message='{holding.missing_price_message}'"
+            )
+            continue
+
+        allocation_invested = (
+            f"{holding.allocation_in_invested_percent}%"
+            if holding.allocation_in_invested_percent is not None
+            else "n/a"
+        )
+        allocation_total = (
+            f"{holding.allocation_in_total_percent}%"
+            if holding.allocation_in_total_percent is not None
+            else "n/a"
+        )
+
         print(
             f"- {holding.ticker}: shares={holding.share_count} "
             f"avg={holding.average_purchase_price} "
-            f"current={current_price} "
-            f"value={estimated_value} "
-            f"gain_loss={gain_loss}"
+            f"current={holding.current_price} "
+            f"value={holding.estimated_value} "
+            f"gain_loss={holding.unrealized_gain_loss} "
+            f"alloc_invested={allocation_invested} "
+            f"alloc_total={allocation_total}"
         )
 
     if snapshot.active_orders:
         print("Active orders:")
         for order in snapshot.active_orders:
-            print(f"- {order}")
+            print(f"- {order.description}")
 
 
 def run(argv: list[str] | None = None) -> int:

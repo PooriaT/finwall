@@ -181,6 +181,32 @@ store.save_portfolio(portfolio)
 loaded = store.get_portfolio("Primary")
 ```
 
+
+## Snapshot output details
+
+The `snapshot` command now includes richer valuation metadata for decision reports:
+
+- Holding-level allocation percentages:
+  - allocation within invested value
+  - allocation within total portfolio value (when total valuation is available)
+- Portfolio-level unrealized gain/loss totals and percent.
+- Structured active orders in JSON output with:
+  - `ticker`, `side`, `order_type`, `share_count`
+  - `limit_price`, `stop_price`
+  - human-readable `description`
+- Clear missing-price handling per holding:
+  - `price_available=false`
+  - `price_status="missing"`
+  - `missing_price_message`
+- Explicit valuation status fields:
+  - `multi_currency_cash`
+  - `valuation_currency`
+  - `valuation_status`
+
+Current limitation: if cash balances contain multiple currencies, Finwall does **not** sum them into a single total portfolio value because FX conversion is not implemented yet. In this case, total valuation and allocation are reported as unavailable with `valuation_status="multi_currency_cash_unsupported"`.
+
+Stale quote detection is not implemented yet. The market-data provider layer currently does not return quote timestamps, so freshness checks are intentionally deferred until provider timestamp metadata is available.
+
 ## Market data configuration
 
 Finwall supports an optional market-data provider layer for raw latest prices and basic index quotes.
