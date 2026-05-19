@@ -175,7 +175,6 @@ def assess_portfolio_risk(
     for holding in snapshot.holdings:
         alloc_total = _to_decimal(holding.allocation_in_total_percent)
         unrealized = _to_decimal(holding.unrealized_gain_loss)
-        estimated = _to_decimal(holding.estimated_value)
         shares = _to_decimal(holding.share_count)
         avg_price = _to_decimal(holding.average_purchase_price)
 
