@@ -47,6 +47,7 @@ class PortfolioSnapshot:
     multi_currency_cash: bool
     valuation_currency: str | None
     valuation_status: str
+    risk_assessment: dict[str, object] | None = None
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), indent=2)

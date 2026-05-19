@@ -189,3 +189,36 @@ def test_market_index_command_with_mock_provider(tmp_path, monkeypatch, capsys) 
 
     assert exit_code == 0
     assert "SP500: 5050.50 (static)" in capsys.readouterr().out
+
+
+def test_snapshot_with_risk_output(tmp_path, capsys) -> None:
+    database = tmp_path / "finwall.db"
+    run(["--database", str(database), "add-cash", "USD", "10"])
+    run(["--database", str(database), "add-holding", "NVDA", "1", "100"])
+
+    run(["--database", str(database), "snapshot", "--price", "NVDA=100", "--risk"])
+
+    out = capsys.readouterr().out
+    assert "Risk profile:" in out
+    assert "Risk warnings:" in out
+
+
+def test_snapshot_json_includes_risk_assessment(tmp_path, capsys) -> None:
+    database = tmp_path / "finwall.db"
+    run(["--database", str(database), "add-holding", "NVDA", "1", "100"])
+
+    run(
+        [
+            "--database",
+            str(database),
+            "snapshot",
+            "--price",
+            "NVDA=100",
+            "--risk",
+            "--json",
+        ]
+    )
+
+    out = capsys.readouterr().out
+    assert '"risk_assessment": {' in out
+    assert '"warnings": [' in out
