@@ -17,3 +17,11 @@ def test_market_data_settings_from_environment(monkeypatch) -> None:
 
     assert reloaded.settings.market_data_provider == "yahoo"
     assert reloaded.settings.market_data_timeout_seconds == 12.0
+
+
+def test_market_data_timeout_invalid_env_uses_default(monkeypatch) -> None:
+    monkeypatch.setenv("FINWALL_MARKET_DATA_TIMEOUT_SECONDS", "not-a-number")
+
+    reloaded = importlib.reload(config)
+
+    assert reloaded.settings.market_data_timeout_seconds == 5.0
