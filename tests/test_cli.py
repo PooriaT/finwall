@@ -275,3 +275,64 @@ def test_evaluate_order_json_output(tmp_path, capsys) -> None:
     out = capsys.readouterr().out
     assert '"ticker": "NVDA"' in out
     assert '"warnings": [' in out
+
+
+def test_recommendations_text_output(tmp_path, capsys) -> None:
+    database = tmp_path / "finwall.db"
+    run(["--database", str(database), "add-holding", "NVDA", "1", "100"])
+
+    run(["--database", str(database), "recommendations", "--price", "NVDA=120"])
+
+    out = capsys.readouterr().out
+    assert "Deterministic recommendations" in out
+    assert "Holding: NVDA" in out
+
+
+def test_recommendations_json_output(tmp_path, capsys) -> None:
+    database = tmp_path / "finwall.db"
+    run(["--database", str(database), "add-holding", "NVDA", "1", "100"])
+
+    run(
+        [
+            "--database",
+            str(database),
+            "recommendations",
+            "--price",
+            "NVDA=120",
+            "--json",
+        ]
+    )
+
+    out = capsys.readouterr().out
+    assert '"holdings": [' in out
+    assert '"cash_deployment": {' in out
+
+
+def test_recommendations_live_prices(tmp_path, monkeypatch, capsys) -> None:
+    database = tmp_path / "finwall.db"
+    run(["--database", str(database), "add-holding", "NVDA", "1", "100"])
+
+    provider = StaticMarketDataProvider(
+        prices={
+            "NVDA": MarketPrice("NVDA", Decimal("120"), "USD", "static", True),
+        }
+    )
+    monkeypatch.setattr("finwall.cli.build_market_data_provider", lambda *_: provider)
+
+    run(["--database", str(database), "recommendations", "--live-prices", "--json"])
+
+    out = capsys.readouterr().out
+    assert '"ticker": "NVDA"' in out
+
+
+def test_recommendations_missing_prices_and_empty_portfolio(tmp_path, capsys) -> None:
+    database = tmp_path / "finwall.db"
+    run(["--database", str(database), "add-holding", "NVDA", "1", "100"])
+    run(["--database", str(database), "recommendations"])
+    out = capsys.readouterr().out
+    assert "Holding: NVDA" in out
+
+    empty_db = tmp_path / "empty.db"
+    run(["--database", str(empty_db), "recommendations"])
+    out2 = capsys.readouterr().out
+    assert "Holdings: none" in out2
