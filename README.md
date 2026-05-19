@@ -48,6 +48,7 @@ finwall/
 │       ├── config.py
 │       ├── market_data.py
 │       ├── models.py
+│       ├── risk.py
 │       ├── snapshot.py
 │       └── storage.py
 ├── tests/
@@ -56,6 +57,7 @@ finwall/
 │   ├── test_market_data.py
 │   ├── test_models.py
 │   ├── test_snapshot.py
+│   ├── test_risk.py
 │   └── test_storage.py
 ├── .env.example
 ├── .gitignore
@@ -146,6 +148,19 @@ Manual prices override live prices for matching tickers:
 poetry run finwall --database finwall.db snapshot --live-prices --price NVDA=120
 ```
 
+
+Risk assessment output (deterministic warnings only):
+
+```bash
+poetry run finwall --database finwall.db snapshot --price NVDA=120 --risk
+```
+
+Risk assessment JSON output:
+
+```bash
+poetry run finwall --database finwall.db snapshot --live-prices --risk --json
+```
+
 Fetch market index quote (currently supports `SP500` and `NASDAQ`):
 
 ```bash
@@ -206,6 +221,23 @@ The `snapshot` command now includes richer valuation metadata for decision repor
 Current limitation: if cash balances contain multiple currencies, Finwall does **not** sum them into a single total portfolio value because FX conversion is not implemented yet. In this case, total valuation and allocation are reported as unavailable with `valuation_status="multi_currency_cash_unsupported"`.
 
 Stale quote detection is not implemented yet. The market-data provider layer currently does not return quote timestamps, so freshness checks are intentionally deferred until provider timestamp metadata is available.
+
+
+
+## Deterministic risk engine
+
+When `snapshot --risk` is enabled, Finwall evaluates portfolio state against configurable risk rules tied to the saved risk profile (`conservative`, `moderate`, `aggressive`). If no saved profile exists, Finwall defaults to `moderate` and reports that fallback in warnings.
+
+Checks currently include:
+
+- single-position concentration limits
+- cash deployment and minimum cash reserve limits
+- missing price / incomplete valuation constraints
+- multi-currency cash valuation limitation (FX conversion intentionally out of scope)
+- portfolio-level and holding-level unrealized loss thresholds
+- missing or non-protective stop-loss / stop-limit orders for large positions
+
+The risk engine is deterministic and guardrail-oriented. It does **not** generate buy/sell/hold recommendations, position sizing, technical analysis, fundamental analysis, scheduling, deployment workflows, or email notifications.
 
 ## Market data configuration
 

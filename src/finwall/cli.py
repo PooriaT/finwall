@@ -24,6 +24,7 @@ from finwall.models import (
     TradeTransaction,
     WatchlistItem,
 )
+from finwall.risk import RiskAssessment, assess_portfolio_risk
 from finwall.snapshot import PortfolioSnapshot, generate_snapshot
 from finwall.storage import SQLitePortfolioStore
 
@@ -283,6 +284,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     snapshot.add_argument("--json", action="store_true")
     snapshot.add_argument("--live-prices", action="store_true")
+    snapshot.add_argument("--risk", action="store_true")
 
     market_index = subparsers.add_parser("market-index")
     market_index.add_argument("symbol", choices=sorted(INDEX_SYMBOL_MAP.keys()))
@@ -296,6 +298,21 @@ def add_order_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("shares", type=parse_decimal)
     parser.add_argument("--limit-price", type=parse_decimal)
     parser.add_argument("--stop-price", type=parse_decimal)
+
+
+def print_risk_assessment(risk_assessment: RiskAssessment) -> None:
+    print(f"Risk profile: {risk_assessment.risk_level}")
+    print(f"Risk summary: {risk_assessment.summary}")
+    if not risk_assessment.warnings:
+        return
+    print("Risk warnings:")
+    for warning in risk_assessment.warnings:
+        parts = [f"- [{warning.severity}] {warning.code}: {warning.message}"]
+        if warning.ticker is not None:
+            parts.append(f"ticker={warning.ticker}")
+        if warning.value is not None and warning.limit is not None:
+            parts.append(f"value={warning.value}% limit={warning.limit}%")
+        print(" ".join(parts))
 
 
 def print_snapshot(snapshot: PortfolioSnapshot) -> None:
@@ -400,10 +417,17 @@ def run(argv: list[str] | None = None) -> int:
 
         snapshot = generate_snapshot(portfolio, latest_prices)
 
+        risk_assessment = None
+        if args.risk:
+            risk_assessment = assess_portfolio_risk(portfolio, snapshot)
+            snapshot = replace(snapshot, risk_assessment=risk_assessment.as_dict())
+
         if args.json:
             print(snapshot.to_json())
         else:
             print_snapshot(snapshot)
+            if risk_assessment is not None:
+                print_risk_assessment(risk_assessment)
 
         return 0
 
