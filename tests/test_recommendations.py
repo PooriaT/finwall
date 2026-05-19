@@ -1,6 +1,15 @@
 from decimal import Decimal
 
-from finwall.models import CashBalance, Holding, Portfolio, RiskLevel, RiskProfile
+from finwall.models import (
+    ActiveOrder,
+    CashBalance,
+    Holding,
+    OrderSide,
+    OrderType,
+    Portfolio,
+    RiskLevel,
+    RiskProfile,
+)
 from finwall.recommendations import (
     CashDeploymentRecommendationStatus,
     RecommendationConfidence,
@@ -117,3 +126,27 @@ def test_cash_deploy_cautiously_when_healthy_and_no_warnings() -> None:
     risk = assess_portfolio_risk(portfolio, snapshot)
     cash = build_recommendation_report(portfolio, snapshot, risk).cash_deployment
     assert cash.status == CashDeploymentRecommendationStatus.DEPLOY_CAUTIOUSLY
+
+
+def test_invalid_stop_protection_order_blocks_by_risk() -> None:
+    portfolio = Portfolio(
+        name="Primary",
+        risk_profile=RiskProfile(RiskLevel.MODERATE),
+        holdings=(Holding("NVDA", Decimal("1"), Decimal("100")),),
+        active_orders=(
+            ActiveOrder(
+                "NVDA",
+                OrderSide.SELL,
+                OrderType.LIMIT,
+                Decimal("1"),
+                limit_price=Decimal("120"),
+            ),
+        ),
+    )
+    snapshot = generate_snapshot(portfolio, {"NVDA": Decimal("100")})
+    risk = assess_portfolio_risk(portfolio, snapshot)
+    item = build_recommendation_report(portfolio, snapshot, risk).holdings[0]
+
+    assert item.status == RecommendationStatus.REDUCE
+    assert item.blocked_by_risk is True
+    assert any("invalid" in warning.lower() for warning in item.warnings)

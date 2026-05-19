@@ -166,6 +166,19 @@ def _recommend_holding(
             "beyond current risk limits."
         )
 
+    if "STOP_PROTECTION_INVALID_ORDER" in codes:
+        status = RecommendationStatus.REDUCE
+        confidence = RecommendationConfidence.LOW
+        risk_level = RecommendationRiskLevel.HIGH
+        blocked_by_risk = True
+        warnings.append(
+            "Risk warning: active stop protection order is present but invalid."
+        )
+        invalidation.append(
+            "If stop protection remains invalid, avoid adding exposure and "
+            "replace with a valid protective sell stop order."
+        )
+
     if "STOP_PROTECTION_MISSING" in codes:
         status = RecommendationStatus.REDUCE
         confidence = RecommendationConfidence.LOW
