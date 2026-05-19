@@ -18,6 +18,7 @@ Included:
 - Separate storage for trade history and cash history
 - CLI portfolio update commands
 - Local portfolio snapshot generation
+- Market-data fetching via optional provider layer (`--live-prices`)
 - JSON snapshot export
 - Poetry-based dependency management
 - Pytest test coverage
@@ -27,7 +28,6 @@ Not included:
 
 - Broker integrations
 - Automatic trading logic
-- Market-data fetching
 - LLM-generated recommendations
 - User accounts, authentication, or web APIs
 - Frontend or UI frameworks
@@ -46,12 +46,14 @@ finwall/
 │       ├── __init__.py
 │       ├── cli.py
 │       ├── config.py
+│       ├── market_data.py
 │       ├── models.py
 │       ├── snapshot.py
 │       └── storage.py
 ├── tests/
 │   ├── test_cli.py
 │   ├── test_config.py
+│   ├── test_market_data.py
 │   ├── test_models.py
 │   ├── test_snapshot.py
 │   └── test_storage.py
@@ -132,6 +134,25 @@ Export a snapshot as JSON:
 poetry run finwall --database finwall.db snapshot --json
 ```
 
+Generate a snapshot with live prices for holdings:
+
+```bash
+poetry run finwall --database finwall.db snapshot --live-prices
+```
+
+Manual prices override live prices for matching tickers:
+
+```bash
+poetry run finwall --database finwall.db snapshot --live-prices --price NVDA=120
+```
+
+Fetch market index quote (currently supports `SP500` and `NASDAQ`):
+
+```bash
+poetry run finwall --database finwall.db market-index SP500
+```
+
+
 ## Python usage example
 
 ```python
@@ -159,6 +180,23 @@ portfolio = Portfolio(
 store.save_portfolio(portfolio)
 loaded = store.get_portfolio("Primary")
 ```
+
+## Market data configuration
+
+Finwall supports an optional market-data provider layer for raw latest prices and basic index quotes.
+
+Environment variables:
+
+- `FINWALL_MARKET_DATA_PROVIDER` (default: `static`)
+  - `static`: safe local default with no network calls
+  - `yahoo`: public no-key Yahoo Finance quote endpoint
+- `FINWALL_MARKET_DATA_TIMEOUT_SECONDS` (default: `5`)
+
+Notes:
+
+- Live market data can be delayed, missing, or temporarily unavailable.
+- Snapshot generation remains resilient: missing ticker prices are warned and skipped.
+- Manual `--price TICKER=PRICE` values always take precedence over fetched values.
 
 ## Development
 

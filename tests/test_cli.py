@@ -3,6 +3,7 @@ from decimal import Decimal
 import pytest
 
 from finwall.cli import run
+from finwall.market_data import IndexQuote, MarketPrice, StaticMarketDataProvider
 from finwall.storage import SQLitePortfolioStore
 
 
@@ -138,3 +139,53 @@ def test_set_risk_profile(tmp_path) -> None:
     assert portfolio is not None
     assert portfolio.risk_profile is not None
     assert portfolio.risk_profile.level.value == "moderate"
+
+
+def test_snapshot_live_prices_with_manual_override(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    database = tmp_path / "finwall.db"
+
+    run(["--database", str(database), "add-holding", "NVDA", "2", "100"])
+    run(["--database", str(database), "add-holding", "PLTR", "1", "10"])
+
+    provider = StaticMarketDataProvider(
+        prices={
+            "NVDA": MarketPrice("NVDA", Decimal("120"), "USD", "static", True),
+            "PLTR": MarketPrice("PLTR", None, "USD", "static", False, "provider down"),
+        }
+    )
+
+    monkeypatch.setattr("finwall.cli.build_market_data_provider", lambda *_: provider)
+
+    run(
+        [
+            "--database",
+            str(database),
+            "snapshot",
+            "--live-prices",
+            "--price",
+            "NVDA=130",
+            "--json",
+        ]
+    )
+
+    out = capsys.readouterr().out
+    assert "Warning: unable to fetch price for PLTR: provider down" in out
+    assert '"ticker": "NVDA"' in out
+    assert '"current_price": "130.00"' in out
+
+
+def test_market_index_command_with_mock_provider(tmp_path, monkeypatch, capsys) -> None:
+    database = tmp_path / "finwall.db"
+    provider = StaticMarketDataProvider(
+        index_quotes={
+            "SP500": IndexQuote("SP500", Decimal("5050.50"), "static", True),
+        }
+    )
+    monkeypatch.setattr("finwall.cli.build_market_data_provider", lambda *_: provider)
+
+    exit_code = run(["--database", str(database), "market-index", "SP500"])
+
+    assert exit_code == 0
+    assert "SP500: 5050.50 (static)" in capsys.readouterr().out

@@ -3,6 +3,12 @@ from dataclasses import replace
 from datetime import date
 from decimal import Decimal
 
+from finwall.config import settings
+from finwall.market_data import (
+    INDEX_SYMBOL_MAP,
+    build_market_data_provider,
+    fetch_portfolio_latest_prices,
+)
 from finwall.models import (
     ActiveOrder,
     CashBalance,
@@ -276,6 +282,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="Manual price in the format TICKER=PRICE",
     )
     snapshot.add_argument("--json", action="store_true")
+    snapshot.add_argument("--live-prices", action="store_true")
+
+    market_index = subparsers.add_parser("market-index")
+    market_index.add_argument("symbol", choices=sorted(INDEX_SYMBOL_MAP.keys()))
     return parser
 
 
@@ -327,6 +337,19 @@ def run(argv: list[str] | None = None) -> int:
 
     if args.command == "snapshot":
         latest_prices = dict(parse_price(item) for item in args.price)
+
+        if args.live_prices:
+            provider = build_market_data_provider(
+                settings.market_data_provider,
+                settings.market_data_timeout_seconds,
+            )
+            fetched_prices, warnings = fetch_portfolio_latest_prices(
+                portfolio, provider
+            )
+            latest_prices = {**fetched_prices, **latest_prices}
+            for warning in warnings:
+                print(f"Warning: unable to fetch price for {warning}")
+
         snapshot = generate_snapshot(portfolio, latest_prices)
 
         if args.json:
@@ -335,6 +358,20 @@ def run(argv: list[str] | None = None) -> int:
             print_snapshot(snapshot)
 
         return 0
+
+    if args.command == "market-index":
+        provider = build_market_data_provider(
+            settings.market_data_provider,
+            settings.market_data_timeout_seconds,
+        )
+        quote = provider.get_index_quote(args.symbol)
+
+        if quote.available and quote.price is not None:
+            print(f"{args.symbol}: {quote.price} ({quote.source})")
+            return 0
+
+        print(f"{args.symbol}: unavailable ({quote.error or 'unknown error'})")
+        return 1
 
     if args.command == "add-cash":
         portfolio = upsert_cash(portfolio, args.currency, args.amount)
