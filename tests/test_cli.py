@@ -222,3 +222,56 @@ def test_snapshot_json_includes_risk_assessment(tmp_path, capsys) -> None:
     out = capsys.readouterr().out
     assert '"risk_assessment": {' in out
     assert '"warnings": [' in out
+
+
+def test_evaluate_order_text_output(tmp_path, capsys) -> None:
+    database = tmp_path / "finwall.db"
+    run(["--database", str(database), "add-cash", "USD", "1000"])
+    run(
+        [
+            "--database",
+            str(database),
+            "evaluate-order",
+            "NVDA",
+            "buy",
+            "limit",
+            "--entry-price",
+            "100",
+            "--shares",
+            "2",
+            "--limit-price",
+            "100",
+            "--stop-price",
+            "90",
+            "--target-price",
+            "120",
+        ]
+    )
+    out = capsys.readouterr().out
+    assert "Proposed order:" in out
+    assert "This is an evaluation of the provided order, not a recommendation." in out
+
+
+def test_evaluate_order_json_output(tmp_path, capsys) -> None:
+    database = tmp_path / "finwall.db"
+    run(["--database", str(database), "add-cash", "USD", "1000"])
+    run(
+        [
+            "--database",
+            str(database),
+            "evaluate-order",
+            "NVDA",
+            "buy",
+            "limit",
+            "--entry-price",
+            "100",
+            "--shares",
+            "2",
+            "--limit-price",
+            "100",
+            "--json",
+        ]
+    )
+    out = capsys.readouterr().out
+    assert '"ticker": "NVDA"' in out
+    assert '"warnings": [' in out
