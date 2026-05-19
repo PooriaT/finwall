@@ -203,3 +203,71 @@ def test_goal_target_missing_and_valuation_warning():
     )
     assert any("target amount is missing" in w for w in e.warnings)
     assert any("valuation is unavailable" in w for w in e.warnings)
+
+
+def test_rejects_non_positive_share_count():
+    p = make_portfolio(cash_balances=(CashBalance("USD", Decimal("1000")),))
+    s = generate_snapshot(p)
+    buy_eval = evaluate_proposed_order(
+        p,
+        s,
+        ProposedOrder(
+            "NVDA",
+            OrderSide.BUY,
+            OrderType.LIMIT,
+            Decimal("100"),
+            Decimal("0"),
+            limit_price=Decimal("100"),
+        ),
+    )
+    sell_eval = evaluate_proposed_order(
+        p,
+        s,
+        ProposedOrder(
+            "NVDA",
+            OrderSide.SELL,
+            OrderType.LIMIT,
+            Decimal("100"),
+            Decimal("-1"),
+            limit_price=Decimal("100"),
+        ),
+    )
+
+    assert not buy_eval.valid
+    assert "share_count must be greater than zero when provided." in buy_eval.errors
+    assert not sell_eval.valid
+    assert "share_count must be greater than zero when provided." in sell_eval.errors
+
+
+def test_rejects_non_positive_entry_price():
+    p = make_portfolio(cash_balances=(CashBalance("USD", Decimal("1000")),))
+    s = generate_snapshot(p)
+    zero_eval = evaluate_proposed_order(
+        p,
+        s,
+        ProposedOrder(
+            "NVDA",
+            OrderSide.BUY,
+            OrderType.LIMIT,
+            Decimal("0"),
+            Decimal("1"),
+            limit_price=Decimal("0"),
+        ),
+    )
+    negative_eval = evaluate_proposed_order(
+        p,
+        s,
+        ProposedOrder(
+            "NVDA",
+            OrderSide.BUY,
+            OrderType.LIMIT,
+            Decimal("-10"),
+            Decimal("1"),
+            limit_price=Decimal("-10"),
+        ),
+    )
+
+    assert not zero_eval.valid
+    assert "entry_price must be greater than zero." in zero_eval.errors
+    assert not negative_eval.valid
+    assert "entry_price must be greater than zero." in negative_eval.errors

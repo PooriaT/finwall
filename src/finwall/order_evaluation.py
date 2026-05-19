@@ -58,6 +58,7 @@ def evaluate_proposed_order(
         "This is an evaluation of the provided order, not a recommendation."
     ]
     _validate_order_type_requirements(order, errors)
+    _validate_positive_values(order, errors)
 
     if order.side == OrderSide.BUY and order.order_type == OrderType.STOP_LOSS:
         errors.append("Buy stop-loss orders are not supported in this evaluation.")
@@ -278,3 +279,10 @@ def _validate_order_type_requirements(order: ProposedOrder, errors: list[str]) -
         order.stop_price is None or order.limit_price is None
     ):
         errors.append("Stop-limit orders require both stop_price and limit_price.")
+
+
+def _validate_positive_values(order: ProposedOrder, errors: list[str]) -> None:
+    if order.entry_price <= ZERO:
+        errors.append("entry_price must be greater than zero.")
+    if order.share_count is not None and order.share_count <= ZERO:
+        errors.append("share_count must be greater than zero when provided.")
