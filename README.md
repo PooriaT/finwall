@@ -285,3 +285,25 @@ poetry run ruff format .
 ## Continuous integration
 
 GitHub Actions runs the test suite automatically when a pull request targets `main`.
+
+## Evaluate proposed orders
+
+Use `evaluate-order` to evaluate a trade idea against cash, risk profile limits, and basic goal-awareness. This command evaluates the provided order only; it does not generate buy/sell/hold recommendations.
+
+Example buy evaluation:
+
+```bash
+poetry run finwall --database finwall.db evaluate-order NVDA buy limit \
+  --entry-price 100 --shares 2 --limit-price 100 --stop-price 90 --target-price 120 \
+  --price NVDA=100
+```
+
+Example sell evaluation:
+
+```bash
+poetry run finwall --database finwall.db evaluate-order NVDA sell stop_limit \
+  --entry-price 100 --shares 1 --stop-price 95 --limit-price 94
+```
+
+The output reports affordability, reserve-aware sizing, risk-based sizing, expected downside/upside, and risk/reward when stop/target are provided. It may warn when goals are missing, goal target is missing, or valuation is unavailable due to missing prices or multi-currency cash.
+

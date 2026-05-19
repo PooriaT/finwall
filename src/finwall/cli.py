@@ -24,6 +24,7 @@ from finwall.models import (
     TradeTransaction,
     WatchlistItem,
 )
+from finwall.order_evaluation import ProposedOrder, evaluate_proposed_order
 from finwall.risk import RiskAssessment, assess_portfolio_risk
 from finwall.snapshot import PortfolioSnapshot, generate_snapshot
 from finwall.storage import SQLitePortfolioStore
@@ -286,6 +287,22 @@ def build_parser() -> argparse.ArgumentParser:
     snapshot.add_argument("--live-prices", action="store_true")
     snapshot.add_argument("--risk", action="store_true")
 
+    evaluate_order = subparsers.add_parser("evaluate-order")
+    evaluate_order.add_argument("ticker")
+    evaluate_order.add_argument("side", choices=[item.value for item in OrderSide])
+    evaluate_order.add_argument(
+        "order_type", choices=[item.value for item in OrderType]
+    )
+    evaluate_order.add_argument("--entry-price", required=True, type=parse_decimal)
+    evaluate_order.add_argument("--shares", type=parse_decimal)
+    evaluate_order.add_argument("--limit-price", type=parse_decimal)
+    evaluate_order.add_argument("--stop-price", type=parse_decimal)
+    evaluate_order.add_argument("--target-price", type=parse_decimal)
+    evaluate_order.add_argument("--currency", default="USD")
+    evaluate_order.add_argument("--price", action="append", default=[])
+    evaluate_order.add_argument("--live-prices", action="store_true")
+    evaluate_order.add_argument("--json", action="store_true")
+
     market_index = subparsers.add_parser("market-index")
     market_index.add_argument("symbol", choices=sorted(INDEX_SYMBOL_MAP.keys()))
     return parser
@@ -429,6 +446,69 @@ def run(argv: list[str] | None = None) -> int:
             if risk_assessment is not None:
                 print_risk_assessment(risk_assessment)
 
+        return 0
+
+    if args.command == "evaluate-order":
+        latest_prices = dict(parse_price(item) for item in args.price)
+        if args.live_prices:
+            provider = build_market_data_provider(
+                settings.market_data_provider,
+                settings.market_data_timeout_seconds,
+            )
+            fetched_prices, warnings = fetch_portfolio_latest_prices(
+                portfolio, provider
+            )
+            latest_prices = {**fetched_prices, **latest_prices}
+            for warning in warnings:
+                print(f"Warning: unable to fetch price for {warning}")
+
+        snapshot = generate_snapshot(portfolio, latest_prices)
+        proposed = ProposedOrder(
+            ticker=args.ticker,
+            side=OrderSide(args.side),
+            order_type=OrderType(args.order_type),
+            entry_price=args.entry_price,
+            share_count=args.shares,
+            stop_price=args.stop_price,
+            limit_price=args.limit_price,
+            target_price=args.target_price,
+            currency=args.currency,
+        )
+        evaluation = evaluate_proposed_order(portfolio, snapshot, proposed)
+        if args.json:
+            print(__import__("json").dumps(evaluation.as_dict(), indent=2))
+        else:
+            print(
+                f"Proposed order: {evaluation.ticker} {evaluation.side} {evaluation.order_type}"
+            )
+            print(f"Valid: {evaluation.valid}")
+            print(f"Estimated total cost: {evaluation.estimated_total_cost or 'n/a'}")
+            print(
+                f"Estimated total proceeds: {evaluation.estimated_total_proceeds or 'n/a'}"
+            )
+            print(f"Maximum affordable shares: {evaluation.maximum_affordable_shares}")
+            print(
+                f"Maximum risk-allowed shares: {evaluation.maximum_risk_allowed_shares or 'n/a'}"
+            )
+            print(f"Suggested maximum shares: {evaluation.suggested_maximum_shares}")
+            print(f"Cash after order: {evaluation.cash_after_order or 'n/a'}")
+            print(
+                f"Cash reserve after order: {evaluation.cash_reserve_percent_after_order or 'n/a'}%"
+            )
+            print(
+                f"Maximum capital at risk: {evaluation.maximum_capital_at_risk or 'n/a'}"
+            )
+            print(f"Expected upside: {evaluation.expected_upside or 'n/a'}")
+            print(f"Expected downside: {evaluation.expected_downside or 'n/a'}")
+            print(f"Risk/reward ratio: {evaluation.risk_reward_ratio or 'n/a'}")
+            if evaluation.warnings:
+                print("Warnings:")
+                for warning in evaluation.warnings:
+                    print(f"- {warning}")
+            if evaluation.errors:
+                print("Validation errors:")
+                for error in evaluation.errors:
+                    print(f"- {error}")
         return 0
 
     if args.command == "market-index":
