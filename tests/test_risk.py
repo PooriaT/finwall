@@ -76,6 +76,20 @@ def test_unrealized_loss_and_stop_protection_warnings() -> None:
     assert "STOP_PROTECTION_MISSING" in codes
 
 
+def test_holding_loss_uses_cost_basis_denominator() -> None:
+    portfolio = Portfolio(
+        name="Primary",
+        risk_profile=RiskProfile(RiskLevel.MODERATE),
+        holdings=(Holding("NVDA", Decimal("1"), Decimal("100")),),
+    )
+    snapshot = generate_snapshot(portfolio, latest_prices={"NVDA": Decimal("86")})
+    assessment = assess_portfolio_risk(portfolio, snapshot)
+    holding_warning = next(
+        (item for item in assessment.warnings if item.code == "HOLDING_UNREALIZED_LOSS_LIMIT"),
+        None,
+    )
+    assert holding_warning is None
+
 def test_no_stop_warning_when_valid_sell_stop_exists() -> None:
     portfolio = Portfolio(
         name="Primary",

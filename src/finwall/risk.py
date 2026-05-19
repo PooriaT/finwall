@@ -191,12 +191,17 @@ def assess_portfolio_risk(
                 )
             )
 
+        cost_basis = (
+            avg_price * shares
+            if avg_price is not None and shares is not None
+            else None
+        )
         if (
             unrealized is not None
-            and estimated is not None
-            and estimated != Decimal("0")
+            and cost_basis is not None
+            and cost_basis != Decimal("0")
         ):
-            holding_loss_pct = (unrealized / estimated) * Decimal("100")
+            holding_loss_pct = (unrealized / cost_basis) * Decimal("100")
             if holding_loss_pct < -rules.max_unrealized_loss_percent:
                 warnings.append(
                     RiskWarning(
