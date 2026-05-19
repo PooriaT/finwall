@@ -25,6 +25,7 @@ from finwall.models import (
     WatchlistItem,
 )
 from finwall.order_evaluation import ProposedOrder, evaluate_proposed_order
+from finwall.recommendations import build_recommendation_report
 from finwall.risk import RiskAssessment, assess_portfolio_risk
 from finwall.snapshot import PortfolioSnapshot, generate_snapshot
 from finwall.storage import SQLitePortfolioStore
@@ -287,6 +288,16 @@ def build_parser() -> argparse.ArgumentParser:
     snapshot.add_argument("--live-prices", action="store_true")
     snapshot.add_argument("--risk", action="store_true")
 
+    recommendations = subparsers.add_parser("recommendations")
+    recommendations.add_argument(
+        "--price",
+        action="append",
+        default=[],
+        help="Manual price in the format TICKER=PRICE",
+    )
+    recommendations.add_argument("--live-prices", action="store_true")
+    recommendations.add_argument("--json", action="store_true")
+
     evaluate_order = subparsers.add_parser("evaluate-order")
     evaluate_order.add_argument("ticker")
     evaluate_order.add_argument("side", choices=[item.value for item in OrderSide])
@@ -409,6 +420,53 @@ def print_snapshot(snapshot: PortfolioSnapshot) -> None:
             print(f"- {order.description}")
 
 
+def print_recommendation_report(report) -> None:
+    print(
+        "Deterministic recommendations are decision support only and not financial advice."
+    )
+    print(f"Summary: {report.summary}")
+    print(f"Cash deployment status: {report.cash_deployment.status.value}")
+    print(f"Cash deployment confidence: {report.cash_deployment.confidence.value}")
+    print(f"Suggested review action: {report.cash_deployment.suggested_action}")
+
+    if report.cash_deployment.reasoning_inputs:
+        print("Cash deployment reasoning inputs:")
+        for item in report.cash_deployment.reasoning_inputs:
+            print(f"- {item}")
+    if report.cash_deployment.warnings:
+        print("Cash deployment warnings:")
+        for item in report.cash_deployment.warnings:
+            print(f"- {item}")
+
+    if not report.holdings:
+        print("Holdings: none")
+
+    for holding in report.holdings:
+        print(f"Holding: {holding.ticker}")
+        print(f"  Deterministic status: {holding.status.value}")
+        print(f"  Confidence: {holding.confidence.value}")
+        print(f"  Risk level: {holding.risk_level.value}")
+        print(f"  Suggested review action: {holding.suggested_action}")
+        print(f"  Blocked by risk: {holding.blocked_by_risk}")
+        print(f"  Data quality: {holding.data_quality}")
+        print("  Key reasoning inputs:")
+        for item in holding.reasoning_inputs:
+            print(f"  - {item}")
+        if holding.warnings:
+            print("  Warnings:")
+            for item in holding.warnings:
+                print(f"  - {item}")
+        if holding.invalidation_conditions:
+            print("  Invalidation conditions:")
+            for item in holding.invalidation_conditions:
+                print(f"  - {item}")
+
+    if report.limitations:
+        print("Limitations:")
+        for item in report.limitations:
+            print(f"- {item}")
+
+
 def run(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -446,6 +504,30 @@ def run(argv: list[str] | None = None) -> int:
             if risk_assessment is not None:
                 print_risk_assessment(risk_assessment)
 
+        return 0
+
+    if args.command == "recommendations":
+        latest_prices = dict(parse_price(item) for item in args.price)
+        if args.live_prices:
+            provider = build_market_data_provider(
+                settings.market_data_provider,
+                settings.market_data_timeout_seconds,
+            )
+            fetched_prices, warnings = fetch_portfolio_latest_prices(
+                portfolio, provider
+            )
+            latest_prices = {**fetched_prices, **latest_prices}
+            for warning in warnings:
+                print(f"Warning: unable to fetch price for {warning}")
+
+        snapshot = generate_snapshot(portfolio, latest_prices)
+        risk_assessment = assess_portfolio_risk(portfolio, snapshot)
+        report = build_recommendation_report(portfolio, snapshot, risk_assessment)
+
+        if args.json:
+            print(__import__("json").dumps(report.as_dict(), indent=2))
+        else:
+            print_recommendation_report(report)
         return 0
 
     if args.command == "evaluate-order":

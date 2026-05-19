@@ -307,3 +307,34 @@ poetry run finwall --database finwall.db evaluate-order NVDA sell stop_limit \
 
 The output reports affordability, reserve-aware sizing, risk-based sizing, expected downside/upside, and risk/reward when stop/target are provided. It may warn when goals are missing, goal target is missing, or valuation is unavailable due to missing prices or multi-currency cash.
 
+
+## Deterministic recommendations (rule-based, no LLM)
+
+Use `recommendations` to generate structured deterministic recommendation candidates from current holdings, snapshot valuation data, and deterministic risk warnings.
+
+Manual-price example:
+
+```bash
+poetry run finwall --database finwall.db recommendations --price NVDA=120
+```
+
+Live-price example:
+
+```bash
+poetry run finwall --database finwall.db recommendations --live-prices
+```
+
+JSON output example:
+
+```bash
+poetry run finwall --database finwall.db recommendations --price NVDA=120 --json
+```
+
+Behavior notes:
+
+- Recommendations are deterministic and rule-based.
+- This command does **not** call any LLM.
+- Technical, fundamental, and news/sentiment inputs are not implemented yet.
+- Missing prices, partial valuation, and missing profile/goal context lower confidence.
+- Output is decision-support only and does not execute trades.
+- No scheduling, deployment, email, broker integration, or automatic trading is performed.
