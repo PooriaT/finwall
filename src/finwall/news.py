@@ -324,7 +324,13 @@ def build_news_report(
 
     market: list[NewsProviderResult] = []
     if include_market:
-        raw = provider.get_market_news("market", limit_per_topic)
+        try:
+            raw = provider.get_market_news("market", limit_per_topic)
+        except Exception as exc:
+            warnings.append(f"market: {exc}")
+            raw = NewsProviderResult(
+                NewsTopicType.MARKET, "market", (), "provider", False, str(exc)
+            )
         deduped, removed = _enrich_articles(raw, max_age_hours=max_age_hours)
         if removed:
             warnings.append(f"market: removed {removed} duplicate article(s)")
@@ -340,7 +346,13 @@ def build_news_report(
             {holding.sector for holding in portfolio.holdings if holding.sector}
         )
         for sector in unique_sectors:
-            raw = provider.get_sector_news(sector, limit_per_topic)
+            try:
+                raw = provider.get_sector_news(sector, limit_per_topic)
+            except Exception as exc:
+                warnings.append(f"sector {sector}: {exc}")
+                raw = NewsProviderResult(
+                    NewsTopicType.SECTOR, sector, (), "provider", False, str(exc)
+                )
             deduped, removed = _enrich_articles(raw, max_age_hours=max_age_hours)
             if removed:
                 warnings.append(
