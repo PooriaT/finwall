@@ -117,11 +117,15 @@ def _normalize_snapshot(snapshot: FundamentalSnapshot) -> FundamentalSnapshot:
         warnings.append("revenue growth unavailable")
     if not snapshot.earnings_growth.available:
         warnings.append("earnings growth unavailable")
-    if not snapshot.profitability:
+    profitability_available = any(m.available for m in snapshot.profitability)
+    debt_available = any(m.available for m in snapshot.debt)
+    valuation_available = any(m.available for m in snapshot.valuation)
+
+    if not profitability_available:
         warnings.append("profitability metrics unavailable")
-    if not snapshot.debt:
+    if not debt_available:
         warnings.append("debt metrics unavailable")
-    if not snapshot.valuation:
+    if not valuation_available:
         warnings.append("valuation metrics unavailable")
 
     unique_warnings = tuple(dict.fromkeys(warnings))
@@ -130,9 +134,9 @@ def _normalize_snapshot(snapshot: FundamentalSnapshot) -> FundamentalSnapshot:
         snapshot.profile.available,
         snapshot.revenue_growth.available,
         snapshot.earnings_growth.available,
-        bool(snapshot.profitability),
-        bool(snapshot.debt),
-        bool(snapshot.valuation),
+        profitability_available,
+        debt_available,
+        valuation_available,
     ]
     if all(available_flags):
         status = "available"

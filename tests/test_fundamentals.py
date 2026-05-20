@@ -86,3 +86,29 @@ def test_missing_data_warnings_and_empty_portfolio_and_json() -> None:
     assert "profitability metrics unavailable" in warnings
     assert "debt metrics unavailable" in warnings
     assert "valuation metrics unavailable" in warnings
+
+
+def test_section_availability_uses_metric_flags_not_tuple_presence() -> None:
+    snapshot = FundamentalSnapshot(
+        ticker="X",
+        source="static",
+        data_status="available",
+        profile=CompanyProfile("X", "X Inc", None, None, None, None, "static", True),
+        revenue_growth=FundamentalMetric("revenue_growth", "10%", True, "static"),
+        earnings_growth=FundamentalMetric("earnings_growth", "8%", True, "static"),
+        profitability=(FundamentalMetric("net_margin", None, False, "static"),),
+        debt=(FundamentalMetric("debt_to_equity", None, False, "static"),),
+        valuation=(FundamentalMetric("pe_ratio", None, False, "static"),),
+        warnings=(),
+    )
+
+    report = build_fundamental_analysis_report(
+        Portfolio(name="P", holdings=(Holding("X", Decimal("1"), Decimal("1")),)),
+        StaticFundamentalDataProvider({"X": snapshot}),
+    )
+
+    normalized = report.holdings[0]
+    assert normalized.data_status == "partial"
+    assert "profitability metrics unavailable" in normalized.warnings
+    assert "debt metrics unavailable" in normalized.warnings
+    assert "valuation metrics unavailable" in normalized.warnings
