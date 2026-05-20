@@ -339,6 +339,7 @@ def build_parser() -> argparse.ArgumentParser:
     report.add_argument("--live-prices", action="store_true")
     report.add_argument("--market-index", choices=sorted(INDEX_SYMBOL_MAP.keys()))
     report.add_argument("--include-nasdaq", action="store_true")
+    report.add_argument("--market-condition-days", type=int, default=400)
     report.add_argument("--json", action="store_true")
     report.add_argument("--markdown", action="store_true")
 
@@ -765,6 +766,7 @@ def run(argv: list[str] | None = None) -> int:
                     provider=provider,
                     primary_symbol=args.market_index,
                     include_nasdaq=args.include_nasdaq,
+                    days=args.market_condition_days,
                 )
 
         snapshot = generate_snapshot(portfolio, latest_prices)

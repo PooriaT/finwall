@@ -378,6 +378,45 @@ def test_report_live_prices_and_market_index(tmp_path, monkeypatch, capsys) -> N
     assert '"status": "insufficient_data"' in out
 
 
+def test_report_market_condition_uses_extended_lookback(tmp_path, monkeypatch) -> None:
+    database = tmp_path / "finwall.db"
+    run(["--database", str(database), "add-holding", "NVDA", "1", "100"])
+
+    provider = StaticMarketDataProvider(
+        prices={"NVDA": MarketPrice("NVDA", Decimal("120"), "USD", "static", True)},
+        index_quotes={"SP500": IndexQuote("SP500", Decimal("5050.50"), "static", True)},
+    )
+    monkeypatch.setattr("finwall.cli.build_market_data_provider", lambda *_: provider)
+
+    seen = {}
+    from finwall import cli as cli_module
+
+    original = cli_module.classify_market_condition
+
+    def fake_classify_market_condition(*, provider, primary_symbol, include_nasdaq, days):
+        seen["days"] = days
+        return original(
+            provider=provider,
+            primary_symbol=primary_symbol,
+            include_nasdaq=include_nasdaq,
+            days=days,
+        )
+
+    monkeypatch.setattr("finwall.cli.classify_market_condition", fake_classify_market_condition)
+
+    run(
+        [
+            "--database",
+            str(database),
+            "report",
+            "--live-prices",
+            "--market-index",
+            "SP500",
+        ]
+    )
+
+    assert seen["days"] == 400
+
 def test_report_handles_empty_portfolio(tmp_path, capsys) -> None:
     database = tmp_path / "finwall.db"
     run(["--database", str(database), "report"])
