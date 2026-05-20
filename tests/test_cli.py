@@ -765,3 +765,56 @@ def test_report_narrative_uses_fallback_on_invalid_provider_response(
     out = capsys.readouterr().out
     assert "Fallback deterministic explanation." in out
     assert "# Finwall Decision-Support Report" in out
+
+
+def test_report_save_run_persists_history(tmp_path, capsys) -> None:
+    database = tmp_path / "finwall.db"
+    run(["--database", str(database), "add-holding", "NVDA", "1", "100"])
+
+    run(["--database", str(database), "report", "--price", "NVDA=120", "--save-run"])
+
+    out = capsys.readouterr().out
+    assert "Saved report run id=" in out
+
+    store = SQLitePortfolioStore(database)
+    latest = store.get_latest_report_run("Primary")
+    assert latest is not None
+    assert latest.id is not None
+    assert store.list_report_recommendation_statuses(latest.id)
+
+
+def test_report_compare_without_save(tmp_path, capsys) -> None:
+    database = tmp_path / "finwall.db"
+    run(["--database", str(database), "add-holding", "NVDA", "1", "100"])
+    run(["--database", str(database), "report", "--price", "NVDA=100", "--save-run"])
+    capsys.readouterr()
+
+    run(["--database", str(database), "report", "--price", "NVDA=105", "--compare"])
+
+    out = capsys.readouterr().out
+    assert "## Recommendation Changes" in out
+    assert "Current run was not saved." in out
+
+
+def test_report_save_run_compare_json(tmp_path, capsys) -> None:
+    database = tmp_path / "finwall.db"
+    run(["--database", str(database), "add-holding", "NVDA", "1", "100"])
+    run(["--database", str(database), "report", "--price", "NVDA=100", "--save-run"])
+    capsys.readouterr()
+
+    run(
+        [
+            "--database",
+            str(database),
+            "report",
+            "--price",
+            "NVDA=95",
+            "--save-run",
+            "--compare",
+            "--json",
+        ]
+    )
+    out = capsys.readouterr().out
+    assert '"report": {' in out
+    assert '"saved_run": {' in out
+    assert '"comparison": {' in out
