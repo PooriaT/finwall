@@ -607,7 +607,7 @@ Notes:
 
 - Storage is local SQLite only (no cloud, no deployment automation).
 - This is decision-support comparison only; it does not trigger trades.
-- Out of scope by design: email notifications, scheduling, deployment workflows, LLM reasoning, broker integration, and automatic trading.
+- Out of scope by design: cloud deployment, scheduling infrastructure, LLM reasoning, broker integration, and automatic trading.
 
 ## Scheduled report command
 
@@ -643,4 +643,37 @@ Behavior:
 Notes on scope:
 
 - This guard is deterministic local logic, not an exchange/broker calendar API.
-- This command does not add cloud deployment, GitHub Actions schedules, Render Cron configuration, email notifications, broker integration, or automatic trading.
+- This command does not add cloud deployment, GitHub Actions schedules, Render Cron configuration, broker integration, or automatic trading.
+
+Email notifications for scheduled reports:
+
+- `--email` sends a plain-text success notification after a generated scheduled report.
+- `--email-on-failure` sends a plain-text failure notification when scheduled report generation fails.
+- `--email-to` overrides configured recipients for the current command only (comma-separated).
+- Supported providers: `disabled` and `smtp`.
+- Missing/invalid email config is handled safely with disabled/no-op behavior and warning details in notification output.
+- Email notifications are local CLI integrations only (not cloud deployment or scheduler infrastructure).
+
+SMTP environment variables:
+
+- `FINWALL_EMAIL_PROVIDER` (default `disabled`)
+- `FINWALL_EMAIL_FROM`
+- `FINWALL_EMAIL_TO` (comma-separated recipients)
+- `FINWALL_EMAIL_TIMEOUT_SECONDS` (default `10`)
+- `FINWALL_SMTP_HOST`
+- `FINWALL_SMTP_PORT` (default `587`)
+- `FINWALL_SMTP_USERNAME`
+- `FINWALL_SMTP_PASSWORD`
+- `FINWALL_SMTP_USE_STARTTLS` (default `true`)
+
+Safety notes:
+
+- Finwall avoids exposing secrets in notification warnings/errors.
+- Notification payloads include safe status and error summaries only.
+
+Additional examples:
+
+```bash
+poetry run finwall --database finwall.db run-scheduled-report --run-context morning --email --save-run
+poetry run finwall --database finwall.db run-scheduled-report --run-context after_close --email --email-on-failure --json
+```
