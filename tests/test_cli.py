@@ -336,3 +336,50 @@ def test_recommendations_missing_prices_and_empty_portfolio(tmp_path, capsys) ->
     run(["--database", str(empty_db), "recommendations"])
     out2 = capsys.readouterr().out
     assert "Holdings: none" in out2
+
+
+def test_report_prints_markdown_by_default(tmp_path, capsys) -> None:
+    database = tmp_path / "finwall.db"
+    run(["--database", str(database), "add-holding", "NVDA", "1", "100"])
+    run(["--database", str(database), "report", "--price", "NVDA=120"])
+    out = capsys.readouterr().out
+    assert "# Finwall Decision-Support Report" in out
+
+
+def test_report_json_output(tmp_path, capsys) -> None:
+    database = tmp_path / "finwall.db"
+    run(["--database", str(database), "add-holding", "NVDA", "1", "100"])
+    run(["--database", str(database), "report", "--price", "NVDA=120", "--json"])
+    out = capsys.readouterr().out
+    assert '"portfolio_snapshot": {' in out
+    assert '"holding_recommendations": [' in out
+
+
+def test_report_live_prices_and_market_index(tmp_path, monkeypatch, capsys) -> None:
+    database = tmp_path / "finwall.db"
+    run(["--database", str(database), "add-holding", "NVDA", "1", "100"])
+    provider = StaticMarketDataProvider(
+        prices={"NVDA": MarketPrice("NVDA", Decimal("120"), "USD", "static", True)},
+        index_quotes={"SP500": IndexQuote("SP500", Decimal("5050.50"), "static", True)},
+    )
+    monkeypatch.setattr("finwall.cli.build_market_data_provider", lambda *_: provider)
+    run(
+        [
+            "--database",
+            str(database),
+            "report",
+            "--live-prices",
+            "--market-index",
+            "SP500",
+            "--json",
+        ]
+    )
+    out = capsys.readouterr().out
+    assert '"status": "raw_index_only"' in out
+
+
+def test_report_handles_empty_portfolio(tmp_path, capsys) -> None:
+    database = tmp_path / "finwall.db"
+    run(["--database", str(database), "report"])
+    out = capsys.readouterr().out
+    assert "# Finwall Decision-Support Report" in out

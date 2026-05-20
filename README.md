@@ -338,3 +338,46 @@ Behavior notes:
 - Missing prices, partial valuation, and missing profile/goal context lower confidence.
 - Output is decision-support only and does not execute trades.
 - No scheduling, deployment, email, broker integration, or automatic trading is performed.
+
+## Decision-support report command
+
+Generate a structured decision-support report that composes existing snapshot, risk, and deterministic recommendation outputs:
+
+```bash
+poetry run finwall --database finwall.db report
+```
+
+Output formats:
+
+- Default output: Markdown
+- Explicit Markdown output: `--markdown`
+- Structured JSON output: `--json`
+
+Examples:
+
+```bash
+poetry run finwall --database finwall.db report --price NVDA=120 --price PLTR=90
+poetry run finwall --database finwall.db report --live-prices --market-index SP500
+poetry run finwall --database finwall.db report --price NVDA=120 --json
+```
+
+The report includes:
+
+- Portfolio snapshot metrics (cash, invested value, total value, allocation, valuation status)
+- Market condition section with optional raw index quote input
+- Holding recommendations from deterministic recommendation output
+- Cash allocation plan from deterministic recommendation output
+- Suggested orders section containing existing active orders only
+- Strategy assessment derived from valuation completeness, risk warnings, and cash deployment status
+- Risks/warnings roll-up and final action plan
+
+Important limitations and exclusions:
+
+- Decision-support only; not financial advice and not guaranteed outcomes
+- No LLM rewriting or generative analysis
+- No scheduling, email, deployment automation, broker integration, or automatic trading
+- No technical-analysis, fundamental-analysis, or news/sentiment modules
+- No market-condition classification (only optional raw index quote inclusion)
+- No new order generation in this report
+
+Manual prices override live prices for matching tickers, consistent with snapshot and recommendation behavior.
