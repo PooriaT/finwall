@@ -393,7 +393,9 @@ def test_report_market_condition_uses_extended_lookback(tmp_path, monkeypatch) -
 
     original = cli_module.classify_market_condition
 
-    def fake_classify_market_condition(*, provider, primary_symbol, include_nasdaq, days):
+    def fake_classify_market_condition(
+        *, provider, primary_symbol, include_nasdaq, days
+    ):
         seen["days"] = days
         return original(
             provider=provider,
@@ -402,7 +404,9 @@ def test_report_market_condition_uses_extended_lookback(tmp_path, monkeypatch) -
             days=days,
         )
 
-    monkeypatch.setattr("finwall.cli.classify_market_condition", fake_classify_market_condition)
+    monkeypatch.setattr(
+        "finwall.cli.classify_market_condition", fake_classify_market_condition
+    )
 
     run(
         [
@@ -416,6 +420,7 @@ def test_report_market_condition_uses_extended_lookback(tmp_path, monkeypatch) -
     )
 
     assert seen["days"] == 400
+
 
 def test_report_handles_empty_portfolio(tmp_path, capsys) -> None:
     database = tmp_path / "finwall.db"
