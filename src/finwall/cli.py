@@ -10,6 +10,7 @@ from finwall.fundamentals import (
     build_fundamental_analysis_report,
     build_fundamental_data_provider,
 )
+from finwall.market_calendar import evaluate_us_trading_day
 from finwall.market_condition import classify_market_condition
 from finwall.market_data import (
     INDEX_SYMBOL_MAP,
@@ -50,6 +51,11 @@ from finwall.report_history import (
 )
 from finwall.reports import build_decision_support_report
 from finwall.risk import RiskAssessment, assess_portfolio_risk
+from finwall.scheduled_report import (
+    ScheduledReportResult,
+    ScheduledReportStatus,
+    ScheduledRunContext,
+)
 from finwall.snapshot import PortfolioSnapshot, generate_snapshot
 from finwall.storage import SQLitePortfolioStore
 from finwall.technical_analysis import (
@@ -366,6 +372,29 @@ def build_parser() -> argparse.ArgumentParser:
     report.add_argument("--narrative", action="store_true")
     report.add_argument("--save-run", action="store_true")
     report.add_argument("--compare", action="store_true")
+
+    scheduled = subparsers.add_parser("run-scheduled-report")
+    scheduled.add_argument(
+        "--run-context",
+        choices=[item.value for item in ScheduledRunContext],
+        default=ScheduledRunContext.MANUAL.value,
+    )
+    scheduled.add_argument("--run-date")
+    scheduled.add_argument("--force", action="store_true")
+    scheduled.add_argument(
+        "--price",
+        action="append",
+        default=[],
+        help="Manual price in the format TICKER=PRICE",
+    )
+    scheduled.add_argument("--live-prices", action="store_true")
+    scheduled.add_argument("--market-index", choices=sorted(INDEX_SYMBOL_MAP.keys()))
+    scheduled.add_argument("--include-nasdaq", action="store_true")
+    scheduled.add_argument("--market-condition-days", type=int, default=400)
+    scheduled.add_argument("--json", action="store_true")
+    scheduled.add_argument("--markdown", action="store_true")
+    scheduled.add_argument("--save-run", action="store_true")
+    scheduled.add_argument("--compare", action="store_true")
 
     market_condition = subparsers.add_parser("market-condition")
     market_condition.add_argument(
@@ -820,6 +849,138 @@ def print_fundamental_summary_report(report) -> None:
         print(f"- {limitation}")
 
 
+def build_report_payload(
+    *,
+    args,
+    portfolio: Portfolio,
+    store: SQLitePortfolioStore,
+    print_live_price_warnings: bool = True,
+) -> tuple[
+    dict[str, object],
+    object,
+    object,
+    object,
+    object | None,
+    ReportRunComparison | None,
+    tuple[str, ...],
+]:
+    latest_prices = dict(parse_price(item) for item in args.price)
+    market_index_quote = None
+    market_condition_report = None
+    live_price_warnings: list[str] = []
+    if args.live_prices or args.market_index:
+        provider = build_market_data_provider(
+            settings.market_data_provider,
+            settings.market_data_timeout_seconds,
+        )
+        if args.live_prices:
+            fetched_prices, warnings = fetch_portfolio_latest_prices(
+                portfolio, provider
+            )
+            latest_prices = {**fetched_prices, **latest_prices}
+            for warning in warnings:
+                warning_message = f"unable to fetch price for {warning}"
+                live_price_warnings.append(warning_message)
+                if print_live_price_warnings:
+                    print(f"Warning: {warning_message}")
+        if args.market_index:
+            market_index_quote = provider.get_index_quote(args.market_index)
+            market_condition_report = classify_market_condition(
+                provider=provider,
+                primary_symbol=args.market_index,
+                include_nasdaq=args.include_nasdaq,
+                days=args.market_condition_days,
+            )
+
+    snapshot = generate_snapshot(portfolio, latest_prices)
+    risk_assessment = assess_portfolio_risk(portfolio, snapshot)
+    recommendation_report = build_recommendation_report(
+        portfolio, snapshot, risk_assessment
+    )
+    report = build_decision_support_report(
+        portfolio,
+        snapshot,
+        risk_assessment,
+        recommendation_report,
+        market_index_quote,
+        market_condition_report,
+    )
+    saved_run = None
+    comparison: ReportRunComparison | None = None
+    if args.save_run:
+        context = getattr(args, "save_command_context", "report")
+        report_run_id = store.save_report_run(
+            portfolio_name=portfolio.name,
+            report=report,
+            recommendation_report=recommendation_report,
+            risk_assessment=risk_assessment,
+            command_context=context,
+        )
+        saved_run = store.get_latest_report_run(portfolio.name)
+        if args.compare:
+            previous = store.get_previous_report_run(portfolio.name, report_run_id)
+            previous_statuses = (
+                store.list_report_recommendation_statuses(previous.id)
+                if previous and previous.id is not None
+                else ()
+            )
+            current_statuses = store.list_report_recommendation_statuses(report_run_id)
+            comparison = compare_recommendation_statuses(
+                previous=previous_statuses,
+                current=current_statuses,
+                previous_run_id=previous.id if previous else None,
+                current_run_id=report_run_id,
+            )
+    elif args.compare:
+        latest = store.get_latest_report_run(portfolio.name)
+        previous_statuses = (
+            store.list_report_recommendation_statuses(latest.id)
+            if latest and latest.id is not None
+            else ()
+        )
+        current_statuses = tuple(
+            StoredRecommendationStatus(
+                ticker=item.ticker,
+                status=item.status.value,
+                confidence=item.confidence.value,
+                risk_level=item.risk_level.value,
+                blocked_by_risk=item.blocked_by_risk,
+                suggested_action=item.suggested_action,
+            )
+            for item in recommendation_report.holdings
+        )
+        comparison = compare_recommendation_statuses(
+            previous=previous_statuses,
+            current=current_statuses,
+            previous_run_id=latest.id if latest else None,
+            current_run_id=None,
+        )
+
+    payload: dict[str, object] = report.as_dict()
+    if saved_run is not None:
+        payload["saved_run"] = {
+            "id": saved_run.id,
+            "created_at": saved_run.created_at,
+            "portfolio_name": saved_run.portfolio_name,
+        }
+    if comparison is not None:
+        payload["comparison"] = {
+            "previous_run_id": comparison.previous_run_id,
+            "current_run_id": comparison.current_run_id,
+            "summary": comparison.summary,
+            "changes": [item.__dict__ for item in comparison.changes],
+        }
+    return (
+        payload,
+        report,
+        saved_run,
+        comparison,
+        risk_assessment,
+        recommendation_report,
+        tuple(live_price_warnings),
+    )
+
+
 def run(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -1089,116 +1250,18 @@ def run(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "report":
-        latest_prices = dict(parse_price(item) for item in args.price)
-        market_index_quote = None
-        market_condition_report = None
-        if args.live_prices or args.market_index:
-            provider = build_market_data_provider(
-                settings.market_data_provider,
-                settings.market_data_timeout_seconds,
-            )
-            if args.live_prices:
-                fetched_prices, warnings = fetch_portfolio_latest_prices(
-                    portfolio, provider
-                )
-                latest_prices = {**fetched_prices, **latest_prices}
-                for warning in warnings:
-                    print(f"Warning: unable to fetch price for {warning}")
-            if args.market_index:
-                market_index_quote = provider.get_index_quote(args.market_index)
-                market_condition_report = classify_market_condition(
-                    provider=provider,
-                    primary_symbol=args.market_index,
-                    include_nasdaq=args.include_nasdaq,
-                    days=args.market_condition_days,
-                )
-
-        snapshot = generate_snapshot(portfolio, latest_prices)
-        risk_assessment = assess_portfolio_risk(portfolio, snapshot)
-        recommendation_report = build_recommendation_report(
-            portfolio, snapshot, risk_assessment
+        payload, report, saved_run, comparison, _, _, _ = build_report_payload(
+            args=args, portfolio=portfolio, store=store
         )
-        report = build_decision_support_report(
-            portfolio,
-            snapshot,
-            risk_assessment,
-            recommendation_report,
-            market_index_quote,
-            market_condition_report,
-        )
-        saved_run = None
-        comparison: ReportRunComparison | None = None
-        if args.save_run:
-            report_run_id = store.save_report_run(
-                portfolio_name=portfolio.name,
-                report=report,
-                recommendation_report=recommendation_report,
-                risk_assessment=risk_assessment,
-                command_context="report",
-            )
-            saved_run = store.get_latest_report_run(portfolio.name)
-            if args.compare:
-                previous = store.get_previous_report_run(portfolio.name, report_run_id)
-                previous_statuses = (
-                    store.list_report_recommendation_statuses(previous.id)
-                    if previous and previous.id is not None
-                    else ()
-                )
-                current_statuses = store.list_report_recommendation_statuses(
-                    report_run_id
-                )
-                comparison = compare_recommendation_statuses(
-                    previous=previous_statuses,
-                    current=current_statuses,
-                    previous_run_id=previous.id if previous else None,
-                    current_run_id=report_run_id,
-                )
-        elif args.compare:
-            latest = store.get_latest_report_run(portfolio.name)
-            previous_statuses = (
-                store.list_report_recommendation_statuses(latest.id)
-                if latest and latest.id is not None
-                else ()
-            )
-            current_statuses = tuple(
-                StoredRecommendationStatus(
-                    ticker=item.ticker,
-                    status=item.status.value,
-                    confidence=item.confidence.value,
-                    risk_level=item.risk_level.value,
-                    blocked_by_risk=item.blocked_by_risk,
-                    suggested_action=item.suggested_action,
-                )
-                for item in recommendation_report.holdings
-            )
-            comparison = compare_recommendation_statuses(
-                previous=previous_statuses,
-                current=current_statuses,
-                previous_run_id=latest.id if latest else None,
-                current_run_id=None,
-            )
         if not args.narrative:
             if args.json:
-                payload: dict[str, object] = report.as_dict()
-                if saved_run is not None:
-                    payload["saved_run"] = {
-                        "id": saved_run.id,
-                        "created_at": saved_run.created_at,
-                        "portfolio_name": saved_run.portfolio_name,
-                    }
-                if comparison is not None:
-                    payload["comparison"] = {
-                        "previous_run_id": comparison.previous_run_id,
-                        "current_run_id": comparison.current_run_id,
-                        "summary": comparison.summary,
-                        "changes": [item.__dict__ for item in comparison.changes],
-                    }
                 print(json.dumps(payload, indent=2))
             else:
                 print(report.to_markdown())
                 if saved_run is not None:
                     print(
-                        f"\nSaved report run id={saved_run.id} for {saved_run.portfolio_name}."
+                        f"\nSaved report run id={saved_run.id} for "
+                        f"{saved_run.portfolio_name}."
                     )
                 if args.compare and not args.save_run:
                     print("Current run was not saved.")
@@ -1222,25 +1285,75 @@ def run(argv: list[str] | None = None) -> int:
         narrative = generate_narrative(request, provider)
 
         if args.json:
-            payload = report.as_dict()
             payload["narrative"] = narrative.as_dict()
-            if saved_run is not None:
-                payload["saved_run"] = {
-                    "id": saved_run.id,
-                    "created_at": saved_run.created_at,
-                    "portfolio_name": saved_run.portfolio_name,
-                }
-            if comparison is not None:
-                payload["comparison"] = {
-                    "previous_run_id": comparison.previous_run_id,
-                    "current_run_id": comparison.current_run_id,
-                    "summary": comparison.summary,
-                    "changes": [item.__dict__ for item in comparison.changes],
-                }
             print(json.dumps(payload, indent=2))
         else:
             print(f"{report.to_markdown()}\n\n{format_narrative_markdown(narrative)}")
         return 0
+
+    if args.command == "run-scheduled-report":
+        run_day = parse_date(args.run_date)
+        trading = evaluate_us_trading_day(run_day)
+        if not trading.is_trading_day and not args.force:
+            message = f"Skipped scheduled report for {trading.calendar_date}: {trading.reason}"
+            result = ScheduledReportResult(
+                status=ScheduledReportStatus.SKIPPED,
+                run_context=args.run_context,
+                trading_day=trading.as_dict(),
+                report=None,
+                saved_report_id=None,
+                comparison=None,
+                message=message,
+                warnings=(),
+            )
+            if args.json:
+                print(json.dumps(result.as_dict(), indent=2))
+            else:
+                print(message)
+            return 0
+        try:
+            args.save_command_context = f"scheduled:{args.run_context}"
+            payload, report, saved_run, comparison, _, _, live_price_warnings = (
+                build_report_payload(
+                    args=args,
+                    portfolio=portfolio,
+                    store=store,
+                    print_live_price_warnings=not args.json,
+                )
+            )
+            message = f"Generated scheduled report for {trading.calendar_date}."
+            result = ScheduledReportResult(
+                status=ScheduledReportStatus.GENERATED,
+                run_context=args.run_context,
+                trading_day=trading.as_dict(),
+                report=payload,
+                saved_report_id=saved_run.id if saved_run else None,
+                comparison=payload.get("comparison")
+                if isinstance(payload.get("comparison"), dict)
+                else None,
+                message=message,
+                warnings=live_price_warnings,
+            )
+            if args.json:
+                print(json.dumps(result.as_dict(), indent=2))
+            elif args.markdown or not args.json:
+                print(report.to_markdown())
+            return 0
+        except Exception:
+            message = "Scheduled report failed unexpectedly."
+            if args.json:
+                print(
+                    json.dumps(
+                        {
+                            "status": ScheduledReportStatus.FAILED.value,
+                            "message": message,
+                        },
+                        indent=2,
+                    )
+                )
+            else:
+                print(message)
+            return 1
 
     if args.command == "market-index":
         provider = build_market_data_provider(
