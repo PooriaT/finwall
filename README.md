@@ -554,3 +554,35 @@ Important scope notes:
 - Deterministic only; no LLMs.
 - Decision-support only; not trade recommendations.
 - No sentiment scoring, recommendation integration, scheduling, email, deployment, broker integration, or automatic trading.
+
+## Optional narrative layer (`report --narrative`)
+
+Finwall now supports an **optional** narrative rewrite layer for the `report` command. This layer rewrites existing deterministic report outputs into clearer language while staying constrained to structured evidence.
+
+Key safety behavior:
+
+- Deterministic report generation remains the source of truth.
+- Narrative is disabled by default and offline-safe.
+- Narrative cannot override deterministic recommendation statuses or risk warnings.
+- Narrative cannot invent prices, holdings, metrics, news claims, or source links.
+- Finwall does not execute trades.
+- Output is decision support only and not financial advice.
+
+Usage:
+
+```bash
+poetry run finwall --database finwall.db report --price NVDA=120 --narrative
+poetry run finwall --database finwall.db report --price NVDA=120 --narrative --json
+```
+
+Configuration:
+
+- `FINWALL_NARRATIVE_PROVIDER` (default: `disabled`)
+- `FINWALL_NARRATIVE_MAX_WORDS` (default: `500`)
+- `FINWALL_NARRATIVE_STYLE` (default: `plain_english`)
+
+Fallback behavior:
+
+- If narrative provider is disabled, unavailable, invalid, or fails validation, Finwall still returns the deterministic report.
+- Narrative output includes deterministic fallback text with warnings and `fallback_used=true`.
+- JSON output for `report --narrative --json` includes a top-level `narrative` object.

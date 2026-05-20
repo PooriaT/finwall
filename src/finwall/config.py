@@ -55,6 +55,11 @@ class Settings:
     news_max_age_hours: int = _parse_positive_int(
         os.getenv("FINWALL_NEWS_MAX_AGE_HOURS"), 72
     )
+    narrative_provider: str = os.getenv("FINWALL_NARRATIVE_PROVIDER", "disabled")
+    narrative_max_words: int = _parse_positive_int(
+        os.getenv("FINWALL_NARRATIVE_MAX_WORDS"), 500
+    )
+    narrative_style: str = os.getenv("FINWALL_NARRATIVE_STYLE", "plain_english")
 
 
 settings = Settings()

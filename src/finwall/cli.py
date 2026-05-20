@@ -30,6 +30,14 @@ from finwall.models import (
     TradeTransaction,
     WatchlistItem,
 )
+from finwall.narrative import (
+    NARRATIVE_SECTIONS,
+    DisabledNarrativeProvider,
+    NarrativeRequest,
+    build_narrative_evidence,
+    format_narrative_markdown,
+    generate_narrative,
+)
 from finwall.news import build_news_data_provider, build_news_report
 from finwall.news_summary import build_news_summary_report
 from finwall.order_evaluation import ProposedOrder, evaluate_proposed_order
@@ -349,6 +357,7 @@ def build_parser() -> argparse.ArgumentParser:
     report.add_argument("--market-condition-days", type=int, default=400)
     report.add_argument("--json", action="store_true")
     report.add_argument("--markdown", action="store_true")
+    report.add_argument("--narrative", action="store_true")
 
     market_condition = subparsers.add_parser("market-condition")
     market_condition.add_argument(
@@ -1109,10 +1118,29 @@ def run(argv: list[str] | None = None) -> int:
             market_index_quote,
             market_condition_report,
         )
+        if not args.narrative:
+            if args.json:
+                print(report.to_json())
+            else:
+                print(report.to_markdown())
+            return 0
+
+        evidence = build_narrative_evidence(report)
+        request = NarrativeRequest(
+            evidence=evidence,
+            requested_sections=NARRATIVE_SECTIONS,
+            max_words=settings.narrative_max_words,
+            style=settings.narrative_style,
+        )
+        provider = DisabledNarrativeProvider(name=settings.narrative_provider)
+        narrative = generate_narrative(request, provider)
+
         if args.json:
-            print(report.to_json())
+            payload = report.as_dict()
+            payload["narrative"] = narrative.as_dict()
+            print(__import__("json").dumps(payload, indent=2))
         else:
-            print(report.to_markdown())
+            print(f"{report.to_markdown()}\n\n{format_narrative_markdown(narrative)}")
         return 0
 
     if args.command == "market-index":
