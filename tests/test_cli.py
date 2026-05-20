@@ -383,3 +383,66 @@ def test_report_handles_empty_portfolio(tmp_path, capsys) -> None:
     run(["--database", str(database), "report"])
     out = capsys.readouterr().out
     assert "# Finwall Decision-Support Report" in out
+
+
+def test_technicals_text_output(tmp_path, monkeypatch, capsys) -> None:
+    database = tmp_path / "finwall.db"
+    run(["--database", str(database), "add-holding", "NVDA", "1", "100"])
+    run(["--database", str(database), "add-watchlist", "MSFT"])
+
+    from finwall.market_data import HistoricalPriceBar
+
+    provider = StaticMarketDataProvider(
+        historical_prices={
+            "NVDA": tuple(
+                HistoricalPriceBar(
+                    "NVDA",
+                    f"2025-01-{day:02d}",
+                    Decimal("100") + day,
+                    1000 + day,
+                    "static",
+                )
+                for day in range(1, 29)
+            ),
+            "MSFT": (),
+        }
+    )
+    monkeypatch.setattr("finwall.cli.build_market_data_provider", lambda *_: provider)
+
+    run(["--database", str(database), "technicals"])
+    out = capsys.readouterr().out
+    assert "Holdings:" in out
+    assert "Watchlist:" in out
+    assert "NVDA" in out
+
+
+def test_technicals_json_and_filters(tmp_path, monkeypatch, capsys) -> None:
+    database = tmp_path / "finwall.db"
+    run(["--database", str(database), "add-holding", "NVDA", "1", "100"])
+    run(["--database", str(database), "add-watchlist", "MSFT"])
+
+    from finwall.market_data import HistoricalPriceBar
+
+    provider = StaticMarketDataProvider(
+        historical_prices={
+            "NVDA": (
+                HistoricalPriceBar(
+                    "NVDA", "2025-01-01", Decimal("100"), 1000, "static"
+                ),
+            ),
+            "MSFT": (
+                HistoricalPriceBar(
+                    "MSFT", "2025-01-01", Decimal("200"), None, "static"
+                ),
+            ),
+        }
+    )
+    monkeypatch.setattr("finwall.cli.build_market_data_provider", lambda *_: provider)
+
+    run(["--database", str(database), "technicals", "--json", "--holdings-only"])
+    out = capsys.readouterr().out
+    assert '"holdings": [' in out
+
+    run(["--database", str(database), "technicals", "--json", "--watchlist-only"])
+    out = capsys.readouterr().out
+    assert '"watchlist": [' in out

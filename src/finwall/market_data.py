@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Iterable, Protocol
@@ -35,10 +36,25 @@ class IndexQuote:
     error: str | None = None
 
 
+@dataclass(frozen=True)
+class HistoricalPriceBar:
+    ticker: str
+    date: str
+    close: Decimal | None
+    volume: int | None
+    source: str
+
+
 class MarketDataProvider(Protocol):
     def get_latest_prices(self, tickers: Iterable[str]) -> dict[str, MarketPrice]: ...
 
     def get_index_quote(self, symbol: str) -> IndexQuote: ...
+
+    def get_historical_prices(
+        self,
+        ticker: str,
+        days: int = 250,
+    ) -> tuple[HistoricalPriceBar, ...]: ...
 
 
 class StaticMarketDataProvider:
@@ -46,12 +62,17 @@ class StaticMarketDataProvider:
         self,
         prices: dict[str, MarketPrice] | None = None,
         index_quotes: dict[str, IndexQuote] | None = None,
+        historical_prices: dict[str, tuple[HistoricalPriceBar, ...]] | None = None,
     ) -> None:
         self._prices = {
             ticker.upper(): value for ticker, value in (prices or {}).items()
         }
         self._index_quotes = {
             symbol.upper(): value for symbol, value in (index_quotes or {}).items()
+        }
+        self._historical_prices = {
+            ticker.upper(): tuple(bars)
+            for ticker, bars in (historical_prices or {}).items()
         }
 
     def get_latest_prices(self, tickers: Iterable[str]) -> dict[str, MarketPrice]:
@@ -81,6 +102,17 @@ class StaticMarketDataProvider:
                 error="index quote not configured",
             ),
         )
+
+    def get_historical_prices(
+        self,
+        ticker: str,
+        days: int = 250,
+    ) -> tuple[HistoricalPriceBar, ...]:
+        normalized = ticker.upper()
+        bars = self._historical_prices.get(normalized, ())
+        if days <= 0:
+            return ()
+        return bars[-days:]
 
 
 class YahooMarketDataProvider:
@@ -160,6 +192,77 @@ class YahooMarketDataProvider:
                 return json.loads(response.read().decode("utf-8"))
         except TimeoutError as exc:
             raise TimeoutError("market data request timed out") from exc
+
+    def get_historical_prices(
+        self,
+        ticker: str,
+        days: int = 250,
+    ) -> tuple[HistoricalPriceBar, ...]:
+        normalized = ticker.upper().strip()
+        if not normalized or days <= 0:
+            return ()
+        url = (
+            "https://query1.finance.yahoo.com/v8/finance/chart/"
+            f"{quote(normalized, safe='^')}?range={days}d&interval=1d"
+        )
+        try:
+            payload = self._fetch_json(url)
+        except (TimeoutError, HTTPError, URLError, ValueError):
+            return ()
+
+        result = payload.get("chart", {}).get("result", [])
+        if not result:
+            return ()
+        item = result[0]
+        timestamps = item.get("timestamp", [])
+        indicators = item.get("indicators", {}).get("quote", [])
+        quote_data = indicators[0] if indicators else {}
+        closes = quote_data.get("close", [])
+        volumes = quote_data.get("volume", [])
+
+        bars: list[HistoricalPriceBar] = []
+        for index, timestamp in enumerate(timestamps):
+            timestamp_value = _to_epoch_seconds(timestamp)
+            if timestamp_value is None:
+                continue
+
+            close = _to_decimal(closes[index]) if index < len(closes) else None
+            raw_volume = volumes[index] if index < len(volumes) else None
+            volume = _to_int(raw_volume)
+            bar_date = (
+                __import__("datetime")
+                .datetime.fromtimestamp(
+                    timestamp_value, tz=__import__("datetime").timezone.utc
+                )
+                .date()
+            )
+            bars.append(
+                HistoricalPriceBar(
+                    ticker=normalized,
+                    date=bar_date.isoformat(),
+                    close=close,
+                    volume=volume,
+                    source=self.source,
+                )
+            )
+        return tuple(bars)
+
+
+def _to_int(value: object) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
+def _to_epoch_seconds(value: object) -> int | None:
+    return _to_int(value)
 
 
 def _to_decimal(value: object) -> Decimal | None:

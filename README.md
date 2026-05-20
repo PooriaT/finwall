@@ -381,3 +381,37 @@ Important limitations and exclusions:
 - No new order generation in this report
 
 Manual prices override live prices for matching tickers, consistent with snapshot and recommendation behavior.
+
+## Technical indicators command
+
+Use the `technicals` command to generate deterministic technical indicator snapshots for current holdings and watchlist tickers from historical prices.
+
+```bash
+poetry run finwall --database finwall.db technicals
+```
+
+```bash
+poetry run finwall --database finwall.db technicals --days 250 --json
+```
+
+Supported options:
+
+- `--days` (default `250`): number of calendar days of historical bars requested from provider
+- `--json`: emits structured JSON output for downstream consumers
+- `--holdings-only`: output holdings snapshots only
+- `--watchlist-only`: output watchlist snapshots only
+
+Current indicator set:
+
+- SMA 20, SMA 50, SMA 200
+- RSI 14
+- Recent high and recent low
+- Volume trend using recent vs previous average volume (when available)
+
+Handling of missing or short history:
+
+- Missing historical bars produce `data_status="missing_data"` with warnings
+- Short history produces `partial` or `insufficient_data` without crashing
+- Indicators with insufficient input remain `null` in JSON / `n/a` in text output
+
+Important: technical indicators are deterministic decision-support inputs only. They are **not** buy/sell/hold/reduce/watch recommendations and are not integrated into recommendation logic yet.
