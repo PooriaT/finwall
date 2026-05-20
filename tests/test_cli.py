@@ -535,3 +535,94 @@ def test_fundamentals_json_and_filters(tmp_path, capsys) -> None:
     run(["--database", str(database), "fundamentals", "--watchlist-only"])
     out = capsys.readouterr().out
     assert "Holdings:" not in out
+
+
+def test_news_text_and_json_and_filters(tmp_path, monkeypatch, capsys) -> None:
+    from finwall.news import (
+        NewsArticle,
+        NewsProviderResult,
+        NewsTopicType,
+        StaticNewsDataProvider,
+    )
+
+    database = tmp_path / "finwall.db"
+    run(
+        [
+            "--database",
+            str(database),
+            "add-holding",
+            "NVDA",
+            "1",
+            "100",
+            "--sector",
+            "Technology",
+        ]
+    )
+    run(["--database", str(database), "add-watchlist", "AAPL"])
+
+    provider = StaticNewsDataProvider(
+        company_news={
+            "NVDA": NewsProviderResult(
+                NewsTopicType.TICKER,
+                "NVDA",
+                (
+                    NewsArticle(
+                        "H",
+                        "Reuters",
+                        "u",
+                        None,
+                        NewsTopicType.TICKER,
+                        "NVDA",
+                        "NVDA",
+                        None,
+                    ),
+                ),
+                "static",
+                True,
+            ),
+            "AAPL": NewsProviderResult(
+                NewsTopicType.TICKER, "AAPL", (), "static", False, "none"
+            ),
+        },
+        market_news={
+            "market": NewsProviderResult(
+                NewsTopicType.MARKET, "market", (), "static", True
+            )
+        },
+        sector_news={
+            "technology": NewsProviderResult(
+                NewsTopicType.SECTOR, "Technology", (), "static", True
+            )
+        },
+    )
+    monkeypatch.setattr("finwall.cli.build_news_data_provider", lambda *_: provider)
+
+    run(["--database", str(database), "news", "--include-market", "--include-sectors"])
+    out = capsys.readouterr().out
+    assert "Holdings:" in out
+    assert "Watchlist:" in out
+
+    run(["--database", str(database), "news", "--json"])
+    out = capsys.readouterr().out
+    assert '"holdings"' in out
+
+    run(["--database", str(database), "news", "--holdings-only"])
+    out = capsys.readouterr().out
+    assert "Watchlist:" not in out
+
+    run(["--database", str(database), "news", "--watchlist-only"])
+    out = capsys.readouterr().out
+    assert "Holdings:" not in out
+
+
+def test_news_empty_portfolio_and_unavailable_provider(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    from finwall.news import StaticNewsDataProvider
+
+    database = tmp_path / "finwall.db"
+    monkeypatch.setattr(
+        "finwall.cli.build_news_data_provider", lambda *_: StaticNewsDataProvider()
+    )
+    run(["--database", str(database), "news"])
+    assert "News topics:" in capsys.readouterr().out
