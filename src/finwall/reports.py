@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass
 
+from finwall.market_condition import MarketConditionReport
 from finwall.market_data import IndexQuote
 from finwall.models import Portfolio
 from finwall.recommendations import (
@@ -158,6 +159,7 @@ def build_decision_support_report(
     risk_assessment: RiskAssessment,
     recommendation_report: RecommendationReport,
     market_index_quote: IndexQuote | None = None,
+    market_condition_report: MarketConditionReport | None = None,
 ) -> DecisionSupportReport:
     disclaimer = (
         "Decision-support output only. Not financial advice, not guaranteed outcomes, "
@@ -175,7 +177,9 @@ def build_decision_support_report(
         "total_unrealized_gain_loss": snapshot.total_unrealized_gain_loss,
     }
 
-    market_condition = _build_market_condition(market_index_quote)
+    market_condition = _build_market_condition(
+        market_index_quote, market_condition_report
+    )
     holdings = tuple(_holding_dict(item) for item in recommendation_report.holdings)
     cash_plan = {
         "status": recommendation_report.cash_deployment.status.value,
@@ -242,7 +246,39 @@ def build_decision_support_report(
 
 def _build_market_condition(
     market_index_quote: IndexQuote | None,
+    market_condition_report: MarketConditionReport | None,
 ) -> MarketConditionSection:
+    if market_condition_report is not None:
+        primary = market_condition_report.primary_index
+        inputs = {
+            "primary_symbol": primary.symbol if primary is not None else None,
+            "primary_provider_symbol": primary.provider_symbol
+            if primary is not None
+            else None,
+            "primary_trend_status": primary.trend_status
+            if primary is not None
+            else None,
+            "secondary_count": len(market_condition_report.secondary_indexes),
+            "reasoning_inputs": list(market_condition_report.reasoning_inputs),
+            "warnings": list(market_condition_report.warnings),
+        }
+        if market_index_quote is not None:
+            inputs["raw_index_quote"] = {
+                "symbol": market_index_quote.symbol,
+                "price": str(market_index_quote.price)
+                if market_index_quote.price is not None
+                else None,
+                "source": market_index_quote.source,
+                "available": market_index_quote.available,
+                "error": market_index_quote.error,
+            }
+        return MarketConditionSection(
+            status=market_condition_report.status.value,
+            summary=market_condition_report.summary,
+            inputs=inputs,
+            limitations=market_condition_report.limitations,
+        )
+
     if market_index_quote is None:
         return MarketConditionSection(
             status="not_evaluated",

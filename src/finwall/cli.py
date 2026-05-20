@@ -4,6 +4,7 @@ from datetime import date
 from decimal import Decimal
 
 from finwall.config import settings
+from finwall.market_condition import classify_market_condition
 from finwall.market_data import (
     INDEX_SYMBOL_MAP,
     build_market_data_provider,
@@ -337,8 +338,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     report.add_argument("--live-prices", action="store_true")
     report.add_argument("--market-index", choices=sorted(INDEX_SYMBOL_MAP.keys()))
+    report.add_argument("--include-nasdaq", action="store_true")
+    report.add_argument("--market-condition-days", type=int, default=400)
     report.add_argument("--json", action="store_true")
     report.add_argument("--markdown", action="store_true")
+
+    market_condition = subparsers.add_parser("market-condition")
+    market_condition.add_argument(
+        "--primary-index", choices=sorted(INDEX_SYMBOL_MAP.keys()), default="SP500"
+    )
+    market_condition.add_argument("--include-nasdaq", action="store_true")
+    market_condition.add_argument("--days", type=int, default=250)
+    market_condition.add_argument("--json", action="store_true")
     return parser
 
 
@@ -487,6 +498,32 @@ def print_recommendation_report(report) -> None:
     if report.limitations:
         print("Limitations:")
         for item in report.limitations:
+            print(f"- {item}")
+
+
+def print_market_condition_report(report) -> None:
+    print(f"Status: {report.status.value}")
+    print(f"Summary: {report.summary}")
+    if report.primary_index is not None:
+        primary = report.primary_index
+        print(f"Primary index: {primary.symbol} ({primary.provider_symbol})")
+        print(f"  trend_status={primary.trend_status} source={primary.source}")
+        print(
+            f"  latest_close={primary.latest_close or 'n/a'} "
+            f"sma50={primary.sma_50 or 'n/a'} sma200={primary.sma_200 or 'n/a'}"
+        )
+        print(f"  volatility_proxy={primary.volatility_proxy or 'n/a'}")
+    if report.secondary_indexes:
+        print("Secondary indexes:")
+        for item in report.secondary_indexes:
+            print(f"- {item.symbol}: trend_status={item.trend_status}")
+    if report.reasoning_inputs:
+        print("Reasoning inputs:")
+        for item in report.reasoning_inputs:
+            print(f"- {item}")
+    if report.warnings:
+        print("Warnings:")
+        for item in report.warnings:
             print(f"- {item}")
 
 
@@ -690,9 +727,27 @@ def run(argv: list[str] | None = None) -> int:
             print_technical_report(report, args.holdings_only, args.watchlist_only)
         return 0
 
+    if args.command == "market-condition":
+        provider = build_market_data_provider(
+            settings.market_data_provider,
+            settings.market_data_timeout_seconds,
+        )
+        report = classify_market_condition(
+            provider=provider,
+            primary_symbol=args.primary_index,
+            include_nasdaq=args.include_nasdaq,
+            days=args.days,
+        )
+        if args.json:
+            print(report.to_json())
+        else:
+            print_market_condition_report(report)
+        return 0
+
     if args.command == "report":
         latest_prices = dict(parse_price(item) for item in args.price)
         market_index_quote = None
+        market_condition_report = None
         if args.live_prices or args.market_index:
             provider = build_market_data_provider(
                 settings.market_data_provider,
@@ -707,6 +762,12 @@ def run(argv: list[str] | None = None) -> int:
                     print(f"Warning: unable to fetch price for {warning}")
             if args.market_index:
                 market_index_quote = provider.get_index_quote(args.market_index)
+                market_condition_report = classify_market_condition(
+                    provider=provider,
+                    primary_symbol=args.market_index,
+                    include_nasdaq=args.include_nasdaq,
+                    days=args.market_condition_days,
+                )
 
         snapshot = generate_snapshot(portfolio, latest_prices)
         risk_assessment = assess_portfolio_risk(portfolio, snapshot)
@@ -719,6 +780,7 @@ def run(argv: list[str] | None = None) -> int:
             risk_assessment,
             recommendation_report,
             market_index_quote,
+            market_condition_report,
         )
         if args.json:
             print(report.to_json())
