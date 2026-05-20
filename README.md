@@ -528,3 +528,29 @@ Limitations:
 - News is raw decision-support input only.
 - No recommendation integration, sentiment scoring, LLM summarization, scheduling, email, deployment, broker integration, or automatic trading.
 
+## News summary command
+
+Use deterministic headline summaries that separate facts, interpretation, uncertainty, and speculative claims:
+
+```bash
+poetry run finwall --database finwall.db news-summary
+poetry run finwall --database finwall.db news-summary --json
+poetry run finwall --database finwall.db news-summary --holdings-only
+poetry run finwall --database finwall.db news-summary --include-market --include-sectors
+```
+
+News summary behavior:
+- Builds from the existing raw `news` report layer (no new provider/fetch flow).
+- Separates claims into:
+  - confirmed facts
+  - possible market interpretations
+  - uncertainties
+  - speculative / low-confidence claims
+- Preserves per-claim source references (title, source, URL, published time, source-quality, recency).
+- Detects simple deterministic headline conflicts (e.g. raises vs cuts guidance) and adds uncertainty warnings.
+- Produces readable text output by default and structured JSON with `--json`.
+
+Important scope notes:
+- Deterministic only; no LLMs.
+- Decision-support only; not trade recommendations.
+- No sentiment scoring, recommendation integration, scheduling, email, deployment, broker integration, or automatic trading.
