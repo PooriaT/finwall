@@ -46,7 +46,9 @@ def test_fetch_portfolio_latest_prices_skips_missing_and_collects_warnings() -> 
     assert warnings == ["PLTR: missing"]
 
 
-def test_yahoo_historical_prices_skips_invalid_timestamp_and_nan_volume(monkeypatch) -> None:
+def test_yahoo_historical_prices_skips_invalid_timestamp_and_nan_volume(
+    monkeypatch,
+) -> None:
     from finwall.market_data import YahooMarketDataProvider
 
     provider = YahooMarketDataProvider(timeout_seconds=1.0)
