@@ -74,6 +74,14 @@ def compare_recommendation_statuses(
     previous_run_id: int | None,
     current_run_id: int | None,
 ) -> ReportRunComparison:
+    if previous_run_id is None:
+        return ReportRunComparison(
+            previous_run_id=previous_run_id,
+            current_run_id=current_run_id,
+            changes=(),
+            summary="First saved report run; no previous run available for comparison.",
+        )
+
     previous_by_ticker = {item.ticker: item for item in previous}
     current_by_ticker = {item.ticker: item for item in current}
     changes: list[RecommendationChange] = []
@@ -154,9 +162,7 @@ def compare_recommendation_statuses(
                 )
             )
 
-    if previous_run_id is None:
-        summary = "First saved report run; no previous run available for comparison."
-    elif not changes:
+    if not changes:
         summary = "No recommendation changes were detected."
     else:
         summary = f"{len(changes)} recommendation change(s) detected."

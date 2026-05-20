@@ -815,6 +815,6 @@ def test_report_save_run_compare_json(tmp_path, capsys) -> None:
         ]
     )
     out = capsys.readouterr().out
-    assert '"report": {' in out
+    assert '"portfolio_snapshot": {' in out
     assert '"saved_run": {' in out
     assert '"comparison": {' in out

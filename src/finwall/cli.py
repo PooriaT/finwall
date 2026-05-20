@@ -1179,7 +1179,7 @@ def run(argv: list[str] | None = None) -> int:
             )
         if not args.narrative:
             if args.json:
-                payload: dict[str, object] = {"report": report.as_dict()}
+                payload: dict[str, object] = report.as_dict()
                 if saved_run is not None:
                     payload["saved_run"] = {
                         "id": saved_run.id,
@@ -1222,7 +1222,7 @@ def run(argv: list[str] | None = None) -> int:
         narrative = generate_narrative(request, provider)
 
         if args.json:
-            payload = {"report": report.as_dict()}
+            payload = report.as_dict()
             payload["narrative"] = narrative.as_dict()
             if saved_run is not None:
                 payload["saved_run"] = {
