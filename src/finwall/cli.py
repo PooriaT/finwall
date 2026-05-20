@@ -26,6 +26,7 @@ from finwall.models import (
 )
 from finwall.order_evaluation import ProposedOrder, evaluate_proposed_order
 from finwall.recommendations import build_recommendation_report
+from finwall.reports import build_decision_support_report
 from finwall.risk import RiskAssessment, assess_portfolio_risk
 from finwall.snapshot import PortfolioSnapshot, generate_snapshot
 from finwall.storage import SQLitePortfolioStore
@@ -316,6 +317,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     market_index = subparsers.add_parser("market-index")
     market_index.add_argument("symbol", choices=sorted(INDEX_SYMBOL_MAP.keys()))
+
+    report = subparsers.add_parser("report")
+    report.add_argument(
+        "--price",
+        action="append",
+        default=[],
+        help="Manual price in the format TICKER=PRICE",
+    )
+    report.add_argument("--live-prices", action="store_true")
+    report.add_argument("--market-index", choices=sorted(INDEX_SYMBOL_MAP.keys()))
+    report.add_argument("--json", action="store_true")
+    report.add_argument("--markdown", action="store_true")
     return parser
 
 
@@ -591,6 +604,42 @@ def run(argv: list[str] | None = None) -> int:
                 print("Validation errors:")
                 for error in evaluation.errors:
                     print(f"- {error}")
+        return 0
+
+    if args.command == "report":
+        latest_prices = dict(parse_price(item) for item in args.price)
+        market_index_quote = None
+        if args.live_prices or args.market_index:
+            provider = build_market_data_provider(
+                settings.market_data_provider,
+                settings.market_data_timeout_seconds,
+            )
+            if args.live_prices:
+                fetched_prices, warnings = fetch_portfolio_latest_prices(
+                    portfolio, provider
+                )
+                latest_prices = {**fetched_prices, **latest_prices}
+                for warning in warnings:
+                    print(f"Warning: unable to fetch price for {warning}")
+            if args.market_index:
+                market_index_quote = provider.get_index_quote(args.market_index)
+
+        snapshot = generate_snapshot(portfolio, latest_prices)
+        risk_assessment = assess_portfolio_risk(portfolio, snapshot)
+        recommendation_report = build_recommendation_report(
+            portfolio, snapshot, risk_assessment
+        )
+        report = build_decision_support_report(
+            portfolio,
+            snapshot,
+            risk_assessment,
+            recommendation_report,
+            market_index_quote,
+        )
+        if args.json:
+            print(report.to_json())
+        else:
+            print(report.to_markdown())
         return 0
 
     if args.command == "market-index":
