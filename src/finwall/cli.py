@@ -4,6 +4,10 @@ from datetime import date
 from decimal import Decimal
 
 from finwall.config import settings
+from finwall.fundamentals import (
+    build_fundamental_analysis_report,
+    build_fundamental_data_provider,
+)
 from finwall.market_condition import classify_market_condition
 from finwall.market_data import (
     INDEX_SYMBOL_MAP,
@@ -350,6 +354,11 @@ def build_parser() -> argparse.ArgumentParser:
     market_condition.add_argument("--include-nasdaq", action="store_true")
     market_condition.add_argument("--days", type=int, default=250)
     market_condition.add_argument("--json", action="store_true")
+
+    fundamentals = subparsers.add_parser("fundamentals")
+    fundamentals.add_argument("--json", action="store_true")
+    fundamentals.add_argument("--holdings-only", action="store_true")
+    fundamentals.add_argument("--watchlist-only", action="store_true")
     return parser
 
 
@@ -575,6 +584,45 @@ def print_technical_report(
             print(f"- {limitation}")
 
 
+def print_fundamentals_report(
+    report, holdings_only: bool, watchlist_only: bool
+) -> None:
+    print(report.summary)
+
+    def _print_metrics(name: str, metrics) -> None:
+        if not metrics:
+            print(f"  {name}: unavailable")
+            return
+        print(f"  {name}:")
+        for metric in metrics:
+            print(f"  - {metric.name}={metric.value or 'n/a'}")
+
+    def _print_section(name: str, snapshots) -> None:
+        print(f"{name}:")
+        if not snapshots:
+            print("- none")
+            return
+        for item in snapshots:
+            print(f"- {item.ticker} [{item.data_status}] source={item.source}")
+            print(f"  company_name={item.profile.company_name or 'n/a'}")
+            print(f"  sector={item.profile.sector or 'n/a'}")
+            print(f"  industry={item.profile.industry or 'n/a'}")
+            print(f"  revenue_growth={item.revenue_growth.value or 'n/a'}")
+            print(f"  earnings_growth={item.earnings_growth.value or 'n/a'}")
+            _print_metrics("profitability", item.profitability)
+            _print_metrics("debt", item.debt)
+            _print_metrics("valuation", item.valuation)
+            if item.warnings:
+                print("  warnings:")
+                for warning in item.warnings:
+                    print(f"  - {warning}")
+
+    if not watchlist_only:
+        _print_section("Holdings", report.holdings)
+    if not holdings_only:
+        _print_section("Watchlist", report.watchlist)
+
+
 def run(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -725,6 +773,21 @@ def run(argv: list[str] | None = None) -> int:
             print(report.to_json())
         else:
             print_technical_report(report, args.holdings_only, args.watchlist_only)
+        return 0
+    if args.command == "fundamentals":
+        provider = build_fundamental_data_provider(
+            settings.fundamental_data_provider,
+            settings.fundamental_data_timeout_seconds,
+        )
+        report = build_fundamental_analysis_report(portfolio, provider)
+        if args.holdings_only and not args.watchlist_only:
+            report = replace(report, watchlist=())
+        if args.watchlist_only and not args.holdings_only:
+            report = replace(report, holdings=())
+        if args.json:
+            print(report.to_json())
+        else:
+            print_fundamentals_report(report, args.holdings_only, args.watchlist_only)
         return 0
 
     if args.command == "market-condition":

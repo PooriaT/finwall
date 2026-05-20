@@ -490,3 +490,29 @@ def test_technicals_json_and_filters(tmp_path, monkeypatch, capsys) -> None:
     run(["--database", str(database), "technicals", "--json", "--watchlist-only"])
     out = capsys.readouterr().out
     assert '"watchlist": [' in out
+
+
+def test_fundamentals_text_output(tmp_path, capsys) -> None:
+    database = tmp_path / "finwall.db"
+    run(["--database", str(database), "add-holding", "NVDA", "1", "100"])
+    run(["--database", str(database), "add-watchlist", "AAPL"])
+
+    run(["--database", str(database), "fundamentals"])
+    out = capsys.readouterr().out
+    assert "Holdings:" in out
+    assert "Watchlist:" in out
+
+
+def test_fundamentals_json_and_filters(tmp_path, capsys) -> None:
+    database = tmp_path / "finwall.db"
+    run(["--database", str(database), "add-watchlist", "AAPL"])
+    run(["--database", str(database), "fundamentals", "--json"])
+    assert '"watchlist": [' in capsys.readouterr().out
+
+    run(["--database", str(database), "fundamentals", "--holdings-only"])
+    out = capsys.readouterr().out
+    assert "Watchlist:" not in out
+
+    run(["--database", str(database), "fundamentals", "--watchlist-only"])
+    out = capsys.readouterr().out
+    assert "Holdings:" not in out

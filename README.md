@@ -451,3 +451,25 @@ Limitations and scope:
 - Uses historical index prices only; no fundamentals or news analysis.
 - Does not generate or modify individual stock recommendations.
 - No LLM reasoning, broker integration, automatic trading, scheduling, deployment, or email notifications.
+
+## Fundamentals command
+
+Use raw fundamental inputs for holdings/watchlist tickers:
+
+```bash
+poetry run finwall --database finwall.db fundamentals
+poetry run finwall --database finwall.db fundamentals --json
+poetry run finwall --database finwall.db fundamentals --holdings-only
+```
+
+Options:
+- `--json` outputs structured JSON via `FundamentalAnalysisReport.to_json()`.
+- `--holdings-only` limits output to holdings.
+- `--watchlist-only` limits output to watchlist.
+
+Configuration:
+- `FINWALL_FUNDAMENTAL_DATA_PROVIDER` (default: `static`)
+- `FINWALL_FUNDAMENTAL_DATA_TIMEOUT_SECONDS` (default: `5`)
+
+Missing data is explicit (`missing_data`, `partial`, `available`) and unavailable fields are reported in warnings.
+Fundamental metrics are raw decision-support inputs only, not financial advice, and are not yet integrated into recommendation logic.
