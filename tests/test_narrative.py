@@ -7,6 +7,7 @@ from finwall.narrative import (
     NarrativeRequest,
     build_narrative_evidence,
     build_narrative_prompt,
+    build_narrative_provider,
     generate_narrative,
     validate_narrative_response,
 )
@@ -98,3 +99,30 @@ def test_disabled_provider_and_exception_fallback() -> None:
     failed = generate_narrative(request, Boom())
     assert failed.fallback_used is True
     assert "provider error" in (failed.error or "")
+
+
+def test_build_narrative_provider_from_settings_name() -> None:
+    assert build_narrative_provider("disabled").name == "disabled"
+    assert build_narrative_provider("static").name == "static"
+    assert build_narrative_provider("fake").name == "fake"
+    assert build_narrative_provider("unknown").name == "unknown"
+
+
+def test_unsupported_recommendation_status_triggers_fallback() -> None:
+    request = _request()
+    response = validate_narrative_response(
+        {
+            "sections": [
+                {
+                    "section": "recommendation_context",
+                    "text": "Deterministic status=strong_buy for NVDA.",
+                    "evidence_keys_used": ["holding_recommendations"],
+                }
+            ],
+            "warnings": [],
+        },
+        request,
+        "fake",
+    )
+    assert response.fallback_used is True
+    assert "unsupported recommendation status" in (response.error or "")

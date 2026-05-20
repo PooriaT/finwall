@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -76,6 +77,55 @@ class NarrativeProvider(Protocol):
     name: str
 
     def generate_narrative(self, request: NarrativeRequest) -> object: ...
+
+
+@dataclass(frozen=True)
+class StaticNarrativeProvider:
+    name: str = "static"
+
+    def generate_narrative(self, request: NarrativeRequest) -> object:
+        sections: list[dict[str, object]] = []
+        for section in request.requested_sections:
+            if section == "portfolio_overview":
+                text = (
+                    "This summary is derived from deterministic report fields. "
+                    "Review portfolio snapshot and valuation status before decisions."
+                )
+                keys = ["portfolio_snapshot", "risks_and_warnings"]
+            elif section == "risk_context":
+                text = (
+                    "Risk warnings and limitations are deterministic outputs and should "
+                    "be reviewed before any changes."
+                )
+                keys = ["risks_and_warnings", "limitations"]
+            elif section == "recommendation_context":
+                text = (
+                    "Recommendation statuses come from deterministic logic and are "
+                    "not overridden by this narrative layer."
+                )
+                keys = ["holding_recommendations", "cash_allocation_plan"]
+            elif section == "action_plan":
+                text = "Action-plan points are restated from the deterministic final action plan."
+                keys = ["final_action_plan"]
+            else:
+                text = (
+                    "Narrative limitations follow deterministic report limitations "
+                    "and missing data notes."
+                )
+                keys = ["limitations"]
+            sections.append(
+                {"section": section, "text": text, "evidence_keys_used": keys}
+            )
+        return {"sections": sections, "warnings": []}
+
+
+def build_narrative_provider(provider_name: str) -> NarrativeProvider:
+    name = provider_name.strip().lower()
+    if name in {"", "disabled"}:
+        return DisabledNarrativeProvider()
+    if name in {"static", "fake"}:
+        return StaticNarrativeProvider(name=name)
+    return DisabledNarrativeProvider(name=name)
 
 
 @dataclass(frozen=True)
@@ -201,7 +251,7 @@ def validate_narrative_response(
         for key in evidence_keys:
             if key not in request.evidence:
                 return _fallback(provider_name, f"unknown evidence key: {key}")
-        if "blocked_by_risk" in text.lower() and "blocked" not in text.lower():
+        if _has_unsupported_recommendation_status(text, request):
             return _fallback(
                 provider_name, "unsupported recommendation status override"
             )
@@ -222,6 +272,27 @@ def validate_narrative_response(
         fallback_used=False,
         error=None,
     )
+
+
+def _has_unsupported_recommendation_status(
+    text: str, request: NarrativeRequest
+) -> bool:
+    allowed_statuses = {
+        str(item.get("status", "")).strip().lower()
+        for item in request.evidence.get("holding_recommendations", [])
+        if isinstance(item, dict)
+    }
+    allowed_statuses.add(
+        str(request.evidence.get("cash_allocation_plan", {}).get("status", ""))
+        .strip()
+        .lower()
+    )
+    allowed_statuses.discard("")
+
+    for match in re.findall(r"status\s*[:=]\s*([a-z_]+)", text.lower()):
+        if match and match not in allowed_statuses:
+            return True
+    return False
 
 
 def format_narrative_markdown(response: NarrativeResponse) -> str:

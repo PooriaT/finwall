@@ -32,9 +32,9 @@ from finwall.models import (
 )
 from finwall.narrative import (
     NARRATIVE_SECTIONS,
-    DisabledNarrativeProvider,
     NarrativeRequest,
     build_narrative_evidence,
+    build_narrative_provider,
     format_narrative_markdown,
     generate_narrative,
 )
@@ -1132,7 +1132,7 @@ def run(argv: list[str] | None = None) -> int:
             max_words=settings.narrative_max_words,
             style=settings.narrative_style,
         )
-        provider = DisabledNarrativeProvider(name=settings.narrative_provider)
+        provider = build_narrative_provider(settings.narrative_provider)
         narrative = generate_narrative(request, provider)
 
         if args.json:
