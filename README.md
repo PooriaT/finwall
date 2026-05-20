@@ -645,6 +645,12 @@ Notes on scope:
 - This guard is deterministic local logic, not an exchange/broker calendar API.
 - This command does not add cloud deployment, GitHub Actions schedules, Render Cron configuration, broker integration, or automatic trading.
 
+## Deployment decision
+
+The deployment/storage decision for scheduled report automation is documented in `docs/adr/0001-finwall-scheduled-report-deployment.md`.
+
+Summary: local SQLite remains the default for local/manual use. The recommended MVP production path is Render Cron Jobs plus external managed database storage. Cloud scheduler implementation and production database support are intentionally future issues.
+
 Email notifications for scheduled reports:
 
 - `--email` sends a plain-text success notification after a generated scheduled report.
