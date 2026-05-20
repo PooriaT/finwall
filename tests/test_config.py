@@ -25,3 +25,13 @@ def test_market_data_timeout_invalid_env_uses_default(monkeypatch) -> None:
     reloaded = importlib.reload(config)
 
     assert reloaded.settings.market_data_timeout_seconds == 5.0
+
+
+def test_fundamental_data_settings_from_environment(monkeypatch) -> None:
+    monkeypatch.setenv("FINWALL_FUNDAMENTAL_DATA_PROVIDER", "bogus")
+    monkeypatch.setenv("FINWALL_FUNDAMENTAL_DATA_TIMEOUT_SECONDS", "9")
+
+    reloaded = importlib.reload(config)
+
+    assert reloaded.settings.fundamental_data_provider == "bogus"
+    assert reloaded.settings.fundamental_data_timeout_seconds == 9.0
