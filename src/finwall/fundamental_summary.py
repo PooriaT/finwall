@@ -172,6 +172,7 @@ def summarize_fundamental_snapshot(
         profitability = "missing"
     else:
         positives = negatives = 0
+        usable_values = 0
         for metric in prof_metrics:
             if not metric.available or metric.value is None:
                 missing.append(f"profitability:{metric.name}")
@@ -181,6 +182,7 @@ def summarize_fundamental_snapshot(
                 parsed_failures += 1
                 reasoning_inputs.append(f"{metric.name}_raw={metric.value}")
                 continue
+            usable_values += 1
             if parsed > 0:
                 positives += 1
                 strengths.append(
@@ -204,13 +206,17 @@ def summarize_fundamental_snapshot(
                     )
                 )
                 flags.add("weak_profitability")
-        profitability = (
-            "positive"
-            if positives and not negatives
-            else "negative"
-            if negatives and not positives
-            else "mixed"
-        )
+        if usable_values == 0:
+            missing.append("profitability_metrics")
+            profitability = "missing"
+        else:
+            profitability = (
+                "positive"
+                if positives and not negatives
+                else "negative"
+                if negatives and not positives
+                else "mixed"
+            )
 
     valuation_risk = "unknown"
     pe = _find_metric(snapshot.valuation, "pe_ratio", "forward_pe")
@@ -221,6 +227,7 @@ def summarize_fundamental_snapshot(
         valuation_risk = "missing"
     else:
         v_high = v_med = False
+        valuation_usable_values = 0
         for metric in [pe, ps, peg]:
             if metric is None:
                 continue
@@ -232,6 +239,7 @@ def summarize_fundamental_snapshot(
                 parsed_failures += 1
                 reasoning_inputs.append(f"{metric.name}_raw={metric.value}")
                 continue
+            valuation_usable_values += 1
             if metric.name in {"pe_ratio", "forward_pe"} and parsed > 60:
                 v_high = True
             elif metric.name in {"pe_ratio", "forward_pe"} and parsed >= 30:
@@ -250,6 +258,9 @@ def summarize_fundamental_snapshot(
             flags.add("high_valuation_risk")
         elif v_med:
             valuation_risk = "elevated"
+        elif valuation_usable_values == 0:
+            missing.append("valuation_metrics")
+            valuation_risk = "missing"
         else:
             valuation_risk = "reasonable"
 
@@ -262,6 +273,7 @@ def summarize_fundamental_snapshot(
         debt_risk = "missing"
     else:
         d_high = False
+        debt_usable_values = 0
         for metric in [dte, nde, cr]:
             if metric is None:
                 continue
@@ -273,6 +285,7 @@ def summarize_fundamental_snapshot(
                 parsed_failures += 1
                 reasoning_inputs.append(f"{metric.name}_raw={metric.value}")
                 continue
+            debt_usable_values += 1
             if metric.name in {"debt_to_equity", "total_debt_to_equity"} and parsed > 2:
                 d_high = True
             if metric.name == "net_debt_to_ebitda" and parsed > 4:
@@ -292,8 +305,12 @@ def summarize_fundamental_snapshot(
                         metric.value,
                     )
                 )
-        debt_risk = "high" if d_high else "moderate"
-        if d_high:
+        if debt_usable_values == 0:
+            missing.append("debt_metrics")
+            debt_risk = "missing"
+        else:
+            debt_risk = "high" if d_high else "moderate"
+        if d_high and debt_usable_values > 0:
             weaknesses.append(
                 FundamentalSignal(
                     "debt", "weakness", "Debt or liquidity metrics imply elevated risk."

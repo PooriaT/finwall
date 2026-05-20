@@ -73,6 +73,31 @@ def test_missing_and_partial_data_and_unparseable_inputs() -> None:
     assert "debt_metrics" in summary.missing_information
     assert any("raw" in i for i in summary.reasoning_inputs)
     assert "profitability:net_margin" in summary.missing_information
+    assert summary.profitability == "missing"
+    assert summary.valuation_risk == "missing"
+    assert summary.debt_risk == "missing"
+
+
+def test_valuation_not_reasonable_without_usable_metrics() -> None:
+    summary = summarize_fundamental_snapshot(
+        mk_snapshot(
+            "Z",
+            valuation=(FundamentalMetric("pe_ratio", "n/a", True, "static"),),
+        )
+    )
+    assert summary.valuation_risk == "missing"
+    assert "valuation_metrics" in summary.missing_information
+
+
+def test_debt_not_moderate_without_usable_metrics() -> None:
+    summary = summarize_fundamental_snapshot(
+        mk_snapshot(
+            "Q",
+            debt=(FundamentalMetric("debt_to_equity", "n/a", True, "static"),),
+        )
+    )
+    assert summary.debt_risk == "missing"
+    assert "debt_metrics" in summary.missing_information
 
 
 def test_build_report_preserves_holdings_and_watchlist_and_json() -> None:
