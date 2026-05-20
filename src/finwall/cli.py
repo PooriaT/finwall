@@ -63,7 +63,8 @@ from finwall.scheduled_report import (
     ScheduledRunContext,
 )
 from finwall.snapshot import PortfolioSnapshot, generate_snapshot
-from finwall.storage import SQLitePortfolioStore
+from finwall.storage_factory import build_portfolio_store
+from finwall.storage_interface import PortfolioStore
 from finwall.technical_analysis import (
     TechnicalAnalysisReport,
     build_technical_analysis_report,
@@ -72,7 +73,7 @@ from finwall.technical_analysis import (
 DEFAULT_PORTFOLIO = "Primary"
 
 
-def load_portfolio(store: SQLitePortfolioStore, name: str) -> Portfolio:
+def load_portfolio(store: PortfolioStore, name: str) -> Portfolio:
     portfolio = store.get_portfolio(name)
     if portfolio is not None:
         return portfolio
@@ -243,7 +244,7 @@ def parse_price(value: str) -> tuple[str, Decimal]:
 
 
 def save_portfolio_update(
-    store: SQLitePortfolioStore,
+    store: PortfolioStore,
     portfolio_name: str,
     portfolio: Portfolio,
     existing_transactions: tuple[TradeTransaction, ...],
@@ -862,7 +863,7 @@ def build_report_payload(
     *,
     args,
     portfolio: Portfolio,
-    store: SQLitePortfolioStore,
+    store: PortfolioStore,
     print_live_price_warnings: bool = True,
 ) -> tuple[
     dict[str, object],
@@ -993,7 +994,12 @@ def build_report_payload(
 def run(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    store = SQLitePortfolioStore(args.database)
+    store = build_portfolio_store(
+        backend=settings.storage_backend,
+        database_path=args.database,
+        database_url=settings.database_url or None,
+        cli_database_override=args.database != "finwall.db",
+    )
     store.initialize()
     portfolio = load_portfolio(store, args.portfolio)
     existing_transactions = portfolio.transactions

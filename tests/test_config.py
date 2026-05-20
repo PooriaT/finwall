@@ -59,3 +59,11 @@ def test_email_to_csv_parsing(monkeypatch) -> None:
         "b@example.com",
         "c@example.com",
     )
+
+
+def test_storage_settings_defaults(monkeypatch) -> None:
+    monkeypatch.delenv("FINWALL_STORAGE_BACKEND", raising=False)
+    monkeypatch.delenv("FINWALL_DATABASE_URL", raising=False)
+    reloaded = importlib.reload(config)
+    assert reloaded.settings.storage_backend == "sqlite"
+    assert reloaded.settings.database_url == ""
