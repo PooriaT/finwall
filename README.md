@@ -473,3 +473,28 @@ Configuration:
 
 Missing data is explicit (`missing_data`, `partial`, `available`) and unavailable fields are reported in warnings.
 Fundamental metrics are raw decision-support inputs only, not financial advice, and are not yet integrated into recommendation logic.
+
+## Fundamentals summary command
+
+Use deterministic fundamental risk summaries derived from existing raw fundamentals snapshots:
+
+```bash
+poetry run finwall --database finwall.db fundamentals-summary
+poetry run finwall --database finwall.db fundamentals-summary --json
+```
+
+What it does:
+- Loads holdings/watchlist tickers from the saved portfolio.
+- Fetches raw fundamentals through the configured provider layer (default provider is `static`).
+- Converts raw snapshots into explainable summaries of:
+  - revenue trend
+  - profitability
+  - valuation risk
+  - debt risk
+  - company context
+- Separates missing data from negative signals (missing information is listed independently from weaknesses).
+
+Important scope notes:
+- Fundamental summaries are deterministic decision-support inputs only; they are **not** buy/sell/hold recommendations.
+- The summary layer does not perform valuation modeling and does not predict future returns.
+- No LLM calls, scheduling, email notifications, deployment workflows, broker integration, or automatic trading are involved.

@@ -4,6 +4,7 @@ from datetime import date
 from decimal import Decimal
 
 from finwall.config import settings
+from finwall.fundamental_summary import build_fundamental_summary_report
 from finwall.fundamentals import (
     build_fundamental_analysis_report,
     build_fundamental_data_provider,
@@ -359,6 +360,9 @@ def build_parser() -> argparse.ArgumentParser:
     fundamentals.add_argument("--json", action="store_true")
     fundamentals.add_argument("--holdings-only", action="store_true")
     fundamentals.add_argument("--watchlist-only", action="store_true")
+
+    fundamentals_summary = subparsers.add_parser("fundamentals-summary")
+    fundamentals_summary.add_argument("--json", action="store_true")
     return parser
 
 
@@ -623,6 +627,55 @@ def print_fundamentals_report(
         _print_section("Watchlist", report.watchlist)
 
 
+def print_fundamental_summary_report(report) -> None:
+    print(report.summary)
+
+    def _print_section(name: str, summaries) -> None:
+        print(f"{name}:")
+        if not summaries:
+            print("- none")
+            return
+        for item in summaries:
+            print(f"- {item.ticker} [{item.data_status}] source={item.source}")
+            print(f"  risk_level={item.risk_level.value}")
+            print(f"  confidence={item.confidence.value}")
+            print(f"  company_context={item.company_context}")
+            print(f"  revenue_trend={item.revenue_trend}")
+            print(f"  profitability={item.profitability}")
+            print(f"  valuation_risk={item.valuation_risk}")
+            print(f"  debt_risk={item.debt_risk}")
+            print("  strengths:")
+            if item.strengths:
+                for signal in item.strengths:
+                    print(f"  - {signal.message}")
+            else:
+                print("  - none")
+            print("  weaknesses:")
+            if item.weaknesses:
+                for signal in item.weaknesses:
+                    print(f"  - {signal.message}")
+            else:
+                print("  - none")
+            print("  missing_information:")
+            if item.missing_information:
+                for value in item.missing_information:
+                    print(f"  - {value}")
+            else:
+                print("  - none")
+            print("  flags:")
+            if item.flags:
+                for value in item.flags:
+                    print(f"  - {value}")
+            else:
+                print("  - none")
+
+    _print_section("Holdings", report.holdings)
+    _print_section("Watchlist", report.watchlist)
+    print("Limitations:")
+    for limitation in report.limitations:
+        print(f"- {limitation}")
+
+
 def run(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -788,6 +841,19 @@ def run(argv: list[str] | None = None) -> int:
             print(report.to_json())
         else:
             print_fundamentals_report(report, args.holdings_only, args.watchlist_only)
+        return 0
+
+    if args.command == "fundamentals-summary":
+        provider = build_fundamental_data_provider(
+            settings.fundamental_data_provider,
+            settings.fundamental_data_timeout_seconds,
+        )
+        raw_report = build_fundamental_analysis_report(portfolio, provider)
+        report = build_fundamental_summary_report(raw_report)
+        if args.json:
+            print(report.to_json())
+        else:
+            print_fundamental_summary_report(report)
         return 0
 
     if args.command == "market-condition":
