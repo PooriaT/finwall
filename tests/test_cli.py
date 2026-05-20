@@ -626,3 +626,87 @@ def test_news_empty_portfolio_and_unavailable_provider(
     )
     run(["--database", str(database), "news"])
     assert "News topics:" in capsys.readouterr().out
+
+
+def test_news_summary_text_json_and_filters(tmp_path, monkeypatch, capsys) -> None:
+    from finwall.news import (
+        NewsArticle,
+        NewsProviderResult,
+        NewsTopicType,
+        StaticNewsDataProvider,
+    )
+
+    database = tmp_path / "finwall.db"
+    run(
+        [
+            "--database",
+            str(database),
+            "add-holding",
+            "NVDA",
+            "1",
+            "100",
+            "--sector",
+            "Technology",
+        ]
+    )
+    run(["--database", str(database), "add-watchlist", "AAPL"])
+    provider = StaticNewsDataProvider(
+        company_news={
+            "NVDA": NewsProviderResult(
+                NewsTopicType.TICKER,
+                "NVDA",
+                (
+                    NewsArticle(
+                        "NVDA reports earnings",
+                        "Reuters",
+                        "u",
+                        None,
+                        NewsTopicType.TICKER,
+                        "NVDA",
+                        "NVDA",
+                        None,
+                    ),
+                ),
+                "static",
+                True,
+            ),
+            "AAPL": NewsProviderResult(
+                NewsTopicType.TICKER, "AAPL", (), "static", False, "none"
+            ),
+        }
+    )
+    monkeypatch.setattr("finwall.cli.build_news_data_provider", lambda *_: provider)
+    run(["--database", str(database), "news-summary"])
+    assert "Confirmed facts" in capsys.readouterr().out
+    run(["--database", str(database), "news-summary", "--json"])
+    assert '"holdings"' in capsys.readouterr().out
+    run(["--database", str(database), "news-summary", "--holdings-only"])
+    assert "Watchlist:" not in capsys.readouterr().out
+    run(["--database", str(database), "news-summary", "--watchlist-only"])
+    assert "Holdings:" not in capsys.readouterr().out
+
+
+def test_news_summary_warns_on_unsupported_provider(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    from dataclasses import replace
+
+    from finwall.cli import settings
+    from finwall.news import StaticNewsDataProvider
+
+    database = tmp_path / "finwall.db"
+    monkeypatch.setattr(
+        "finwall.cli.build_news_data_provider", lambda *_: StaticNewsDataProvider()
+    )
+    monkeypatch.setattr(
+        "finwall.cli.settings",
+        replace(settings, news_provider="custom-provider"),
+    )
+
+    run(["--database", str(database), "news-summary"])
+    out = capsys.readouterr().out
+    assert "unsupported news provider 'custom-provider'" in out
+
+    run(["--database", str(database), "news-summary", "--json"])
+    out = capsys.readouterr().out
+    assert "unsupported news provider 'custom-provider'" in out

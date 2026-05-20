@@ -31,6 +31,7 @@ from finwall.models import (
     WatchlistItem,
 )
 from finwall.news import build_news_data_provider, build_news_report
+from finwall.news_summary import build_news_summary_report
 from finwall.order_evaluation import ProposedOrder, evaluate_proposed_order
 from finwall.recommendations import build_recommendation_report
 from finwall.reports import build_decision_support_report
@@ -373,6 +374,15 @@ def build_parser() -> argparse.ArgumentParser:
     news.add_argument("--include-sectors", action="store_true")
     news.add_argument("--limit-per-topic", type=int)
     news.add_argument("--max-age-hours", type=int)
+
+    news_summary = subparsers.add_parser("news-summary")
+    news_summary.add_argument("--json", action="store_true")
+    news_summary.add_argument("--holdings-only", action="store_true")
+    news_summary.add_argument("--watchlist-only", action="store_true")
+    news_summary.add_argument("--include-market", action="store_true")
+    news_summary.add_argument("--include-sectors", action="store_true")
+    news_summary.add_argument("--limit-per-topic", type=int)
+    news_summary.add_argument("--max-age-hours", type=int)
     return parser
 
 
@@ -683,6 +693,67 @@ def print_news_report(report, holdings_only: bool, watchlist_only: bool) -> None
             print(f"- {limitation}")
 
 
+def print_news_summary_report(
+    report, holdings_only: bool, watchlist_only: bool
+) -> None:
+    print(report.summary)
+    print(
+        "News summaries are decision-support input only and are not trade recommendations."
+    )
+
+    def _print_claims(name: str, claims) -> None:
+        print(f"  {name}:")
+        if not claims:
+            print("  - none")
+            return
+        for claim in claims:
+            print(f"  - [{claim.confidence}] {claim.text}")
+            if claim.warning:
+                print(f"    warning={claim.warning}")
+
+    def _print_section(name: str, items) -> None:
+        print(f"{name}:")
+        if not items:
+            print("- none")
+            return
+        for result in items:
+            print(
+                f"- {result.topic} [{result.topic_type}] [confidence={result.confidence}]"
+            )
+            _print_claims("Confirmed facts", result.confirmed_facts)
+            _print_claims(
+                "Possible market interpretations", result.market_interpretations
+            )
+            _print_claims("Uncertainties", result.uncertainties)
+            _print_claims("Speculative claims", result.speculative_claims)
+            if result.source_references:
+                print("  Source references:")
+                for ref in result.source_references:
+                    print(
+                        f"  - {ref.source_name}: {ref.title} "
+                        f"quality={ref.source_quality} "
+                        f"recency={ref.recency_status}"
+                    )
+                    if ref.url:
+                        print(f"    url={ref.url}")
+
+    if not watchlist_only:
+        _print_section("Holdings", report.holdings)
+    if not holdings_only:
+        _print_section("Watchlist", report.watchlist)
+    _print_section("Market", report.market)
+    _print_section("Sectors", report.sectors)
+
+    if report.warnings:
+        print("Warnings:")
+        for warning in report.warnings:
+            print(f"- {warning}")
+    if report.limitations:
+        print("Limitations:")
+        for limitation in report.limitations:
+            print(f"- {limitation}")
+
+
 def print_fundamental_summary_report(report) -> None:
     print(report.summary)
 
@@ -945,6 +1016,42 @@ def run(argv: list[str] | None = None) -> int:
             print(report.to_json())
         else:
             print_news_report(report, args.holdings_only, args.watchlist_only)
+        return 0
+
+    if args.command == "news-summary":
+        provider = build_news_data_provider(
+            settings.news_provider,
+            settings.news_timeout_seconds,
+        )
+        raw_report = build_news_report(
+            portfolio,
+            provider,
+            include_market=args.include_market,
+            include_sectors=args.include_sectors,
+            limit_per_topic=args.limit_per_topic
+            or settings.news_max_articles_per_topic,
+            max_age_hours=args.max_age_hours or settings.news_max_age_hours,
+        )
+        report = build_news_summary_report(raw_report)
+        if args.holdings_only and not args.watchlist_only:
+            report = replace(report, watchlist=())
+        if args.watchlist_only and not args.holdings_only:
+            report = replace(report, holdings=())
+        if settings.news_provider.strip().lower() != "static":
+            report = replace(
+                report,
+                warnings=report.warnings
+                + (
+                    (
+                        "unsupported news provider "
+                        f"'{settings.news_provider}' configured; using static fallback."
+                    ),
+                ),
+            )
+        if args.json:
+            print(report.to_json())
+        else:
+            print_news_summary_report(report, args.holdings_only, args.watchlist_only)
         return 0
 
     if args.command == "market-condition":
