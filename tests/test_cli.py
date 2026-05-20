@@ -921,3 +921,146 @@ def test_run_scheduled_report_json_keeps_stdout_as_json_with_live_price_warnings
     payload = json.loads(out)
     assert payload["status"] == "generated"
     assert payload["warnings"] == ["unable to fetch price for NVDA"]
+
+
+class _FakeEmailProvider:
+    def __init__(self, result):
+        self.result = result
+        self.messages = []
+
+    def send(self, message):
+        self.messages.append(message)
+        return self.result
+
+
+def test_run_scheduled_report_email_success_notification(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    from finwall.email_notifications import EmailSendResult
+
+    database = tmp_path / "finwall.db"
+    run(["--database", str(database), "add-holding", "NVDA", "1", "100"])
+    capsys.readouterr()
+    fake = _FakeEmailProvider(
+        EmailSendResult(attempted=True, sent=True, provider="smtp")
+    )
+    monkeypatch.setattr(
+        "finwall.cli.build_email_provider", lambda *args, **kwargs: fake
+    )
+
+    run(
+        [
+            "--database",
+            str(database),
+            "run-scheduled-report",
+            "--run-date",
+            "2026-05-20",
+            "--price",
+            "NVDA=120",
+            "--email",
+            "--json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["status"] == "generated"
+    assert payload["notification"]["attempted"] is True
+    assert len(fake.messages) == 1
+
+
+def test_run_scheduled_report_email_failure_notification_on_exception(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    from finwall.email_notifications import EmailSendResult
+
+    database = tmp_path / "finwall.db"
+    fake = _FakeEmailProvider(
+        EmailSendResult(attempted=True, sent=True, provider="smtp")
+    )
+    monkeypatch.setattr(
+        "finwall.cli.build_email_provider", lambda *args, **kwargs: fake
+    )
+    monkeypatch.setattr(
+        "finwall.cli.build_report_payload",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
+
+    code = run(
+        [
+            "--database",
+            str(database),
+            "run-scheduled-report",
+            "--run-date",
+            "2026-05-20",
+            "--email-on-failure",
+            "--json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert code == 1
+    assert payload["status"] == "failed"
+    assert payload["notification"]["attempted"] is True
+
+
+def test_scheduled_report_email_send_failure_does_not_fail_run(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    from finwall.email_notifications import EmailSendResult
+
+    database = tmp_path / "finwall.db"
+    run(["--database", str(database), "add-holding", "NVDA", "1", "100"])
+    capsys.readouterr()
+    fake = _FakeEmailProvider(
+        EmailSendResult(
+            attempted=True,
+            sent=False,
+            provider="smtp",
+            warnings=("smtp warning",),
+            error="unable to send email notification via SMTP",
+        )
+    )
+    monkeypatch.setattr(
+        "finwall.cli.build_email_provider", lambda *args, **kwargs: fake
+    )
+
+    code = run(
+        [
+            "--database",
+            str(database),
+            "run-scheduled-report",
+            "--run-date",
+            "2026-05-20",
+            "--price",
+            "NVDA=120",
+            "--email",
+            "--json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert code == 0
+    assert payload["status"] == "generated"
+    assert payload["notification"]["sent"] is False
+
+
+def test_scheduled_report_skip_does_not_send_email(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    database = tmp_path / "finwall.db"
+    fake = _FakeEmailProvider(None)
+    monkeypatch.setattr(
+        "finwall.cli.build_email_provider", lambda *args, **kwargs: fake
+    )
+
+    run(
+        [
+            "--database",
+            str(database),
+            "run-scheduled-report",
+            "--run-date",
+            "2026-05-23",
+            "--email",
+            "--json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["status"] == "skipped"
+    assert fake.messages == []

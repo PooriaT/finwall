@@ -26,6 +26,7 @@ class ScheduledReportResult:
     comparison: dict[str, object] | None
     message: str
     warnings: tuple[str, ...]
+    notification: dict[str, object] | None = None
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -37,4 +38,5 @@ class ScheduledReportResult:
             "comparison": self.comparison,
             "message": self.message,
             "warnings": list(self.warnings),
+            "notification": self.notification,
         }

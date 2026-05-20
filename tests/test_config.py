@@ -47,3 +47,15 @@ def test_narrative_settings_defaults_and_validation(monkeypatch) -> None:
     assert reloaded.settings.narrative_provider == "disabled"
     assert reloaded.settings.narrative_max_words == 500
     assert reloaded.settings.narrative_style == "plain_english"
+
+
+def test_email_to_csv_parsing(monkeypatch) -> None:
+    monkeypatch.setenv(
+        "FINWALL_EMAIL_TO", "a@example.com, b@example.com ,,c@example.com"
+    )
+    reloaded = importlib.reload(config)
+    assert reloaded.settings.email_to_addresses == (
+        "a@example.com",
+        "b@example.com",
+        "c@example.com",
+    )

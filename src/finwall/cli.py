@@ -5,6 +5,12 @@ from datetime import date
 from decimal import Decimal
 
 from finwall.config import settings
+from finwall.email_notifications import (
+    EmailSendResult,
+    build_email_provider,
+    build_scheduled_failure_email,
+    build_scheduled_success_email,
+)
 from finwall.fundamental_summary import build_fundamental_summary_report
 from finwall.fundamentals import (
     build_fundamental_analysis_report,
@@ -395,6 +401,9 @@ def build_parser() -> argparse.ArgumentParser:
     scheduled.add_argument("--markdown", action="store_true")
     scheduled.add_argument("--save-run", action="store_true")
     scheduled.add_argument("--compare", action="store_true")
+    scheduled.add_argument("--email", action="store_true")
+    scheduled.add_argument("--email-on-failure", action="store_true")
+    scheduled.add_argument("--email-to")
 
     market_condition = subparsers.add_parser("market-condition")
     market_condition.add_argument(
@@ -1294,6 +1303,28 @@ def run(argv: list[str] | None = None) -> int:
     if args.command == "run-scheduled-report":
         run_day = parse_date(args.run_date)
         trading = evaluate_us_trading_day(run_day)
+        email_override = (
+            tuple(item.strip() for item in args.email_to.split(",") if item.strip())
+            if args.email_to
+            else None
+        )
+        email_provider = build_email_provider(
+            settings, to_addresses_override=email_override
+        )
+
+        def _notify(
+            message_builder, result: ScheduledReportResult
+        ) -> EmailSendResult | None:
+            if not (args.email or args.email_on_failure):
+                return None
+            message = message_builder(
+                result,
+                portfolio.name,
+                settings.email_from,
+                email_override or settings.email_to_addresses,
+            )
+            return email_provider.send(message)
+
         if not trading.is_trading_day and not args.force:
             message = f"Skipped scheduled report for {trading.calendar_date}: {trading.reason}"
             result = ScheduledReportResult(
@@ -1334,23 +1365,44 @@ def run(argv: list[str] | None = None) -> int:
                 message=message,
                 warnings=live_price_warnings,
             )
+            notification = None
+            if args.email:
+                notification = _notify(build_scheduled_success_email, result)
+                if notification is not None and notification.warnings:
+                    result = replace(
+                        result,
+                        warnings=result.warnings + tuple(notification.warnings),
+                    )
+                if notification is not None:
+                    result = replace(result, notification=notification.as_dict())
+
             if args.json:
                 print(json.dumps(result.as_dict(), indent=2))
             elif args.markdown or not args.json:
                 print(report.to_markdown())
+                if notification is not None and not notification.sent:
+                    print(
+                        f"Warning: {notification.error or 'unable to send email notification'}"
+                    )
             return 0
         except Exception:
             message = "Scheduled report failed unexpectedly."
+            result = ScheduledReportResult(
+                status=ScheduledReportStatus.FAILED,
+                run_context=args.run_context,
+                trading_day=trading.as_dict(),
+                report=None,
+                saved_report_id=None,
+                comparison=None,
+                message=message,
+                warnings=(),
+            )
+            if args.email_on_failure:
+                notification = _notify(build_scheduled_failure_email, result)
+                if notification is not None:
+                    result = replace(result, notification=notification.as_dict())
             if args.json:
-                print(
-                    json.dumps(
-                        {
-                            "status": ScheduledReportStatus.FAILED.value,
-                            "message": message,
-                        },
-                        indent=2,
-                    )
-                )
+                print(json.dumps(result.as_dict(), indent=2))
             else:
                 print(message)
             return 1
