@@ -586,3 +586,25 @@ Fallback behavior:
 - If narrative provider is disabled, unavailable, invalid, or fails validation, Finwall still returns the deterministic report.
 - Narrative output includes deterministic fallback text with warnings and `fallback_used=true`.
 - JSON output for `report --narrative --json` includes a top-level `narrative` object.
+
+## Report history persistence and comparison
+
+Finwall can now persist generated decision-support report runs in local SQLite and compare recommendation-status changes between runs.
+
+Commands:
+
+- `poetry run finwall --database finwall.db report --save-run`
+- `poetry run finwall --database finwall.db report --compare`
+- `poetry run finwall --database finwall.db report --save-run --compare`
+
+Behavior:
+
+- `--save-run` stores report metadata, full report JSON, recommendation statuses, risk warnings, and active-order snapshots.
+- `--compare` compares the current recommendation statuses against the latest saved run.
+- `--save-run --compare` saves first, then compares against the previous saved run.
+
+Notes:
+
+- Storage is local SQLite only (no cloud, no deployment automation).
+- This is decision-support comparison only; it does not trigger trades.
+- Out of scope by design: email notifications, scheduling, deployment workflows, LLM reasoning, broker integration, and automatic trading.

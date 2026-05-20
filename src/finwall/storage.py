@@ -21,6 +21,15 @@ from finwall.models import (
     TradeTransaction,
     WatchlistItem,
 )
+from finwall.recommendations import RecommendationReport
+from finwall.report_history import (
+    StoredRecommendationStatus,
+    StoredReportRun,
+    StoredRiskWarning,
+    StoredSuggestedOrder,
+)
+from finwall.reports import DecisionSupportReport
+from finwall.risk import RiskAssessment
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -103,6 +112,50 @@ CREATE TABLE IF NOT EXISTS recommendation_records (
     title TEXT NOT NULL,
     summary TEXT NOT NULL,
     created_on TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS report_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    portfolio_id INTEGER NOT NULL REFERENCES portfolios(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL,
+    command_context TEXT NOT NULL,
+    report_summary TEXT NOT NULL,
+    report_json TEXT NOT NULL,
+    price_completeness_status TEXT,
+    valuation_status TEXT,
+    recommendation_summary TEXT
+);
+
+CREATE TABLE IF NOT EXISTS report_recommendation_statuses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    report_run_id INTEGER NOT NULL REFERENCES report_runs(id) ON DELETE CASCADE,
+    ticker TEXT NOT NULL,
+    status TEXT NOT NULL,
+    confidence TEXT NOT NULL,
+    risk_level TEXT NOT NULL,
+    blocked_by_risk INTEGER NOT NULL,
+    suggested_action TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS report_risk_warnings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    report_run_id INTEGER NOT NULL REFERENCES report_runs(id) ON DELETE CASCADE,
+    code TEXT NOT NULL,
+    severity TEXT NOT NULL,
+    ticker TEXT,
+    message TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS report_suggested_orders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    report_run_id INTEGER NOT NULL REFERENCES report_runs(id) ON DELETE CASCADE,
+    ticker TEXT NOT NULL,
+    side TEXT NOT NULL,
+    order_type TEXT NOT NULL,
+    share_count TEXT NOT NULL,
+    limit_price TEXT,
+    stop_price TEXT,
+    description TEXT NOT NULL
 );
 """
 
@@ -207,11 +260,225 @@ class SQLitePortfolioStore:
                 for row in rows
             )
 
+    def save_report_run(
+        self,
+        portfolio_name: str,
+        report: DecisionSupportReport,
+        recommendation_report: RecommendationReport,
+        risk_assessment: RiskAssessment,
+        command_context: str,
+    ) -> int:
+        with self._connect() as connection:
+            portfolio_id = self._require_portfolio_id(connection, portfolio_name)
+            report_run = connection.execute(
+                """
+                INSERT INTO report_runs (
+                    portfolio_id, created_at, command_context, report_summary, report_json,
+                    price_completeness_status, valuation_status, recommendation_summary
+                ) VALUES (?, datetime('now'), ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    portfolio_id,
+                    command_context,
+                    report.strategy_assessment.summary,
+                    report.to_json(),
+                    report.portfolio_snapshot.get("price_coverage"),
+                    report.portfolio_snapshot.get("valuation_status"),
+                    recommendation_report.summary,
+                ),
+            )
+            report_run_id = int(report_run.lastrowid)
+            for holding in recommendation_report.holdings:
+                connection.execute(
+                    """
+                    INSERT INTO report_recommendation_statuses (
+                        report_run_id, ticker, status, confidence, risk_level,
+                        blocked_by_risk, suggested_action
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        report_run_id,
+                        holding.ticker,
+                        holding.status.value,
+                        holding.confidence.value,
+                        holding.risk_level.value,
+                        int(holding.blocked_by_risk),
+                        holding.suggested_action,
+                    ),
+                )
+            for warning in risk_assessment.warnings:
+                connection.execute(
+                    """
+                    INSERT INTO report_risk_warnings (
+                        report_run_id, code, severity, ticker, message
+                    ) VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        report_run_id,
+                        warning.code,
+                        warning.severity,
+                        warning.ticker,
+                        warning.message,
+                    ),
+                )
+            for order in report.suggested_orders.active_orders:
+                connection.execute(
+                    """
+                    INSERT INTO report_suggested_orders (
+                        report_run_id, ticker, side, order_type, share_count,
+                        limit_price, stop_price, description
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        report_run_id,
+                        order["ticker"],
+                        order["side"],
+                        order["order_type"],
+                        str(order["share_count"]),
+                        self._decimal_to_text(order["limit_price"]),
+                        self._decimal_to_text(order["stop_price"]),
+                        order["description"],
+                    ),
+                )
+            return report_run_id
+
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.database_path)
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys = ON")
         return connection
+
+    def get_latest_report_run(self, portfolio_name: str) -> StoredReportRun | None:
+        with self._connect() as connection:
+            portfolio_id = self._require_portfolio_id(connection, portfolio_name)
+            row = connection.execute(
+                """
+                SELECT rr.id, p.name AS portfolio_name, rr.created_at, rr.command_context,
+                       rr.report_summary, rr.report_json, rr.price_completeness_status,
+                       rr.valuation_status, rr.recommendation_summary
+                FROM report_runs rr
+                INNER JOIN portfolios p ON p.id = rr.portfolio_id
+                WHERE rr.portfolio_id = ?
+                ORDER BY rr.id DESC
+                LIMIT 1
+                """,
+                (portfolio_id,),
+            ).fetchone()
+            return self._to_stored_report_run(row) if row is not None else None
+
+    def get_previous_report_run(
+        self, portfolio_name: str, before_report_id: int
+    ) -> StoredReportRun | None:
+        with self._connect() as connection:
+            portfolio_id = self._require_portfolio_id(connection, portfolio_name)
+            row = connection.execute(
+                """
+                SELECT rr.id, p.name AS portfolio_name, rr.created_at, rr.command_context,
+                       rr.report_summary, rr.report_json, rr.price_completeness_status,
+                       rr.valuation_status, rr.recommendation_summary
+                FROM report_runs rr
+                INNER JOIN portfolios p ON p.id = rr.portfolio_id
+                WHERE rr.portfolio_id = ? AND rr.id < ?
+                ORDER BY rr.id DESC
+                LIMIT 1
+                """,
+                (portfolio_id, before_report_id),
+            ).fetchone()
+            return self._to_stored_report_run(row) if row is not None else None
+
+    def list_report_runs(
+        self, portfolio_name: str, limit: int = 10
+    ) -> tuple[StoredReportRun, ...]:
+        with self._connect() as connection:
+            portfolio_id = self._require_portfolio_id(connection, portfolio_name)
+            rows = connection.execute(
+                """
+                SELECT rr.id, p.name AS portfolio_name, rr.created_at, rr.command_context,
+                       rr.report_summary, rr.report_json, rr.price_completeness_status,
+                       rr.valuation_status, rr.recommendation_summary
+                FROM report_runs rr
+                INNER JOIN portfolios p ON p.id = rr.portfolio_id
+                WHERE rr.portfolio_id = ?
+                ORDER BY rr.id DESC
+                LIMIT ?
+                """,
+                (portfolio_id, limit),
+            ).fetchall()
+            return tuple(self._to_stored_report_run(row) for row in rows)
+
+    def list_report_recommendation_statuses(
+        self, report_run_id: int
+    ) -> tuple[StoredRecommendationStatus, ...]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT ticker, status, confidence, risk_level, blocked_by_risk, suggested_action
+                FROM report_recommendation_statuses
+                WHERE report_run_id = ?
+                ORDER BY ticker
+                """,
+                (report_run_id,),
+            ).fetchall()
+            return tuple(
+                StoredRecommendationStatus(
+                    ticker=row["ticker"],
+                    status=row["status"],
+                    confidence=row["confidence"],
+                    risk_level=row["risk_level"],
+                    blocked_by_risk=bool(row["blocked_by_risk"]),
+                    suggested_action=row["suggested_action"],
+                )
+                for row in rows
+            )
+
+    def list_report_risk_warnings(
+        self, report_run_id: int
+    ) -> tuple[StoredRiskWarning, ...]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT code, severity, ticker, message
+                FROM report_risk_warnings
+                WHERE report_run_id = ?
+                ORDER BY id
+                """,
+                (report_run_id,),
+            ).fetchall()
+            return tuple(
+                StoredRiskWarning(
+                    code=row["code"],
+                    severity=row["severity"],
+                    ticker=row["ticker"],
+                    message=row["message"],
+                )
+                for row in rows
+            )
+
+    def list_report_suggested_orders(
+        self, report_run_id: int
+    ) -> tuple[StoredSuggestedOrder, ...]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT ticker, side, order_type, share_count, limit_price, stop_price, description
+                FROM report_suggested_orders
+                WHERE report_run_id = ?
+                ORDER BY id
+                """,
+                (report_run_id,),
+            ).fetchall()
+            return tuple(
+                StoredSuggestedOrder(
+                    ticker=row["ticker"],
+                    side=row["side"],
+                    order_type=row["order_type"],
+                    share_count=row["share_count"],
+                    limit_price=row["limit_price"],
+                    stop_price=row["stop_price"],
+                    description=row["description"],
+                )
+                for row in rows
+            )
 
     def _upsert_portfolio(
         self, connection: sqlite3.Connection, portfolio: Portfolio
@@ -235,6 +502,19 @@ class SQLitePortfolioStore:
             (portfolio.name, risk_level, risk_notes),
         )
         return self._require_portfolio_id(connection, portfolio.name)
+
+    def _to_stored_report_run(self, row: sqlite3.Row) -> StoredReportRun:
+        return StoredReportRun(
+            id=row["id"],
+            portfolio_name=row["portfolio_name"],
+            created_at=row["created_at"],
+            command_context=row["command_context"],
+            report_summary=row["report_summary"],
+            report_json=row["report_json"],
+            price_completeness_status=row["price_completeness_status"],
+            valuation_status=row["valuation_status"],
+            recommendation_summary=row["recommendation_summary"],
+        )
 
     def _replace_portfolio_rows(
         self,

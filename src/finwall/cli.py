@@ -1,4 +1,5 @@
 import argparse
+import json
 from dataclasses import replace
 from datetime import date
 from decimal import Decimal
@@ -42,6 +43,11 @@ from finwall.news import build_news_data_provider, build_news_report
 from finwall.news_summary import build_news_summary_report
 from finwall.order_evaluation import ProposedOrder, evaluate_proposed_order
 from finwall.recommendations import build_recommendation_report
+from finwall.report_history import (
+    ReportRunComparison,
+    StoredRecommendationStatus,
+    compare_recommendation_statuses,
+)
 from finwall.reports import build_decision_support_report
 from finwall.risk import RiskAssessment, assess_portfolio_risk
 from finwall.snapshot import PortfolioSnapshot, generate_snapshot
@@ -358,6 +364,8 @@ def build_parser() -> argparse.ArgumentParser:
     report.add_argument("--json", action="store_true")
     report.add_argument("--markdown", action="store_true")
     report.add_argument("--narrative", action="store_true")
+    report.add_argument("--save-run", action="store_true")
+    report.add_argument("--compare", action="store_true")
 
     market_condition = subparsers.add_parser("market-condition")
     market_condition.add_argument(
@@ -1118,11 +1126,89 @@ def run(argv: list[str] | None = None) -> int:
             market_index_quote,
             market_condition_report,
         )
+        saved_run = None
+        comparison: ReportRunComparison | None = None
+        if args.save_run:
+            report_run_id = store.save_report_run(
+                portfolio_name=portfolio.name,
+                report=report,
+                recommendation_report=recommendation_report,
+                risk_assessment=risk_assessment,
+                command_context="report",
+            )
+            saved_run = store.get_latest_report_run(portfolio.name)
+            if args.compare:
+                previous = store.get_previous_report_run(portfolio.name, report_run_id)
+                previous_statuses = (
+                    store.list_report_recommendation_statuses(previous.id)
+                    if previous and previous.id is not None
+                    else ()
+                )
+                current_statuses = store.list_report_recommendation_statuses(
+                    report_run_id
+                )
+                comparison = compare_recommendation_statuses(
+                    previous=previous_statuses,
+                    current=current_statuses,
+                    previous_run_id=previous.id if previous else None,
+                    current_run_id=report_run_id,
+                )
+        elif args.compare:
+            latest = store.get_latest_report_run(portfolio.name)
+            previous_statuses = (
+                store.list_report_recommendation_statuses(latest.id)
+                if latest and latest.id is not None
+                else ()
+            )
+            current_statuses = tuple(
+                StoredRecommendationStatus(
+                    ticker=item.ticker,
+                    status=item.status.value,
+                    confidence=item.confidence.value,
+                    risk_level=item.risk_level.value,
+                    blocked_by_risk=item.blocked_by_risk,
+                    suggested_action=item.suggested_action,
+                )
+                for item in recommendation_report.holdings
+            )
+            comparison = compare_recommendation_statuses(
+                previous=previous_statuses,
+                current=current_statuses,
+                previous_run_id=latest.id if latest else None,
+                current_run_id=None,
+            )
         if not args.narrative:
             if args.json:
-                print(report.to_json())
+                payload: dict[str, object] = report.as_dict()
+                if saved_run is not None:
+                    payload["saved_run"] = {
+                        "id": saved_run.id,
+                        "created_at": saved_run.created_at,
+                        "portfolio_name": saved_run.portfolio_name,
+                    }
+                if comparison is not None:
+                    payload["comparison"] = {
+                        "previous_run_id": comparison.previous_run_id,
+                        "current_run_id": comparison.current_run_id,
+                        "summary": comparison.summary,
+                        "changes": [item.__dict__ for item in comparison.changes],
+                    }
+                print(json.dumps(payload, indent=2))
             else:
                 print(report.to_markdown())
+                if saved_run is not None:
+                    print(
+                        f"\nSaved report run id={saved_run.id} for {saved_run.portfolio_name}."
+                    )
+                if args.compare and not args.save_run:
+                    print("Current run was not saved.")
+                if comparison is not None:
+                    print("\n## Recommendation Changes")
+                    print(f"Previous run: {comparison.previous_run_id}")
+                    print(f"Current run: {comparison.current_run_id}")
+                    print(f"Summary: {comparison.summary}")
+                    for change in comparison.changes:
+                        print(f"\n- {change.ticker}: {change.change_type}")
             return 0
 
         evidence = build_narrative_evidence(report)
@@ -1138,7 +1224,20 @@ def run(argv: list[str] | None = None) -> int:
         if args.json:
             payload = report.as_dict()
             payload["narrative"] = narrative.as_dict()
-            print(__import__("json").dumps(payload, indent=2))
+            if saved_run is not None:
+                payload["saved_run"] = {
+                    "id": saved_run.id,
+                    "created_at": saved_run.created_at,
+                    "portfolio_name": saved_run.portfolio_name,
+                }
+            if comparison is not None:
+                payload["comparison"] = {
+                    "previous_run_id": comparison.previous_run_id,
+                    "current_run_id": comparison.current_run_id,
+                    "summary": comparison.summary,
+                    "changes": [item.__dict__ for item in comparison.changes],
+                }
+            print(json.dumps(payload, indent=2))
         else:
             print(f"{report.to_markdown()}\n\n{format_narrative_markdown(narrative)}")
         return 0
