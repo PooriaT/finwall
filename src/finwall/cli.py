@@ -1037,6 +1037,17 @@ def run(argv: list[str] | None = None) -> int:
             report = replace(report, watchlist=())
         if args.watchlist_only and not args.holdings_only:
             report = replace(report, holdings=())
+        if settings.news_provider.strip().lower() != "static":
+            report = replace(
+                report,
+                warnings=report.warnings
+                + (
+                    (
+                        "unsupported news provider "
+                        f"'{settings.news_provider}' configured; using static fallback."
+                    ),
+                ),
+            )
         if args.json:
             print(report.to_json())
         else:
