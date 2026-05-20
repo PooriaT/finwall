@@ -498,3 +498,33 @@ Important scope notes:
 - Fundamental summaries are deterministic decision-support inputs only; they are **not** buy/sell/hold recommendations.
 - The summary layer does not perform valuation modeling and does not predict future returns.
 - No LLM calls, scheduling, email notifications, deployment workflows, broker integration, or automatic trading are involved.
+
+## News command
+
+Use raw news inputs (not recommendations):
+
+```bash
+poetry run finwall --database finwall.db news
+poetry run finwall --database finwall.db news --json
+poetry run finwall --database finwall.db news --holdings-only
+poetry run finwall --database finwall.db news --include-market --include-sectors
+```
+
+News report behavior:
+- Separate holdings and watchlist sections.
+- Optional market and sector topics.
+- Source quality labels: trusted, standard, low_quality, unsupported, unknown.
+- Recency labels: recent, stale, unknown.
+- Duplicate filtering prefers URL, then normalized title+source.
+- Provider failures are surfaced as warnings.
+
+Environment variables:
+- `FINWALL_NEWS_PROVIDER` (default `static`)
+- `FINWALL_NEWS_TIMEOUT_SECONDS` (default `5`)
+- `FINWALL_NEWS_MAX_ARTICLES_PER_TOPIC` (default `5`)
+- `FINWALL_NEWS_MAX_AGE_HOURS` (default `72`)
+
+Limitations:
+- News is raw decision-support input only.
+- No recommendation integration, sentiment scoring, LLM summarization, scheduling, email, deployment, broker integration, or automatic trading.
+

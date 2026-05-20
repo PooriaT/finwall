@@ -30,6 +30,7 @@ from finwall.models import (
     TradeTransaction,
     WatchlistItem,
 )
+from finwall.news import build_news_data_provider, build_news_report
 from finwall.order_evaluation import ProposedOrder, evaluate_proposed_order
 from finwall.recommendations import build_recommendation_report
 from finwall.reports import build_decision_support_report
@@ -363,6 +364,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     fundamentals_summary = subparsers.add_parser("fundamentals-summary")
     fundamentals_summary.add_argument("--json", action="store_true")
+
+    news = subparsers.add_parser("news")
+    news.add_argument("--json", action="store_true")
+    news.add_argument("--holdings-only", action="store_true")
+    news.add_argument("--watchlist-only", action="store_true")
+    news.add_argument("--include-market", action="store_true")
+    news.add_argument("--include-sectors", action="store_true")
+    news.add_argument("--limit-per-topic", type=int)
+    news.add_argument("--max-age-hours", type=int)
     return parser
 
 
@@ -627,6 +637,52 @@ def print_fundamentals_report(
         _print_section("Watchlist", report.watchlist)
 
 
+def print_news_report(report, holdings_only: bool, watchlist_only: bool) -> None:
+    print(report.summary)
+
+    def _print_articles(section: str, items) -> None:
+        print(f"{section}:")
+        if not items:
+            print("- none")
+            return
+        for result in items:
+            print(
+                f"- topic={result.topic} source={result.source} available={result.available}"
+            )
+            if result.error:
+                print(f"  error={result.error}")
+            if not result.articles:
+                print("  articles: none")
+                continue
+            for article in result.articles:
+                print(f"  * {article.title}")
+                print(
+                    "    source={0} quality={1} recency={2}".format(
+                        article.source_name,
+                        article.source_quality.value,
+                        article.recency_status.value,
+                    )
+                )
+                if article.url:
+                    print(f"    url={article.url}")
+
+    if not watchlist_only:
+        _print_articles("Holdings", report.holdings)
+    if not holdings_only:
+        _print_articles("Watchlist", report.watchlist)
+    _print_articles("Market", report.market)
+    _print_articles("Sectors", report.sectors)
+
+    if report.warnings:
+        print("Warnings:")
+        for warning in report.warnings:
+            print(f"- {warning}")
+    if report.limitations:
+        print("Limitations:")
+        for limitation in report.limitations:
+            print(f"- {limitation}")
+
+
 def print_fundamental_summary_report(report) -> None:
     print(report.summary)
 
@@ -854,6 +910,41 @@ def run(argv: list[str] | None = None) -> int:
             print(report.to_json())
         else:
             print_fundamental_summary_report(report)
+        return 0
+
+    if args.command == "news":
+        provider = build_news_data_provider(
+            settings.news_provider,
+            settings.news_timeout_seconds,
+        )
+        report = build_news_report(
+            portfolio,
+            provider,
+            include_market=args.include_market,
+            include_sectors=args.include_sectors,
+            limit_per_topic=args.limit_per_topic
+            or settings.news_max_articles_per_topic,
+            max_age_hours=args.max_age_hours or settings.news_max_age_hours,
+        )
+        if args.holdings_only and not args.watchlist_only:
+            report = replace(report, watchlist=())
+        if args.watchlist_only and not args.holdings_only:
+            report = replace(report, holdings=())
+        if settings.news_provider.strip().lower() != "static":
+            report = replace(
+                report,
+                warnings=report.warnings
+                + (
+                    (
+                        "unsupported news provider "
+                        f"'{settings.news_provider}' configured; using static fallback."
+                    ),
+                ),
+            )
+        if args.json:
+            print(report.to_json())
+        else:
+            print_news_report(report, args.holdings_only, args.watchlist_only)
         return 0
 
     if args.command == "market-condition":
