@@ -375,7 +375,7 @@ def test_report_live_prices_and_market_index(tmp_path, monkeypatch, capsys) -> N
         ]
     )
     out = capsys.readouterr().out
-    assert '"status": "raw_index_only"' in out
+    assert '"status": "insufficient_data"' in out
 
 
 def test_report_handles_empty_portfolio(tmp_path, capsys) -> None:

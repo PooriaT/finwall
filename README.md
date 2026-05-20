@@ -415,3 +415,39 @@ Handling of missing or short history:
 - Indicators with insufficient input remain `null` in JSON / `n/a` in text output
 
 Important: technical indicators are deterministic decision-support inputs only. They are **not** buy/sell/hold/reduce/watch recommendations and are not integrated into recommendation logic yet.
+
+## Market condition classification
+
+Use the `market-condition` command to classify broader market conditions deterministically from historical index trends.
+
+```bash
+poetry run finwall --database finwall.db market-condition
+```
+
+Optional Nasdaq confirmation and JSON output:
+
+```bash
+poetry run finwall --database finwall.db market-condition --include-nasdaq --json
+```
+
+Report integration with index classification:
+
+```bash
+poetry run finwall --database finwall.db report --market-index SP500
+```
+
+How it works (high level):
+
+- Default primary index is S&P 500 (`SP500` -> `^GSPC`).
+- Optional Nasdaq confirmation (`NASDAQ` -> `^IXIC`) can be included.
+- Classification uses deterministic moving-average and trend checks with existing technical indicator calculations.
+- Status is one of: `favorable`, `neutral`, `risky`, `insufficient_data`.
+- A lightweight volatility proxy is computed from recent close-to-close moves when enough data exists.
+- Missing or short historical data produces warnings and `insufficient_data` instead of crashing.
+
+Limitations and scope:
+
+- Decision-support only; not financial advice and not guaranteed outcomes.
+- Uses historical index prices only; no fundamentals or news analysis.
+- Does not generate or modify individual stock recommendations.
+- No LLM reasoning, broker integration, automatic trading, scheduling, deployment, or email notifications.
