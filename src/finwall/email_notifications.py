@@ -76,15 +76,15 @@ class SmtpEmailProvider:
         self.config = config
 
     def send(self, message: EmailMessage) -> EmailSendResult:
-        mime = MimeEmailMessage()
-        mime["Subject"] = message.subject
-        mime["From"] = message.from_address
-        mime["To"] = ", ".join(message.to_addresses)
-        mime.set_content(message.text_body)
-        if message.html_body:
-            mime.add_alternative(message.html_body, subtype="html")
-
         try:
+            mime = MimeEmailMessage()
+            mime["Subject"] = message.subject
+            mime["From"] = message.from_address
+            mime["To"] = ", ".join(message.to_addresses)
+            mime.set_content(message.text_body)
+            if message.html_body:
+                mime.add_alternative(message.html_body, subtype="html")
+
             with smtplib.SMTP(
                 self.config.smtp_host,
                 self.config.smtp_port,
@@ -95,7 +95,7 @@ class SmtpEmailProvider:
                 if self.config.smtp_username:
                     client.login(self.config.smtp_username, self.config.smtp_password)
                 client.send_message(mime)
-        except (smtplib.SMTPException, OSError):
+        except (smtplib.SMTPException, OSError, ValueError):
             return EmailSendResult(
                 attempted=True,
                 sent=False,

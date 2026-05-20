@@ -89,3 +89,19 @@ def test_failure_template_omits_traceback() -> None:
     )
     assert "Scheduled report failed." in message.text_body
     assert "Traceback" not in message.text_body
+
+
+def test_smtp_provider_invalid_header_returns_safe_error() -> None:
+    provider = build_email_provider(_settings(email_provider="smtp"))
+    result = provider.send(
+        EmailMessage(
+            "ok",
+            "body",
+            None,
+            "from@example.com\nInjected: x",
+            ("to@example.com",),
+        )
+    )
+    assert result.attempted is True
+    assert result.sent is False
+    assert result.error == "unable to send email notification via SMTP"
