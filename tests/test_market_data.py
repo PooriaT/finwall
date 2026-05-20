@@ -44,3 +44,38 @@ def test_fetch_portfolio_latest_prices_skips_missing_and_collects_warnings() -> 
 
     assert latest_prices == {"NVDA": Decimal("900")}
     assert warnings == ["PLTR: missing"]
+
+
+def test_yahoo_historical_prices_skips_invalid_timestamp_and_nan_volume(monkeypatch) -> None:
+    from finwall.market_data import YahooMarketDataProvider
+
+    provider = YahooMarketDataProvider(timeout_seconds=1.0)
+
+    monkeypatch.setattr(
+        provider,
+        "_fetch_json",
+        lambda _url: {
+            "chart": {
+                "result": [
+                    {
+                        "timestamp": [None, 1715731200],
+                        "indicators": {
+                            "quote": [
+                                {
+                                    "close": [100.5, 101.5],
+                                    "volume": [float("nan"), float("nan")],
+                                }
+                            ]
+                        },
+                    }
+                ]
+            }
+        },
+    )
+
+    bars = provider.get_historical_prices("aapl", days=5)
+
+    assert len(bars) == 1
+    assert bars[0].ticker == "AAPL"
+    assert bars[0].close == Decimal("101.5")
+    assert bars[0].volume is None

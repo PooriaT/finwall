@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Iterable, Protocol
@@ -221,13 +222,17 @@ class YahooMarketDataProvider:
 
         bars: list[HistoricalPriceBar] = []
         for index, timestamp in enumerate(timestamps):
+            timestamp_value = _to_epoch_seconds(timestamp)
+            if timestamp_value is None:
+                continue
+
             close = _to_decimal(closes[index]) if index < len(closes) else None
             raw_volume = volumes[index] if index < len(volumes) else None
-            volume = int(raw_volume) if isinstance(raw_volume, (int, float)) else None
+            volume = _to_int(raw_volume)
             bar_date = (
                 __import__("datetime")
                 .datetime.fromtimestamp(
-                    int(timestamp), tz=__import__("datetime").timezone.utc
+                    timestamp_value, tz=__import__("datetime").timezone.utc
                 )
                 .date()
             )
@@ -241,6 +246,23 @@ class YahooMarketDataProvider:
                 )
             )
         return tuple(bars)
+
+
+def _to_int(value: object) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
+def _to_epoch_seconds(value: object) -> int | None:
+    return _to_int(value)
 
 
 def _to_decimal(value: object) -> Decimal | None:
