@@ -1,6 +1,5 @@
 from pathlib import Path
 
-from finwall.postgres_storage import PostgresPortfolioStore
 from finwall.storage import SQLitePortfolioStore
 from finwall.storage_interface import PortfolioStore
 
@@ -29,18 +28,9 @@ def build_portfolio_store(
         )
         return SQLitePortfolioStore(Path(resolved_path))
     if normalized == "postgres":
-        if not database_url:
-            raise ValueError(
-                "Postgres storage backend requires FINWALL_DATABASE_URL to be set."
-            )
-        if not (
-            database_url.startswith("postgresql://")
-            or database_url.startswith("postgresql+psycopg://")
-        ):
-            raise ValueError(
-                "Postgres storage backend requires a PostgreSQL URL in FINWALL_DATABASE_URL."
-            )
-        return PostgresPortfolioStore(database_url)
+        raise ValueError(
+            "Postgres storage backend is not implemented yet. Use sqlite for now."
+        )
     raise ValueError(
         "Unsupported storage backend. Allowed values are 'sqlite' and 'postgres'."
     )

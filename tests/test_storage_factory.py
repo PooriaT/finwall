@@ -1,6 +1,5 @@
 import pytest
 
-from finwall.postgres_storage import PostgresPortfolioStore
 from finwall.storage import SQLitePortfolioStore
 from finwall.storage_factory import build_portfolio_store, resolve_sqlite_database_path
 
@@ -34,7 +33,7 @@ def test_unknown_storage_backend_fails_safely() -> None:
 
 
 def test_postgres_backend_requires_database_url() -> None:
-    with pytest.raises(ValueError, match="requires FINWALL_DATABASE_URL"):
+    with pytest.raises(ValueError, match="not implemented yet"):
         build_portfolio_store(
             backend="postgres", database_path="finwall.db", database_url=None
         )
@@ -49,10 +48,10 @@ def test_postgres_url_not_exposed_in_errors() -> None:
     assert bad_url not in str(exc.value)
 
 
-def test_postgres_backend_selection() -> None:
-    store = build_portfolio_store(
-        backend="postgres",
-        database_path="finwall.db",
-        database_url="postgresql://USER:PASSWORD@HOST:5432/DBNAME",
-    )
-    assert isinstance(store, PostgresPortfolioStore)
+def test_postgres_backend_not_implemented_yet() -> None:
+    with pytest.raises(ValueError, match="not implemented yet"):
+        build_portfolio_store(
+            backend="postgres",
+            database_path="finwall.db",
+            database_url="postgresql://USER:PASSWORD@HOST:5432/DBNAME",
+        )

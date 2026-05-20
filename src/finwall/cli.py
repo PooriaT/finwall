@@ -1,5 +1,6 @@
 import argparse
 import json
+import sys
 from dataclasses import replace
 from datetime import date
 from decimal import Decimal
@@ -993,12 +994,16 @@ def build_report_payload(
 
 def run(argv: list[str] | None = None) -> int:
     parser = build_parser()
+    raw_args = argv if argv is not None else sys.argv[1:]
     args = parser.parse_args(argv)
+    cli_database_override = any(
+        item == "--database" or item.startswith("--database=") for item in raw_args
+    )
     store = build_portfolio_store(
         backend=settings.storage_backend,
         database_path=args.database,
         database_url=settings.database_url or None,
-        cli_database_override=args.database != "finwall.db",
+        cli_database_override=cli_database_override,
     )
     store.initialize()
     portfolio = load_portfolio(store, args.portfolio)
