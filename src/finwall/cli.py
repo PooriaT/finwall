@@ -854,12 +854,20 @@ def build_report_payload(
     args,
     portfolio: Portfolio,
     store: SQLitePortfolioStore,
+    print_live_price_warnings: bool = True,
 ) -> tuple[
-    dict[str, object], object, object, object, object | None, ReportRunComparison | None
+    dict[str, object],
+    object,
+    object,
+    object,
+    object | None,
+    ReportRunComparison | None,
+    tuple[str, ...],
 ]:
     latest_prices = dict(parse_price(item) for item in args.price)
     market_index_quote = None
     market_condition_report = None
+    live_price_warnings: list[str] = []
     if args.live_prices or args.market_index:
         provider = build_market_data_provider(
             settings.market_data_provider,
@@ -871,7 +879,10 @@ def build_report_payload(
             )
             latest_prices = {**fetched_prices, **latest_prices}
             for warning in warnings:
-                print(f"Warning: unable to fetch price for {warning}")
+                warning_message = f"unable to fetch price for {warning}"
+                live_price_warnings.append(warning_message)
+                if print_live_price_warnings:
+                    print(f"Warning: {warning_message}")
         if args.market_index:
             market_index_quote = provider.get_index_quote(args.market_index)
             market_condition_report = classify_market_condition(
@@ -966,6 +977,7 @@ def build_report_payload(
         comparison,
         risk_assessment,
         recommendation_report,
+        tuple(live_price_warnings),
     )
 
 
@@ -1238,7 +1250,7 @@ def run(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "report":
-        payload, report, saved_run, comparison, _, _ = build_report_payload(
+        payload, report, saved_run, comparison, _, _, _ = build_report_payload(
             args=args, portfolio=portfolio, store=store
         )
         if not args.narrative:
@@ -1301,8 +1313,13 @@ def run(argv: list[str] | None = None) -> int:
             return 0
         try:
             args.save_command_context = f"scheduled:{args.run_context}"
-            payload, report, saved_run, comparison, _, _ = build_report_payload(
-                args=args, portfolio=portfolio, store=store
+            payload, report, saved_run, comparison, _, _, live_price_warnings = (
+                build_report_payload(
+                    args=args,
+                    portfolio=portfolio,
+                    store=store,
+                    print_live_price_warnings=not args.json,
+                )
             )
             message = f"Generated scheduled report for {trading.calendar_date}."
             result = ScheduledReportResult(
@@ -1315,7 +1332,7 @@ def run(argv: list[str] | None = None) -> int:
                 if isinstance(payload.get("comparison"), dict)
                 else None,
                 message=message,
-                warnings=(),
+                warnings=live_price_warnings,
             )
             if args.json:
                 print(json.dumps(result.as_dict(), indent=2))

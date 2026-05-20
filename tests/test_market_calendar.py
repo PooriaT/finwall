@@ -25,3 +25,9 @@ def test_good_friday_holiday() -> None:
     decision = evaluate_us_trading_day(date(2026, 4, 3))
     assert decision.status == TradingDayStatus.MARKET_HOLIDAY
     assert decision.holiday_name == "Good Friday"
+
+
+def test_prior_year_observed_new_year_holiday() -> None:
+    decision = evaluate_us_trading_day(date(2021, 12, 31))
+    assert decision.status == TradingDayStatus.MARKET_HOLIDAY
+    assert decision.holiday_name == "New Year's Day"

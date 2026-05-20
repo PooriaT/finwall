@@ -98,7 +98,11 @@ def evaluate_us_trading_day(day: date) -> TradingDayDecision:
             reason="Weekend; US equity markets are closed.",
         )
 
-    holidays = _us_market_holidays(day.year)
+    holidays = {
+        **_us_market_holidays(day.year - 1),
+        **_us_market_holidays(day.year),
+        **_us_market_holidays(day.year + 1),
+    }
     holiday_name = holidays.get(day)
     if holiday_name:
         return TradingDayDecision(

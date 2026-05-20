@@ -1,3 +1,4 @@
+import json
 from decimal import Decimal
 
 import pytest
@@ -891,3 +892,32 @@ def test_run_scheduled_report_json_save_compare(tmp_path, capsys) -> None:
     out = capsys.readouterr().out
     assert '"status": "generated"' in out
     assert '"comparison": {' in out
+
+
+def test_run_scheduled_report_json_keeps_stdout_as_json_with_live_price_warnings(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    database = tmp_path / "finwall.db"
+    run(["--database", str(database), "add-holding", "NVDA", "1", "100"])
+    capsys.readouterr()
+
+    monkeypatch.setattr(
+        "finwall.cli.fetch_portfolio_latest_prices",
+        lambda *args, **kwargs: ({}, ("NVDA",)),
+    )
+    run(
+        [
+            "--database",
+            str(database),
+            "run-scheduled-report",
+            "--run-date",
+            "2026-05-20",
+            "--live-prices",
+            "--json",
+        ]
+    )
+
+    out = capsys.readouterr().out
+    payload = json.loads(out)
+    assert payload["status"] == "generated"
+    assert payload["warnings"] == ["unable to fetch price for NVDA"]
