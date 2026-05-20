@@ -30,6 +30,10 @@ from finwall.reports import build_decision_support_report
 from finwall.risk import RiskAssessment, assess_portfolio_risk
 from finwall.snapshot import PortfolioSnapshot, generate_snapshot
 from finwall.storage import SQLitePortfolioStore
+from finwall.technical_analysis import (
+    TechnicalAnalysisReport,
+    build_technical_analysis_report,
+)
 
 DEFAULT_PORTFOLIO = "Primary"
 
@@ -318,6 +322,12 @@ def build_parser() -> argparse.ArgumentParser:
     market_index = subparsers.add_parser("market-index")
     market_index.add_argument("symbol", choices=sorted(INDEX_SYMBOL_MAP.keys()))
 
+    technicals = subparsers.add_parser("technicals")
+    technicals.add_argument("--days", type=int, default=250)
+    technicals.add_argument("--json", action="store_true")
+    technicals.add_argument("--holdings-only", action="store_true")
+    technicals.add_argument("--watchlist-only", action="store_true")
+
     report = subparsers.add_parser("report")
     report.add_argument(
         "--price",
@@ -480,6 +490,54 @@ def print_recommendation_report(report) -> None:
             print(f"- {item}")
 
 
+def print_technical_report(
+    report: TechnicalAnalysisReport,
+    holdings_only: bool,
+    watchlist_only: bool,
+) -> None:
+    print(report.summary)
+
+    def _print_section(name: str, snapshots) -> None:
+        print(f"{name}:")
+        if not snapshots:
+            print("- none")
+            return
+        for item in snapshots:
+            print(f"- {item.ticker} [{item.data_status}] source={item.source}")
+            print(f"  latest_close={item.latest_close or 'n/a'}")
+            print(
+                "  sma20={0} sma50={1} sma200={2}".format(
+                    item.moving_averages.sma_20 or "n/a",
+                    item.moving_averages.sma_50 or "n/a",
+                    item.moving_averages.sma_200 or "n/a",
+                )
+            )
+            print(f"  rsi14={item.rsi_14 or 'n/a'}")
+            print(
+                f"  recent_high={item.recent_high or 'n/a'} "
+                f"recent_low={item.recent_low or 'n/a'}"
+            )
+            print(
+                f"  volume_trend={item.volume_trend.status} "
+                f"recent_avg={item.volume_trend.recent_average_volume or 'n/a'} "
+                f"previous_avg={item.volume_trend.previous_average_volume or 'n/a'}"
+            )
+            if item.warnings:
+                print("  warnings:")
+                for warning in item.warnings:
+                    print(f"  - {warning}")
+
+    if not watchlist_only:
+        _print_section("Holdings", report.holdings)
+    if not holdings_only:
+        _print_section("Watchlist", report.watchlist)
+
+    if report.limitations:
+        print("Limitations:")
+        for limitation in report.limitations:
+            print(f"- {limitation}")
+
+
 def run(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -604,6 +662,32 @@ def run(argv: list[str] | None = None) -> int:
                 print("Validation errors:")
                 for error in evaluation.errors:
                     print(f"- {error}")
+        return 0
+
+    if args.command == "technicals":
+        provider = build_market_data_provider(
+            settings.market_data_provider,
+            settings.market_data_timeout_seconds,
+        )
+        report = build_technical_analysis_report(portfolio, provider, days=args.days)
+        if args.holdings_only and not args.watchlist_only:
+            report = TechnicalAnalysisReport(
+                holdings=report.holdings,
+                watchlist=(),
+                summary=report.summary,
+                limitations=report.limitations,
+            )
+        if args.watchlist_only and not args.holdings_only:
+            report = TechnicalAnalysisReport(
+                holdings=(),
+                watchlist=report.watchlist,
+                summary=report.summary,
+                limitations=report.limitations,
+            )
+        if args.json:
+            print(report.to_json())
+        else:
+            print_technical_report(report, args.holdings_only, args.watchlist_only)
         return 0
 
     if args.command == "report":
