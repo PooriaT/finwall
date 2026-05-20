@@ -338,6 +338,25 @@ def test_recommendations_missing_prices_and_empty_portfolio(tmp_path, capsys) ->
     assert "Holdings: none" in out2
 
 
+def test_fundamentals_summary_text_output(tmp_path, capsys) -> None:
+    database = tmp_path / "finwall.db"
+    run(["--database", str(database), "add-holding", "NVDA", "1", "100"])
+    run(["--database", str(database), "add-watchlist", "AAPL"])
+    run(["--database", str(database), "fundamentals-summary"])
+    out = capsys.readouterr().out
+    assert "Fundamental summaries" in out
+    assert "risk_level=" in out
+    assert "Limitations:" in out
+
+
+def test_fundamentals_summary_json_and_empty_portfolio(tmp_path, capsys) -> None:
+    database = tmp_path / "empty.db"
+    run(["--database", str(database), "fundamentals-summary", "--json"])
+    out = capsys.readouterr().out
+    assert '"holdings": []' in out
+    assert '"watchlist": []' in out
+
+
 def test_report_prints_markdown_by_default(tmp_path, capsys) -> None:
     database = tmp_path / "finwall.db"
     run(["--database", str(database), "add-holding", "NVDA", "1", "100"])
