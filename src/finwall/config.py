@@ -90,6 +90,10 @@ class Settings:
     smtp_username: str = os.getenv("FINWALL_SMTP_USERNAME", "").strip()
     smtp_password: str = os.getenv("FINWALL_SMTP_PASSWORD", "")
     smtp_use_starttls: bool = _parse_bool(os.getenv("FINWALL_SMTP_USE_STARTTLS"), True)
+    storage_backend: str = (
+        os.getenv("FINWALL_STORAGE_BACKEND", "sqlite").strip().lower()
+    )
+    database_url: str = os.getenv("FINWALL_DATABASE_URL", "").strip()
 
 
 settings = Settings()

@@ -683,3 +683,15 @@ Additional examples:
 poetry run finwall --database finwall.db run-scheduled-report --run-context morning --email --save-run
 poetry run finwall --database finwall.db run-scheduled-report --run-context after_close --email --email-on-failure --json
 ```
+
+## Production persistence configuration
+
+Finwall keeps SQLite as the default persistence backend for local development and CLI workflows.
+
+- `FINWALL_STORAGE_BACKEND=sqlite` keeps existing local behavior.
+- `FINWALL_STORAGE_BACKEND=postgres` selects the production persistence backend.
+- `FINWALL_DATABASE_URL` is optional for SQLite and required for Postgres mode.
+- Use placeholder URLs in docs and secrets managers, for example: `postgresql://USER:PASSWORD@HOST:PORT/DBNAME`.
+- For scheduled cloud runs, configure external persistence so run history and comparisons are not stored in ephemeral local files.
+- Report history save/compare flows use the selected backend through the storage factory.
+- This change does not add deployment automation, scheduling infrastructure, authentication, or broker integration.
