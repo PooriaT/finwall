@@ -710,3 +710,58 @@ def test_news_summary_warns_on_unsupported_provider(
     run(["--database", str(database), "news-summary", "--json"])
     out = capsys.readouterr().out
     assert "unsupported news provider 'custom-provider'" in out
+
+
+def test_report_narrative_markdown_and_json(tmp_path, monkeypatch, capsys) -> None:
+    database = tmp_path / "finwall.db"
+    run(["--database", str(database), "add-holding", "NVDA", "1", "100"])
+
+    run(["--database", str(database), "report", "--price", "NVDA=120", "--narrative"])
+    out = capsys.readouterr().out
+    assert "## Narrative Summary" in out
+
+    run(
+        [
+            "--database",
+            str(database),
+            "report",
+            "--price",
+            "NVDA=120",
+            "--narrative",
+            "--json",
+        ]
+    )
+    out = capsys.readouterr().out
+    assert '"narrative": {' in out
+
+
+def test_report_narrative_uses_fallback_on_invalid_provider_response(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    from finwall.narrative import NarrativeResponse, NarrativeSection
+
+    database = tmp_path / "finwall.db"
+    run(["--database", str(database), "add-holding", "NVDA", "1", "100"])
+
+    monkeypatch.setattr(
+        "finwall.cli.generate_narrative",
+        lambda *args, **kwargs: NarrativeResponse(
+            available=False,
+            provider="fake",
+            sections=(
+                NarrativeSection(
+                    section="portfolio_overview",
+                    text="Fallback deterministic explanation.",
+                    evidence_keys_used=("portfolio_snapshot",),
+                ),
+            ),
+            warnings=("invalid provider payload",),
+            fallback_used=True,
+            error="invalid provider payload",
+        ),
+    )
+
+    run(["--database", str(database), "report", "--price", "NVDA=120", "--narrative"])
+    out = capsys.readouterr().out
+    assert "Fallback deterministic explanation." in out
+    assert "# Finwall Decision-Support Report" in out

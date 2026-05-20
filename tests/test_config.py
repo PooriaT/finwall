@@ -35,3 +35,15 @@ def test_fundamental_data_settings_from_environment(monkeypatch) -> None:
 
     assert reloaded.settings.fundamental_data_provider == "bogus"
     assert reloaded.settings.fundamental_data_timeout_seconds == 9.0
+
+
+def test_narrative_settings_defaults_and_validation(monkeypatch) -> None:
+    monkeypatch.setenv("FINWALL_NARRATIVE_PROVIDER", "disabled")
+    monkeypatch.setenv("FINWALL_NARRATIVE_MAX_WORDS", "-1")
+    monkeypatch.setenv("FINWALL_NARRATIVE_STYLE", "plain_english")
+
+    reloaded = importlib.reload(config)
+
+    assert reloaded.settings.narrative_provider == "disabled"
+    assert reloaded.settings.narrative_max_words == 500
+    assert reloaded.settings.narrative_style == "plain_english"
