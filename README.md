@@ -608,3 +608,39 @@ Notes:
 - Storage is local SQLite only (no cloud, no deployment automation).
 - This is decision-support comparison only; it does not trigger trades.
 - Out of scope by design: email notifications, scheduling, deployment workflows, LLM reasoning, broker integration, and automatic trading.
+
+## Scheduled report command
+
+Use `run-scheduled-report` for non-interactive automation-safe report generation with a deterministic local US market-calendar guard.
+
+```bash
+poetry run finwall --database finwall.db run-scheduled-report --run-context morning
+poetry run finwall --database finwall.db run-scheduled-report --run-context after_close
+```
+
+Useful options:
+
+- `--run-date YYYY-MM-DD` for deterministic testing and manual backfill.
+- `--force` to generate even when the calendar guard marks the day as weekend/holiday.
+- `--json` for structured automation output.
+- `--save-run` and `--compare` to reuse existing report history persistence/comparison behavior.
+
+Examples:
+
+```bash
+poetry run finwall --database finwall.db run-scheduled-report --run-context morning --run-date 2026-05-20 --json
+poetry run finwall --database finwall.db run-scheduled-report --run-context after_close --run-date 2026-07-03
+poetry run finwall --database finwall.db run-scheduled-report --run-date 2026-07-03 --force --save-run --compare
+```
+
+Behavior:
+
+- On non-trading days (weekend or supported US market holiday), the command safely skips and exits `0` unless `--force` is used.
+- On trading days (or with `--force`), the existing decision-support report pipeline runs.
+- JSON output includes explicit scheduled status (`generated`, `skipped`, or `failed`) and trading-day decision metadata.
+- Unexpected failures return a non-zero exit code with a safe error message.
+
+Notes on scope:
+
+- This guard is deterministic local logic, not an exchange/broker calendar API.
+- This command does not add cloud deployment, GitHub Actions schedules, Render Cron configuration, email notifications, broker integration, or automatic trading.

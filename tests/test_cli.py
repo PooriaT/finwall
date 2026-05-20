@@ -818,3 +818,76 @@ def test_report_save_run_compare_json(tmp_path, capsys) -> None:
     assert '"portfolio_snapshot": {' in out
     assert '"saved_run": {' in out
     assert '"comparison": {' in out
+
+
+def test_run_scheduled_report_skips_weekend(tmp_path, capsys) -> None:
+    database = tmp_path / "finwall.db"
+    run(
+        [
+            "--database",
+            str(database),
+            "run-scheduled-report",
+            "--run-date",
+            "2026-05-23",
+        ]
+    )
+    out = capsys.readouterr().out
+    assert "Skipped scheduled report" in out
+
+
+def test_run_scheduled_report_force_generates(tmp_path, capsys) -> None:
+    database = tmp_path / "finwall.db"
+    run(["--database", str(database), "add-holding", "NVDA", "1", "100"])
+    capsys.readouterr()
+    run(
+        [
+            "--database",
+            str(database),
+            "run-scheduled-report",
+            "--run-date",
+            "2026-05-23",
+            "--force",
+            "--price",
+            "NVDA=120",
+        ]
+    )
+    out = capsys.readouterr().out
+    assert "# Finwall Decision-Support Report" in out
+
+
+def test_run_scheduled_report_json_save_compare(tmp_path, capsys) -> None:
+    database = tmp_path / "finwall.db"
+    run(["--database", str(database), "add-holding", "NVDA", "1", "100"])
+    capsys.readouterr()
+    run(
+        [
+            "--database",
+            str(database),
+            "run-scheduled-report",
+            "--run-date",
+            "2026-05-20",
+            "--price",
+            "NVDA=100",
+            "--save-run",
+            "--json",
+        ]
+    )
+    first = capsys.readouterr().out
+    assert '"status": "generated"' in first
+    run(
+        [
+            "--database",
+            str(database),
+            "run-scheduled-report",
+            "--run-date",
+            "2026-05-21",
+            "--price",
+            "NVDA=105",
+            "--save-run",
+            "--compare",
+            "--json",
+        ]
+    )
+    out = capsys.readouterr().out
+    assert '"status": "generated"' in out
+    assert '"comparison": {' in out
