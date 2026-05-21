@@ -105,3 +105,15 @@ def test_smtp_provider_invalid_header_returns_safe_error() -> None:
     assert result.attempted is True
     assert result.sent is False
     assert result.error == "unable to send email notification via SMTP"
+
+
+def test_smtp_error_does_not_leak_secrets() -> None:
+    provider = build_email_provider(_settings(email_provider="smtp"))
+    result = provider.send(
+        EmailMessage(
+            "x", "y", None, "from@example.com\npassword=secret", ("to@example.com",)
+        )
+    )
+    payload = str(result.as_dict())
+    assert "secret" not in payload
+    assert "smtp_username" not in payload

@@ -724,3 +724,9 @@ FINWALL_API_TOKEN=change-me poetry run uvicorn "finwall.api:create_app" --factor
 - Audit events intentionally exclude API tokens, credentials, raw headers, database URLs, and other secrets.
 - View audit history via authenticated `GET /api/v1/portfolio/audit` and `/admin/audit`.
 - This is application-level supportability logging, not a compliance-grade audit system.
+
+
+## Security and privacy
+
+See `docs/security.md` for secret handling, deployment safeguards, and privacy assumptions.
+Run runtime checks with `poetry run finwall security-check` (or `--json`).

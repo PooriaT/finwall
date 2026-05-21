@@ -1194,3 +1194,25 @@ def test_scheduled_runs_command_json(tmp_path, capsys) -> None:
     run(["--database", str(database), "scheduled-runs", "--json"])
     payload = json.loads(capsys.readouterr().out)
     assert payload["scheduled_runs"]
+
+
+def test_security_check_ok(tmp_path, capsys, monkeypatch) -> None:
+    monkeypatch.setattr(
+        "finwall.cli.settings", __import__("finwall.config").config.Settings()
+    )
+    code = run(["--database", str(tmp_path / "x.db"), "security-check"])
+    assert code == 0
+    assert "passed" in capsys.readouterr().out.lower()
+
+
+def test_security_check_json_warns(tmp_path, capsys, monkeypatch) -> None:
+    from finwall.config import Settings
+
+    monkeypatch.setattr(
+        "finwall.cli.settings", Settings(api_enabled=True, api_token="")
+    )
+    code = run(["--database", str(tmp_path / "x.db"), "security-check", "--json"])
+    out = capsys.readouterr().out
+    assert code == 1
+    assert '"ok": false' in out.lower()
+    assert "FINWALL_API_TOKEN" in out

@@ -1,6 +1,7 @@
 from typing import Protocol
 
 from finwall.models import CashBalance, Portfolio, TradeTransaction
+from finwall.portfolio_audit import PortfolioAuditEvent
 from finwall.recommendations import RecommendationReport
 from finwall.report_history import (
     StoredRecommendationStatus,
