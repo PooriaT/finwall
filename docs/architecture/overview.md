@@ -201,6 +201,13 @@ Notes:
 | `cli.py` | command surface orchestration and output transport | owning deep finance decision policies |
 | `api.py` | HTTP/admin input surface, auth checks, persistence/audit routing | owning finance calculations or recommendation policy |
 
+## Maintainer cleanup guidance
+
+- Keep deterministic finance logic in deterministic modules (`snapshot.py`, `risk.py`, `recommendations.py`, `reports.py`) and out of narrative/presentation code.
+- Keep CLI/API modules as thin orchestration surfaces over shared deterministic and mutation helpers.
+- Treat storage/provider protocols and interfaces as intentional seams; do not remove them casually during cleanup.
+- Keep report and narrative output layers downstream from recommendation logic; they must not become a second recommendation engine.
+
 ## Future LLM/Ollama boundary
 
 Any future LLM/Ollama integration should remain downstream of deterministic report generation.
