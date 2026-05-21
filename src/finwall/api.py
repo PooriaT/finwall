@@ -262,7 +262,12 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
 
     @app.get("/api/v1/portfolio/audit")
     def read_portfolio_audit(limit: int = 50, _: str = Depends(auth)):
-        events = app.state.store.list_portfolio_audit_events(DEFAULT_PORTFOLIO, limit)
+        try:
+            events = app.state.store.list_portfolio_audit_events(
+                DEFAULT_PORTFOLIO, limit
+            )
+        except ValueError:
+            events = ()
         return {"events": [event.as_dict() for event in events]}
 
     @app.post("/api/v1/portfolio/cash/add")
@@ -446,7 +451,10 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
 
     @app.get("/admin/audit", response_class=HTMLResponse)
     def admin_audit(_: str = Depends(admin_auth)):
-        events = app.state.store.list_portfolio_audit_events(DEFAULT_PORTFOLIO, 100)
+        try:
+            events = app.state.store.list_portfolio_audit_events(DEFAULT_PORTFOLIO, 100)
+        except ValueError:
+            events = ()
         rows = "".join(
             "<tr>"
             f"<td>{escape(event.changed_at)}</td><td>{escape(event.actor)}</td>"
