@@ -182,7 +182,7 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
             token,
             httponly=True,
             samesite="lax",
-            secure=app.state.settings.env.lower() == "production",
+            secure=app.state.settings.app_env.lower() == "production",
         )
         return response
 
