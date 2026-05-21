@@ -1,7 +1,6 @@
 from typing import Protocol
 
 from finwall.models import CashBalance, Portfolio, TradeTransaction
-from finwall.portfolio_audit import PortfolioAuditEvent
 from finwall.recommendations import RecommendationReport
 from finwall.report_history import (
     StoredRecommendationStatus,
@@ -11,6 +10,7 @@ from finwall.report_history import (
 )
 from finwall.reports import DecisionSupportReport
 from finwall.risk import RiskAssessment
+from finwall.scheduled_report import StoredScheduledRun
 
 
 class PortfolioStore(Protocol):
@@ -72,3 +72,32 @@ class PortfolioStore(Protocol):
         portfolio_name: str,
         limit: int = 50,
     ) -> tuple[PortfolioAuditEvent, ...]: ...
+    def get_scheduled_run(
+        self,
+        portfolio_name: str,
+        run_date: str,
+        run_context: str,
+    ) -> StoredScheduledRun | None: ...
+    def start_scheduled_run(
+        self,
+        portfolio_name: str,
+        run_date: str,
+        run_context: str,
+    ) -> StoredScheduledRun: ...
+    def finish_scheduled_run(
+        self,
+        scheduled_run_id: int,
+        *,
+        status: str,
+        report_run_id: int | None,
+        notification_attempted: bool,
+        notification_sent: bool,
+        notification_provider: str | None,
+        error_category: str,
+        safe_error_message: str | None,
+    ) -> StoredScheduledRun: ...
+    def list_scheduled_runs(
+        self,
+        portfolio_name: str,
+        limit: int = 10,
+    ) -> tuple[StoredScheduledRun, ...]: ...

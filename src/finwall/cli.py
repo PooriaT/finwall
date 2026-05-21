@@ -91,6 +91,8 @@ from finwall.scheduled_report import (
     ScheduledReportResult,
     ScheduledReportStatus,
     ScheduledRunContext,
+    ScheduledRunErrorCategory,
+    ScheduledRunStatus,
 )
 from finwall.snapshot import PortfolioSnapshot, generate_snapshot
 from finwall.storage_factory import build_portfolio_store
@@ -366,6 +368,9 @@ def build_parser() -> argparse.ArgumentParser:
     scheduled.add_argument("--email", action="store_true")
     scheduled.add_argument("--email-on-failure", action="store_true")
     scheduled.add_argument("--email-to")
+    scheduled_runs = subparsers.add_parser("scheduled-runs")
+    scheduled_runs.add_argument("--json", action="store_true")
+    scheduled_runs.add_argument("--limit", type=int, default=10)
 
     market_condition = subparsers.add_parser("market-condition")
     market_condition.add_argument(
@@ -1296,24 +1301,61 @@ def run(argv: list[str] | None = None) -> int:
             )
             return email_provider.send(message)
 
-        if not trading.is_trading_day and not args.force:
-            message = f"Skipped scheduled report for {trading.calendar_date}: {trading.reason}"
-            result = ScheduledReportResult(
-                status=ScheduledReportStatus.SKIPPED,
-                run_context=args.run_context,
-                trading_day=trading.as_dict(),
-                report=None,
-                saved_report_id=None,
-                comparison=None,
-                message=message,
-                warnings=(),
-            )
-            if args.json:
-                print(json.dumps(result.as_dict(), indent=2))
-            else:
-                print(message)
-            return 0
+        scheduled_run = None
         try:
+            scheduled_run = store.start_scheduled_run(
+                portfolio.name, trading.calendar_date, args.run_context
+            )
+            if scheduled_run.status != ScheduledRunStatus.STARTED.value:
+                message = (
+                    f"Duplicate scheduled report suppressed for {args.run_context}."
+                )
+                result = ScheduledReportResult(
+                    status=ScheduledReportStatus.DUPLICATE,
+                    run_context=args.run_context,
+                    trading_day=trading.as_dict(),
+                    report=None,
+                    saved_report_id=scheduled_run.report_run_id,
+                    comparison=None,
+                    message=message,
+                    warnings=(),
+                    scheduled_run=scheduled_run.as_dict(),
+                )
+                if args.json:
+                    print(json.dumps(result.as_dict(), indent=2))
+                else:
+                    print(message)
+                return 0
+
+            if not trading.is_trading_day and not args.force:
+                message = f"Skipped scheduled report for {trading.calendar_date}: {trading.reason}"
+                scheduled_run = store.finish_scheduled_run(
+                    scheduled_run.id,
+                    status=ScheduledRunStatus.SKIPPED.value,
+                    report_run_id=None,
+                    notification_attempted=False,
+                    notification_sent=False,
+                    notification_provider=None,
+                    error_category=ScheduledRunErrorCategory.NON_TRADING_DAY.value,
+                    safe_error_message=trading.reason,
+                )
+                result = ScheduledReportResult(
+                    status=ScheduledReportStatus.SKIPPED,
+                    run_context=args.run_context,
+                    trading_day=trading.as_dict(),
+                    report=None,
+                    saved_report_id=None,
+                    comparison=None,
+                    message=message,
+                    warnings=(),
+                    scheduled_run=scheduled_run.as_dict(),
+                )
+                if args.json:
+                    print(json.dumps(result.as_dict(), indent=2))
+                else:
+                    print(message)
+                return 0
+
             args.save_command_context = f"scheduled:{args.run_context}"
             payload, report, saved_run, comparison, _, _, live_price_warnings = (
                 build_report_payload(
@@ -1337,6 +1379,7 @@ def run(argv: list[str] | None = None) -> int:
                 warnings=live_price_warnings,
             )
             notification = None
+            error_category = ScheduledRunErrorCategory.NONE.value
             if args.email:
                 notification = _notify(build_scheduled_success_email, result)
                 if notification is not None and notification.warnings:
@@ -1346,6 +1389,21 @@ def run(argv: list[str] | None = None) -> int:
                     )
                 if notification is not None:
                     result = replace(result, notification=notification.as_dict())
+                if notification is not None and not notification.sent:
+                    error_category = ScheduledRunErrorCategory.EMAIL_SEND_FAILED.value
+            scheduled_run = store.finish_scheduled_run(
+                scheduled_run.id,
+                status=ScheduledRunStatus.GENERATED.value,
+                report_run_id=saved_run.id if saved_run else None,
+                notification_attempted=bool(notification and notification.attempted),
+                notification_sent=bool(notification and notification.sent),
+                notification_provider=notification.provider if notification else None,
+                error_category=error_category,
+                safe_error_message=notification.error
+                if notification and not notification.sent
+                else None,
+            )
+            result = replace(result, scheduled_run=scheduled_run.as_dict())
 
             if args.json:
                 print(json.dumps(result.as_dict(), indent=2))
@@ -1372,11 +1430,47 @@ def run(argv: list[str] | None = None) -> int:
                 notification = _notify(build_scheduled_failure_email, result)
                 if notification is not None:
                     result = replace(result, notification=notification.as_dict())
+            if scheduled_run is not None:
+                scheduled_run = store.finish_scheduled_run(
+                    scheduled_run.id,
+                    status=ScheduledRunStatus.FAILED.value,
+                    report_run_id=None,
+                    notification_attempted=bool(notification and notification.attempted)
+                    if "notification" in locals()
+                    else False,
+                    notification_sent=bool(notification and notification.sent)
+                    if "notification" in locals()
+                    else False,
+                    notification_provider=notification.provider
+                    if "notification" in locals() and notification is not None
+                    else None,
+                    error_category=ScheduledRunErrorCategory.REPORT_GENERATION_FAILED.value,
+                    safe_error_message=message,
+                )
+                result = replace(result, scheduled_run=scheduled_run.as_dict())
             if args.json:
                 print(json.dumps(result.as_dict(), indent=2))
             else:
                 print(message)
             return 1
+
+    if args.command == "scheduled-runs":
+        runs = store.list_scheduled_runs(portfolio.name, limit=args.limit)
+        if args.json:
+            print(
+                json.dumps(
+                    {"scheduled_runs": [item.as_dict() for item in runs]}, indent=2
+                )
+            )
+        else:
+            for item in runs:
+                print(
+                    f"id={item.id} date={item.run_date} context={item.run_context} "
+                    f"status={item.status} report_run_id={item.report_run_id} "
+                    "notification_sent="
+                    f"{item.notification_sent} error_category={item.error_category}"
+                )
+        return 0
 
     if args.command == "market-index":
         provider = build_market_data_provider(
