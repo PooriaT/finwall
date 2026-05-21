@@ -90,6 +90,7 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
         database_path=app_settings.database_path,
         database_url=app_settings.database_url,
     )
+    app.state.store.initialize()
 
     def auth(request: Request, authorization: str | None = Header(default=None)) -> str:
         token = request.app.state.settings.api_token
