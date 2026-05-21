@@ -30,6 +30,7 @@ from finwall.portfolio_updates import (
     set_timeline,
     upsert_cash,
 )
+from finwall.security import safe_error_message
 from finwall.storage_factory import build_portfolio_store
 
 DEFAULT_PORTFOLIO = "Primary"
@@ -188,7 +189,7 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
                 safe_error_message=safe_error_message,
             )
         except Exception:
-            logger.exception("failed to record portfolio audit event")
+            logger.warning("failed to record portfolio audit event")
 
     def persist(updated: Portfolio, existing: Portfolio) -> dict:
         save_portfolio_update(
@@ -314,7 +315,7 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
         try:
             updated = upsert_cash(portfolio, payload.currency, -amount)
         except ValueError as exc:
-            raise HTTPException(400, detail=str(exc)) from exc
+            raise HTTPException(400, detail=safe_error_message(exc)) from exc
         return persist(updated, portfolio)
 
     @app.post("/api/v1/portfolio/holdings")
@@ -367,7 +368,7 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
                 payload.trade_date or date.today(),
             )
         except ValueError as exc:
-            raise HTTPException(400, detail=str(exc)) from exc
+            raise HTTPException(400, detail=safe_error_message(exc)) from exc
         return persist(updated, portfolio)
 
     @app.post("/api/v1/portfolio/trades/sell")
@@ -383,7 +384,7 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
                 payload.trade_date or date.today(),
             )
         except ValueError as exc:
-            raise HTTPException(400, detail=str(exc)) from exc
+            raise HTTPException(400, detail=safe_error_message(exc)) from exc
         return persist(updated, portfolio)
 
     @app.post("/api/v1/portfolio/orders")
@@ -402,7 +403,7 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
                 else None,
             )
         except ValueError as exc:
-            raise HTTPException(422, detail=str(exc)) from exc
+            raise HTTPException(422, detail=safe_error_message(exc)) from exc
         portfolio = get_portfolio()
         return persist(add_or_update_order(portfolio, order), portfolio)
 
@@ -439,7 +440,7 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
         try:
             updated = set_timeline(portfolio, payload.start_date, payload.target_date)
         except ValueError as exc:
-            raise HTTPException(422, detail=str(exc)) from exc
+            raise HTTPException(422, detail=safe_error_message(exc)) from exc
         return persist(updated, portfolio)
 
     @app.put("/api/v1/portfolio/risk-profile")
@@ -517,7 +518,8 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
             return _redirect("/admin/cash", "Cash updated")
         except Exception as exc:
             return HTMLResponse(
-                _layout("Cash", "<h1>Cash</h1>", str(exc)), status_code=422
+                _layout("Cash", "<h1>Cash</h1>", safe_error_message(exc)),
+                status_code=422,
             )
 
     @app.post("/admin/cash/withdraw")
@@ -534,7 +536,8 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
             return _redirect("/admin/cash", "Cash withdrawn")
         except Exception as exc:
             return HTMLResponse(
-                _layout("Cash", "<h1>Cash</h1>", str(exc)), status_code=422
+                _layout("Cash", "<h1>Cash</h1>", safe_error_message(exc)),
+                status_code=422,
             )
 
     @app.get("/admin/holdings", response_class=HTMLResponse)
@@ -566,7 +569,8 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
             return _redirect("/admin/holdings", "Holding saved")
         except Exception as exc:
             return HTMLResponse(
-                _layout("Holdings", "<h1>Holdings</h1>", str(exc)), status_code=422
+                _layout("Holdings", "<h1>Holdings</h1>", safe_error_message(exc)),
+                status_code=422,
             )
 
     @app.post("/admin/holdings/delete")
@@ -625,7 +629,8 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
             return await _trade(request, "buy")
         except Exception as exc:
             return HTMLResponse(
-                _layout("Trades", "<h1>Trades</h1>", str(exc)), status_code=422
+                _layout("Trades", "<h1>Trades</h1>", safe_error_message(exc)),
+                status_code=422,
             )
 
     @app.post("/admin/trades/sell")
@@ -634,7 +639,8 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
             return await _trade(request, "sell")
         except Exception as exc:
             return HTMLResponse(
-                _layout("Trades", "<h1>Trades</h1>", str(exc)), status_code=422
+                _layout("Trades", "<h1>Trades</h1>", safe_error_message(exc)),
+                status_code=422,
             )
 
     @app.get("/admin/orders", response_class=HTMLResponse)
@@ -671,7 +677,8 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
             return _redirect("/admin/orders", "Order saved")
         except Exception as exc:
             return HTMLResponse(
-                _layout("Orders", "<h1>Orders</h1>", str(exc)), status_code=422
+                _layout("Orders", "<h1>Orders</h1>", safe_error_message(exc)),
+                status_code=422,
             )
 
     @app.post("/admin/orders/delete")
@@ -760,7 +767,8 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
             return _redirect("/admin/settings", "Timeline set")
         except Exception as exc:
             return HTMLResponse(
-                _layout("Settings", "<h1>Settings</h1>", str(exc)), status_code=422
+                _layout("Settings", "<h1>Settings</h1>", safe_error_message(exc)),
+                status_code=422,
             )
 
     @app.post("/admin/risk-profile")

@@ -1,3 +1,8 @@
+import pytest
+
+pytest.importorskip("fastapi")
+pytest.importorskip("httpx")
+
 from fastapi.testclient import TestClient
 
 from finwall.api import create_app
@@ -295,8 +300,6 @@ def test_admin_forms_update_portfolio(tmp_path):
     )
 
 
-
-
 def test_audit_views_return_empty_on_fresh_database(tmp_path):
     client = build_client(tmp_path)
     h = auth_headers()
@@ -309,6 +312,7 @@ def test_audit_views_return_empty_on_fresh_database(tmp_path):
     page = client.get("/admin/audit")
     assert page.status_code == 200
     assert "Audit events" in page.text
+
 
 def test_audit_endpoint_and_web_audit_page(tmp_path):
     client = build_client(tmp_path)
@@ -332,3 +336,13 @@ def test_audit_endpoint_and_web_audit_page(tmp_path):
     assert page.status_code == 200
     assert "web" in page.text
     assert "secret" not in page.text
+
+
+def test_admin_form_error_sanitized(tmp_path):
+    client = build_client(tmp_path)
+    client.post("/admin/login", data={"token": "secret"})
+    response = client.post(
+        "/admin/cash", data={"currency": "USD", "amount": "bad\nTraceback"}
+    )
+    assert response.status_code == 422
+    assert "Traceback" not in response.text

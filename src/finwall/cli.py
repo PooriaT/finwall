@@ -6,6 +6,7 @@ from datetime import date
 from decimal import Decimal
 
 from finwall.config import settings
+from finwall.config_validation import validate_runtime_security_settings
 from finwall.email_notifications import (
     EmailSendResult,
     build_email_provider,
@@ -368,6 +369,9 @@ def build_parser() -> argparse.ArgumentParser:
     scheduled.add_argument("--email", action="store_true")
     scheduled.add_argument("--email-on-failure", action="store_true")
     scheduled.add_argument("--email-to")
+    security_check = subparsers.add_parser("security-check")
+    security_check.add_argument("--json", action="store_true")
+
     scheduled_runs = subparsers.add_parser("scheduled-runs")
     scheduled_runs.add_argument("--json", action="store_true")
     scheduled_runs.add_argument("--limit", type=int, default=10)
@@ -961,6 +965,21 @@ def run(argv: list[str] | None = None) -> int:
     parser = build_parser()
     raw_args = argv if argv is not None else sys.argv[1:]
     args = parser.parse_args(argv)
+
+    if args.command == "security-check":
+        warnings = validate_runtime_security_settings(settings)
+        ok = not warnings
+        if args.json:
+            print(json.dumps({"ok": ok, "warnings": list(warnings)}, indent=2))
+        else:
+            if ok:
+                print("Security check passed.")
+            else:
+                print("Security check found warnings:")
+                for warning in warnings:
+                    print(f"- {warning}")
+        return 0 if ok else 1
+
     cli_database_override = any(
         item == "--database" or item.startswith("--database=") for item in raw_args
     )

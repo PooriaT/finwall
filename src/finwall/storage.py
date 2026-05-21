@@ -515,7 +515,6 @@ class SQLitePortfolioStore:
                 for row in rows
             )
 
-
     def record_portfolio_audit_event(
         self,
         portfolio_name: str,
