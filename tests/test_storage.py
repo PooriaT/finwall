@@ -175,3 +175,37 @@ def test_cash_history_is_stored_separately(store) -> None:
 def test_invalid_portfolio_state_is_rejected(store) -> None:
     with pytest.raises(ValueError):
         store.save_portfolio("invalid")
+
+
+def test_portfolio_audit_events_record_and_list(store) -> None:
+    store.save_portfolio(Portfolio(name="Primary"))
+    store.record_portfolio_audit_event(
+        "Primary",
+        actor="api-admin",
+        source="api",
+        action="cash_add",
+        entity_type="cash",
+        entity_id="USD",
+        status="succeeded",
+        summary="Added cash",
+        before_json='{"amount":"10"}',
+        after_json='{"amount":"20"}',
+        safe_error_message=None,
+    )
+    store.record_portfolio_audit_event(
+        "Primary",
+        actor="api-admin",
+        source="api",
+        action="cash_add",
+        entity_type="cash",
+        entity_id="USD",
+        status="failed",
+        summary="Failed cash update",
+        before_json='{"amount":"20"}',
+        after_json=None,
+        safe_error_message="invalid amount",
+    )
+    events = store.list_portfolio_audit_events("Primary", limit=1)
+    assert len(events) == 1
+    assert events[0].status == "failed"
+    assert events[0].safe_error_message == "invalid amount"

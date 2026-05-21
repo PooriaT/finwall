@@ -1,3 +1,5 @@
+import json
+import logging
 from dataclasses import asdict, replace
 from datetime import date
 from decimal import Decimal, InvalidOperation
@@ -9,6 +11,11 @@ from pydantic import BaseModel
 
 from finwall.config import Settings, settings
 from finwall.models import ActiveOrder, OrderSide, OrderType, Portfolio, RiskLevel
+from finwall.portfolio_audit import (
+    PortfolioAuditEntityType,
+    PortfolioAuditSource,
+    PortfolioAuditStatus,
+)
 from finwall.portfolio_updates import (
     add_holding,
     add_or_update_order,
@@ -125,7 +132,9 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
             "<nav><a href='/admin'>Admin Home</a> | <a href='/admin/portfolio'>Portfolio</a> | "
             "<a href='/admin/cash'>Cash</a> | <a href='/admin/holdings'>Holdings</a> | "
             "<a href='/admin/trades'>Trades</a> | <a href='/admin/orders'>Orders</a> | "
-            "<a href='/admin/watchlist'>Watchlist</a> | <a href='/admin/settings'>Settings</a> "
+            "<a href='/admin/watchlist'>Watchlist</a> | "
+            "<a href='/admin/settings'>Settings</a> | "
+            "<a href='/admin/audit'>Audit</a> "
             "<form style='display:inline' method='post' action='/admin/logout'>"
             "<button type='submit'>Logout</button></form></nav><hr/>"
             f"{flash}{body}</body></html>"
@@ -142,6 +151,44 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
             portfolio = Portfolio(name=DEFAULT_PORTFOLIO)
             store.save_portfolio(portfolio)
         return portfolio
+
+    logger = logging.getLogger(__name__)
+
+    def _json_snapshot(value: object | None) -> str | None:
+        if value is None:
+            return None
+        return json.dumps(value, separators=(",", ":"), sort_keys=True, default=str)
+
+    def record_update_audit(
+        portfolio_name: str,
+        *,
+        actor: str,
+        source: str,
+        action: str,
+        entity_type: str,
+        entity_id: str | None,
+        before: object | None,
+        after: object | None,
+        status: str,
+        summary: str,
+        safe_error_message: str | None = None,
+    ) -> None:
+        try:
+            app.state.store.record_portfolio_audit_event(
+                portfolio_name,
+                actor=actor,
+                source=source,
+                action=action,
+                entity_type=entity_type,
+                entity_id=entity_id,
+                status=status,
+                summary=summary,
+                before_json=_json_snapshot(before),
+                after_json=_json_snapshot(after),
+                safe_error_message=safe_error_message,
+            )
+        except Exception:
+            logger.exception("failed to record portfolio audit event")
 
     def persist(updated: Portfolio, existing: Portfolio) -> dict:
         save_portfolio_update(
@@ -213,13 +260,52 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
     def read_portfolio(_: str = Depends(auth)):
         return asdict(get_portfolio())
 
+    @app.get("/api/v1/portfolio/audit")
+    def read_portfolio_audit(limit: int = 50, _: str = Depends(auth)):
+        try:
+            events = app.state.store.list_portfolio_audit_events(
+                DEFAULT_PORTFOLIO, limit
+            )
+        except ValueError:
+            events = ()
+        return {"events": [event.as_dict() for event in events]}
+
     @app.post("/api/v1/portfolio/cash/add")
-    def cash_add(payload: CashRequest, _: str = Depends(auth)):
+    def cash_add(payload: CashRequest, actor: str = Depends(auth)):
         portfolio = get_portfolio()
+        before = next(
+            (
+                asdict(c)
+                for c in portfolio.cash_balances
+                if c.currency == payload.currency
+            ),
+            None,
+        )
         updated = upsert_cash(
             portfolio, payload.currency, _to_decimal(payload.amount, "amount")
         )
-        return persist(updated, portfolio)
+        after = next(
+            (
+                asdict(c)
+                for c in updated.cash_balances
+                if c.currency == payload.currency
+            ),
+            None,
+        )
+        result = persist(updated, portfolio)
+        record_update_audit(
+            DEFAULT_PORTFOLIO,
+            actor=actor,
+            source=PortfolioAuditSource.API,
+            action="cash_add",
+            entity_type=PortfolioAuditEntityType.CASH,
+            entity_id=payload.currency,
+            before=before,
+            after=after,
+            status=PortfolioAuditStatus.SUCCEEDED,
+            summary=f"Added cash for {payload.currency}",
+        )
+        return result
 
     @app.post("/api/v1/portfolio/cash/withdraw")
     def cash_withdraw(payload: CashRequest, _: str = Depends(auth)):
@@ -229,8 +315,11 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
         return persist(updated, portfolio)
 
     @app.post("/api/v1/portfolio/holdings")
-    def holdings_upsert(payload: HoldingRequest, _: str = Depends(auth)):
+    def holdings_upsert(payload: HoldingRequest, actor: str = Depends(auth)):
         portfolio = get_portfolio()
+        before = next(
+            (asdict(h) for h in portfolio.holdings if h.ticker == payload.ticker), None
+        )
         updated = add_holding(
             portfolio,
             payload.ticker,
@@ -238,7 +327,23 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
             _to_decimal(payload.average_price, "average_price"),
             payload.sector,
         )
-        return persist(updated, portfolio)
+        after = next(
+            (asdict(h) for h in updated.holdings if h.ticker == payload.ticker), None
+        )
+        result = persist(updated, portfolio)
+        record_update_audit(
+            DEFAULT_PORTFOLIO,
+            actor=actor,
+            source=PortfolioAuditSource.API,
+            action="holding_upsert",
+            entity_type=PortfolioAuditEntityType.HOLDING,
+            entity_id=payload.ticker,
+            before=before,
+            after=after,
+            status=PortfolioAuditStatus.SUCCEEDED,
+            summary=f"Saved holding {payload.ticker}",
+        )
+        return result
 
     @app.delete("/api/v1/portfolio/holdings/{ticker}")
     def holdings_remove(ticker: str, _: str = Depends(auth)):
@@ -344,6 +449,30 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
             _layout("Portfolio", f"<pre>{escape(str(asdict(get_portfolio())))}</pre>")
         )
 
+    @app.get("/admin/audit", response_class=HTMLResponse)
+    def admin_audit(_: str = Depends(admin_auth)):
+        try:
+            events = app.state.store.list_portfolio_audit_events(DEFAULT_PORTFOLIO, 100)
+        except ValueError:
+            events = ()
+        rows = "".join(
+            "<tr>"
+            f"<td>{escape(event.changed_at)}</td><td>{escape(event.actor)}</td>"
+            f"<td>{escape(event.source)}</td><td>{escape(event.action)}</td>"
+            f"<td>{escape(event.entity_type)}</td><td>{escape(str(event.entity_id or ''))}</td>"
+            f"<td>{escape(event.status)}</td><td>{escape(event.summary)}</td>"
+            f"<td>{escape(str(event.safe_error_message or ''))}</td>"
+            "</tr>"
+            for event in events
+        )
+        body = (
+            "<h1>Audit events</h1><table border='1'><tr><th>changed_at</th><th>actor</th>"
+            "<th>source</th><th>action</th><th>entity</th><th>entity id</th><th>status</th>"
+            "<th>summary</th><th>error</th></tr>"
+            f"{rows}</table>"
+        )
+        return HTMLResponse(_layout("Audit", body))
+
     @app.get("/admin/cash", response_class=HTMLResponse)
     def admin_cash(request: Request, _: str = Depends(admin_auth)):
         body = (
@@ -367,6 +496,18 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
                 _to_decimal(str(form["amount"]), "amount"),
             )
             persist(updated, portfolio)
+            record_update_audit(
+                DEFAULT_PORTFOLIO,
+                actor="web-admin",
+                source=PortfolioAuditSource.WEB,
+                action="cash_add",
+                entity_type=PortfolioAuditEntityType.CASH,
+                entity_id=str(form["currency"]),
+                before=None,
+                after=None,
+                status=PortfolioAuditStatus.SUCCEEDED,
+                summary=f"Added cash for {str(form['currency'])}",
+            )
             return _redirect("/admin/cash", "Cash updated")
         except Exception as exc:
             return HTMLResponse(

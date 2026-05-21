@@ -256,3 +256,42 @@ def test_admin_forms_update_portfolio(tmp_path):
         ).status_code
         == 303
     )
+
+
+
+
+def test_audit_views_return_empty_on_fresh_database(tmp_path):
+    client = build_client(tmp_path)
+    h = auth_headers()
+
+    response = client.get("/api/v1/portfolio/audit", headers=h)
+    assert response.status_code == 200
+    assert response.json() == {"events": []}
+
+    client.post("/admin/login", data={"token": "secret"})
+    page = client.get("/admin/audit")
+    assert page.status_code == 200
+    assert "Audit events" in page.text
+
+def test_audit_endpoint_and_web_audit_page(tmp_path):
+    client = build_client(tmp_path)
+    h = auth_headers()
+    client.post(
+        "/api/v1/portfolio/cash/add",
+        headers=h,
+        json={"currency": "USD", "amount": "1000"},
+    )
+    response = client.get("/api/v1/portfolio/audit", headers=h)
+    assert response.status_code == 200
+    events = response.json()["events"]
+    assert events
+    assert events[0]["source"] == "api"
+    assert "secret" not in response.text
+
+    assert client.get("/admin/audit").status_code == 401
+    client.post("/admin/login", data={"token": "secret"})
+    client.post("/admin/cash/add", data={"currency": "USD", "amount": "25"})
+    page = client.get("/admin/audit")
+    assert page.status_code == 200
+    assert "web" in page.text
+    assert "secret" not in page.text

@@ -703,3 +703,10 @@ Run locally:
 ```bash
 FINWALL_API_TOKEN=change-me poetry run uvicorn "finwall.api:create_app" --factory --host 127.0.0.1 --port 8000
 ```
+
+## Portfolio audit history
+- Finwall records lightweight portfolio audit events for API and admin web updates.
+- Stored fields: actor, source, action, entity type/id, status, summary, optional safe before/after JSON, and optional safe error message.
+- Audit events intentionally exclude API tokens, credentials, raw headers, database URLs, and other secrets.
+- View audit history via authenticated `GET /api/v1/portfolio/audit` and `/admin/audit`.
+- This is application-level supportability logging, not a compliance-grade audit system.
