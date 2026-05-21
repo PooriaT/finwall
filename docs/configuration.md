@@ -18,11 +18,11 @@ Finwall reads runtime settings from environment variables. `.env.example` provid
 
 | Variable | Purpose | Default | Required (local-only) | Required (scheduled/email/API) | Example |
 |---|---|---|---|---|---|
-| `FINWALL_STORAGE_BACKEND` | Storage backend selector (`sqlite` or `postgres`). | `sqlite` | No | Yes for non-local durable runs. | `sqlite` |
+| `FINWALL_STORAGE_BACKEND` | Storage backend selector. Use `sqlite` today (`postgres` is not implemented at runtime). | `sqlite` | No | Keep `sqlite` for local and scheduled runs. | `sqlite` |
 | `FINWALL_DATABASE_PATH` | SQLite file path. | `finwall.db` | No (used automatically) | Optional fallback only. | `finwall.db` |
-| `FINWALL_DATABASE_URL` | Postgres connection URL when backend is `postgres`. | empty | No for SQLite local use | Yes for durable cloud history/comparison. | `postgresql://user:pass@host:5432/finwall` |
+| `FINWALL_DATABASE_URL` | Optional SQLite URL override when using `sqlite:///...`; do not use for Postgres today. | empty | No | Optional in SQLite mode only. | `sqlite:///finwall.db` |
 
-> Postgres is configuration-supported through storage settings. Treat deployment setup as self-managed and validate in your environment before production reliance.
+> Current limitation: selecting `FINWALL_STORAGE_BACKEND=postgres` fails at runtime because Postgres storage is not implemented yet. Use SQLite for now in both local and scheduled environments.
 
 ## Market data
 
