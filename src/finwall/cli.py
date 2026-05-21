@@ -965,6 +965,21 @@ def run(argv: list[str] | None = None) -> int:
     parser = build_parser()
     raw_args = argv if argv is not None else sys.argv[1:]
     args = parser.parse_args(argv)
+
+    if args.command == "security-check":
+        warnings = validate_runtime_security_settings(settings)
+        ok = not warnings
+        if args.json:
+            print(json.dumps({"ok": ok, "warnings": list(warnings)}, indent=2))
+        else:
+            if ok:
+                print("Security check passed.")
+            else:
+                print("Security check found warnings:")
+                for warning in warnings:
+                    print(f"- {warning}")
+        return 0 if ok else 1
+
     cli_database_override = any(
         item == "--database" or item.startswith("--database=") for item in raw_args
     )
@@ -1457,20 +1472,6 @@ def run(argv: list[str] | None = None) -> int:
             else:
                 print(message)
             return 1
-
-    if args.command == "security-check":
-        warnings = validate_runtime_security_settings(settings)
-        ok = not warnings
-        if args.json:
-            print(json.dumps({"ok": ok, "warnings": list(warnings)}, indent=2))
-        else:
-            if ok:
-                print("Security check passed.")
-            else:
-                print("Security check found warnings:")
-                for warning in warnings:
-                    print(f"- {warning}")
-        return 0 if ok else 1
 
     if args.command == "scheduled-runs":
         runs = store.list_scheduled_runs(portfolio.name, limit=args.limit)

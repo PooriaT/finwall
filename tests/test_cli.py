@@ -1216,3 +1216,23 @@ def test_security_check_json_warns(tmp_path, capsys, monkeypatch) -> None:
     assert code == 1
     assert '"ok": false' in out.lower()
     assert "FINWALL_API_TOKEN" in out
+
+
+def test_security_check_does_not_initialize_store(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    from finwall.config import Settings
+
+    monkeypatch.setattr(
+        "finwall.cli.settings",
+        Settings(
+            storage_backend="postgres", database_url="", api_enabled=True, api_token=""
+        ),
+    )
+
+    code = run(["--database", str(tmp_path / "x.db"), "security-check", "--json"])
+    out = capsys.readouterr().out
+
+    assert code == 1
+    assert '"ok": false' in out.lower()
+    assert "FINWALL_DATABASE_URL" in out
