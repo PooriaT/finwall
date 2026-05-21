@@ -137,8 +137,8 @@ flowchart LR
 
 Notes:
 
-- In current CLI implementation, `build_report_payload(...)` orchestrates this sequence.
-- `build_report_payload(...)` is a useful future seam for extraction into a dedicated service layer, but no extraction is done in this documentation PR.
+- `report_pipeline.build_deterministic_report_artifacts(...)` now orchestrates deterministic composition.
+- CLI orchestration (`build_report_payload(...)`) layers deterministic save/compare metadata on top of those artifacts and remains narrative-independent.
 
 ### Scheduled report flow
 
