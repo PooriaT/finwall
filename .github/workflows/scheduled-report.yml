@@ -103,12 +103,13 @@ jobs:
           set -euo pipefail
 
           if [[ "${GITHUB_EVENT_NAME}" == "schedule" ]]; then
-            if [[ "${GITHUB_EVENT_SCHEDULE}" == "30 14 * * 1-5" ]]; then
+            SCHEDULE_EXPR="${{ github.event.schedule }}"
+            if [[ "${SCHEDULE_EXPR}" == "30 14 * * 1-5" ]]; then
               RUN_CONTEXT="morning"
-            elif [[ "${GITHUB_EVENT_SCHEDULE}" == "15 20 * * 1-5" ]]; then
+            elif [[ "${SCHEDULE_EXPR}" == "15 20 * * 1-5" ]]; then
               RUN_CONTEXT="after_close"
             else
-              echo "Unexpected schedule expression: ${GITHUB_EVENT_SCHEDULE}" >&2
+              echo "Unexpected schedule expression: ${SCHEDULE_EXPR}" >&2
               exit 1
             fi
             RUN_DATE=""
@@ -127,7 +128,11 @@ jobs:
             EMAIL_ON_FAILURE="${{ github.event.inputs.email_on_failure }}"
           fi
 
-          CMD=(poetry run finwall --database "${FINWALL_DATABASE_PATH}" run-scheduled-report --run-context "${RUN_CONTEXT}" --json)
+          CMD=(poetry run finwall run-scheduled-report --run-context "${RUN_CONTEXT}" --json)
+
+          if [[ -z "${FINWALL_DATABASE_URL:-}" ]]; then
+            CMD=(poetry run finwall --database "${FINWALL_DATABASE_PATH}" run-scheduled-report --run-context "${RUN_CONTEXT}" --json)
+          fi
 
           if [[ -n "${RUN_DATE}" ]]; then
             CMD+=(--run-date "${RUN_DATE}")
