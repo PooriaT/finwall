@@ -54,6 +54,12 @@ Finwall reads runtime settings from environment variables. `.env.example` provid
 | `FINWALL_NARRATIVE_PROVIDER` | Narrative provider selector. | `disabled` | No | Optional | `disabled` |
 | `FINWALL_NARRATIVE_MAX_WORDS` | Narrative length cap. | `500` | No | Optional | `500` |
 | `FINWALL_NARRATIVE_STYLE` | Narrative style label. | `plain_english` | No | Optional | `plain_english` |
+| `FINWALL_OLLAMA_BASE_URL` | Local Ollama API base URL (used when provider is `ollama`). | `http://localhost:11434` | No | Optional | `http://localhost:11434` |
+| `FINWALL_OLLAMA_MODEL` | Ollama model name (used when provider is `ollama`). | `gemma3:latest` | No | Optional | `gemma3:latest` |
+| `FINWALL_OLLAMA_TIMEOUT_SECONDS` | Ollama request timeout (seconds). | `30` | No | Optional | `30` |
+
+When `FINWALL_NARRATIVE_PROVIDER=ollama`, narratives are explainers only. They cannot
+override deterministic recommendation, risk, or report outputs.
 
 ## Email / SMTP
 

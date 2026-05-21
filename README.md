@@ -54,6 +54,28 @@ Use fake/test data while learning.
 - Expanded command examples: [docs/cli-workflows.md](docs/cli-workflows.md)
 - Environment variable reference: [docs/configuration.md](docs/configuration.md)
 
+## Optional local Ollama narrative provider
+
+Finwall can optionally generate plain-language narrative explainers from deterministic
+report evidence by setting `FINWALL_NARRATIVE_PROVIDER=ollama`.
+
+- Ollama integration is local-only (`http://localhost:11434` by default).
+- Deterministic report fields remain authoritative for risk and recommendations.
+- If Ollama is unavailable or returns invalid output, Finwall safely falls back to a
+  deterministic narrative warning and report generation still succeeds.
+
+Example:
+
+```bash
+export FINWALL_NARRATIVE_PROVIDER=ollama
+export FINWALL_OLLAMA_BASE_URL=http://localhost:11434
+export FINWALL_OLLAMA_MODEL=gemma3:latest
+export FINWALL_OLLAMA_TIMEOUT_SECONDS=30
+poetry run finwall --database finwall.db report --price NVDA=120 --narrative
+```
+
+Install Ollama and pull your chosen model separately.
+
 ## Scheduled automation
 
 - App-level scheduling command: `run-scheduled-report`

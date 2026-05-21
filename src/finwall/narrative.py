@@ -10,7 +10,10 @@ import json
 import re
 from dataclasses import dataclass
 from typing import Callable, Protocol
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
+from finwall.config import settings
 from finwall.fundamental_summary import FundamentalSummaryReport
 from finwall.news_summary import NewsSummaryReport
 from finwall.reports import DecisionSupportReport
@@ -26,6 +29,7 @@ NARRATIVE_SECTIONS: tuple[str, ...] = (
 PROVIDER_DISABLED = "disabled"
 PROVIDER_STATIC = "static"
 PROVIDER_FAKE = "fake"
+PROVIDER_OLLAMA = "ollama"
 
 PROHIBITED_PHRASES: tuple[str, ...] = (
     "guaranteed",
@@ -156,10 +160,61 @@ class DisabledNarrativeProvider:
         return {"sections": [], "warnings": ["narrative provider disabled"]}
 
 
+@dataclass(frozen=True)
+class OllamaNarrativeProvider:
+    base_url: str
+    model: str
+    timeout_seconds: float
+    name: str = PROVIDER_OLLAMA
+
+    def generate_narrative(self, request: NarrativeRequest) -> object:
+        prompt = build_narrative_prompt(request)
+        endpoint = f"{self.base_url.rstrip('/')}/api/generate"
+        payload = json.dumps(
+            {
+                "model": self.model,
+                "prompt": prompt,
+                "stream": False,
+                "format": "json",
+                "options": {"temperature": 0},
+            }
+        ).encode("utf-8")
+        http_request = Request(
+            endpoint,
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urlopen(http_request, timeout=self.timeout_seconds) as response:
+                if response.status != 200:
+                    raise ValueError(f"non-200 from ollama api: {response.status}")
+                outer_raw = response.read().decode("utf-8")
+        except (TimeoutError, ConnectionError, URLError, HTTPError) as exc:
+            raise ValueError("failed to reach ollama api") from exc
+
+        try:
+            outer_payload = json.loads(outer_raw)
+        except json.JSONDecodeError as exc:
+            raise ValueError("invalid ollama api json response") from exc
+        nested = outer_payload.get("response")
+        if not isinstance(nested, str):
+            raise ValueError("missing ollama response field")
+        try:
+            return json.loads(nested)
+        except json.JSONDecodeError as exc:
+            raise ValueError("invalid nested ollama json payload") from exc
+
+
 PROVIDER_BUILDERS: dict[str, Callable[[], NarrativeProvider]] = {
     PROVIDER_DISABLED: DisabledNarrativeProvider,
     PROVIDER_STATIC: StaticNarrativeProvider,
     PROVIDER_FAKE: lambda: StaticNarrativeProvider(name=PROVIDER_FAKE),
+    PROVIDER_OLLAMA: lambda: OllamaNarrativeProvider(
+        base_url=settings.ollama_base_url,
+        model=settings.ollama_model,
+        timeout_seconds=settings.ollama_timeout_seconds,
+    ),
 }
 
 

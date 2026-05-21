@@ -823,6 +823,46 @@ def test_report_narrative_uses_fallback_on_invalid_provider_response(
     assert "# Finwall Decision-Support Report" in out
 
 
+def test_report_narrative_json_marks_fallback_used(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    from finwall.narrative import NarrativeResponse, NarrativeSection
+
+    database = tmp_path / "finwall.db"
+    run(["--database", str(database), "add-holding", "NVDA", "1", "100"])
+
+    monkeypatch.setattr(
+        "finwall.cli.generate_narrative",
+        lambda *args, **kwargs: NarrativeResponse(
+            available=False,
+            provider="ollama",
+            sections=(
+                NarrativeSection(
+                    section="portfolio_overview",
+                    text="Fallback deterministic explanation.",
+                    evidence_keys_used=("portfolio_snapshot",),
+                ),
+            ),
+            warnings=("provider error: provider call failed",),
+            fallback_used=True,
+            error="provider error: provider call failed",
+        ),
+    )
+    run(
+        [
+            "--database",
+            str(database),
+            "report",
+            "--price",
+            "NVDA=120",
+            "--narrative",
+            "--json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["narrative"]["fallback_used"] is True
+
+
 def test_report_save_run_persists_history(tmp_path, capsys) -> None:
     database = tmp_path / "finwall.db"
     run(["--database", str(database), "add-holding", "NVDA", "1", "100"])

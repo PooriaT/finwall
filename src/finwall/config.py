@@ -79,6 +79,13 @@ class Settings:
         os.getenv("FINWALL_NARRATIVE_MAX_WORDS"), 500
     )
     narrative_style: str = os.getenv("FINWALL_NARRATIVE_STYLE", "plain_english")
+    ollama_base_url: str = os.getenv(
+        "FINWALL_OLLAMA_BASE_URL", "http://localhost:11434"
+    ).strip()
+    ollama_model: str = os.getenv("FINWALL_OLLAMA_MODEL", "gemma3:latest").strip()
+    ollama_timeout_seconds: float = _parse_timeout_seconds(
+        os.getenv("FINWALL_OLLAMA_TIMEOUT_SECONDS"), 30.0
+    )
     email_provider: str = os.getenv("FINWALL_EMAIL_PROVIDER", "disabled")
     email_from: str = os.getenv("FINWALL_EMAIL_FROM", "").strip()
     email_to_addresses: tuple[str, ...] = _parse_csv(os.getenv("FINWALL_EMAIL_TO"))
