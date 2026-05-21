@@ -175,3 +175,42 @@ def test_cash_history_is_stored_separately(store) -> None:
 def test_invalid_portfolio_state_is_rejected(store) -> None:
     with pytest.raises(ValueError):
         store.save_portfolio("invalid")
+
+
+def test_scheduled_runs_persist(store) -> None:
+    store.save_portfolio(Portfolio(name="Primary"))
+    started = store.start_scheduled_run("Primary", "2026-05-20", "manual")
+    finished = store.finish_scheduled_run(
+        started.id,
+        status="generated",
+        report_run_id=None,
+        notification_attempted=True,
+        notification_sent=True,
+        notification_provider="smtp",
+        error_category="none",
+        safe_error_message=None,
+    )
+    assert finished.status == "generated"
+    got = store.get_scheduled_run("Primary", "2026-05-20", "manual")
+    assert got is not None
+    assert got.notification_provider == "smtp"
+    listed = store.list_scheduled_runs("Primary")
+    assert listed
+
+
+def test_scheduled_runs_retry_failed(store) -> None:
+    store.save_portfolio(Portfolio(name="Primary"))
+    first = store.start_scheduled_run("Primary", "2026-05-20", "manual")
+    store.finish_scheduled_run(
+        first.id,
+        status="failed",
+        report_run_id=None,
+        notification_attempted=False,
+        notification_sent=False,
+        notification_provider=None,
+        error_category="report_generation_failed",
+        safe_error_message="Scheduled report failed unexpectedly.",
+    )
+    retry = store.start_scheduled_run("Primary", "2026-05-20", "manual")
+    assert retry.id == first.id
+    assert retry.status == "started"
