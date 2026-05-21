@@ -239,10 +239,11 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
     @app.put("/api/v1/portfolio/timeline")
     def timeline_set(payload: TimelineRequest, _: str = Depends(auth)):
         portfolio = get_portfolio()
-        return persist(
-            set_timeline(portfolio, payload.start_date, payload.target_date),
-            portfolio,
-        )
+        try:
+            updated = set_timeline(portfolio, payload.start_date, payload.target_date)
+        except ValueError as exc:
+            raise HTTPException(422, detail=str(exc)) from exc
+        return persist(updated, portfolio)
 
     @app.put("/api/v1/portfolio/risk-profile")
     def risk_set(payload: RiskProfileRequest, _: str = Depends(auth)):
