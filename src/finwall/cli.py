@@ -1341,64 +1341,63 @@ def run(argv: list[str] | None = None) -> int:
             )
             return email_provider.send(message)
 
-        existing_run = store.get_scheduled_run(
-            portfolio.name, trading.calendar_date, args.run_context
-        )
-        if existing_run is not None and existing_run.status in {
-            ScheduledRunStatus.GENERATED.value,
-            ScheduledRunStatus.SKIPPED.value,
-            ScheduledRunStatus.DUPLICATE.value,
-        }:
-            message = f"Duplicate scheduled report suppressed for {args.run_context}."
-            result = ScheduledReportResult(
-                status=ScheduledReportStatus.DUPLICATE,
-                run_context=args.run_context,
-                trading_day=trading.as_dict(),
-                report=None,
-                saved_report_id=existing_run.report_run_id,
-                comparison=None,
-                message=message,
-                warnings=(),
-                scheduled_run=existing_run.as_dict(),
-            )
-            if args.json:
-                print(json.dumps(result.as_dict(), indent=2))
-            else:
-                print(message)
-            return 0
-        scheduled_run = store.start_scheduled_run(
-            portfolio.name, trading.calendar_date, args.run_context
-        )
-
-        if not trading.is_trading_day and not args.force:
-            message = f"Skipped scheduled report for {trading.calendar_date}: {trading.reason}"
-            scheduled_run = store.finish_scheduled_run(
-                scheduled_run.id,
-                status=ScheduledRunStatus.SKIPPED.value,
-                report_run_id=None,
-                notification_attempted=False,
-                notification_sent=False,
-                notification_provider=None,
-                error_category=ScheduledRunErrorCategory.NON_TRADING_DAY.value,
-                safe_error_message=trading.reason,
-            )
-            result = ScheduledReportResult(
-                status=ScheduledReportStatus.SKIPPED,
-                run_context=args.run_context,
-                trading_day=trading.as_dict(),
-                report=None,
-                saved_report_id=None,
-                comparison=None,
-                message=message,
-                warnings=(),
-                scheduled_run=scheduled_run.as_dict(),
-            )
-            if args.json:
-                print(json.dumps(result.as_dict(), indent=2))
-            else:
-                print(message)
-            return 0
+        scheduled_run = None
         try:
+            scheduled_run = store.start_scheduled_run(
+                portfolio.name, trading.calendar_date, args.run_context
+            )
+            if scheduled_run.status != ScheduledRunStatus.STARTED.value:
+                message = (
+                    f"Duplicate scheduled report suppressed for {args.run_context}."
+                )
+                result = ScheduledReportResult(
+                    status=ScheduledReportStatus.DUPLICATE,
+                    run_context=args.run_context,
+                    trading_day=trading.as_dict(),
+                    report=None,
+                    saved_report_id=scheduled_run.report_run_id,
+                    comparison=None,
+                    message=message,
+                    warnings=(),
+                    scheduled_run=scheduled_run.as_dict(),
+                )
+                if args.json:
+                    print(json.dumps(result.as_dict(), indent=2))
+                else:
+                    print(message)
+                return 0
+
+            if not trading.is_trading_day and not args.force:
+                message = (
+                    f"Skipped scheduled report for {trading.calendar_date}: {trading.reason}"
+                )
+                scheduled_run = store.finish_scheduled_run(
+                    scheduled_run.id,
+                    status=ScheduledRunStatus.SKIPPED.value,
+                    report_run_id=None,
+                    notification_attempted=False,
+                    notification_sent=False,
+                    notification_provider=None,
+                    error_category=ScheduledRunErrorCategory.NON_TRADING_DAY.value,
+                    safe_error_message=trading.reason,
+                )
+                result = ScheduledReportResult(
+                    status=ScheduledReportStatus.SKIPPED,
+                    run_context=args.run_context,
+                    trading_day=trading.as_dict(),
+                    report=None,
+                    saved_report_id=None,
+                    comparison=None,
+                    message=message,
+                    warnings=(),
+                    scheduled_run=scheduled_run.as_dict(),
+                )
+                if args.json:
+                    print(json.dumps(result.as_dict(), indent=2))
+                else:
+                    print(message)
+                return 0
+
             args.save_command_context = f"scheduled:{args.run_context}"
             payload, report, saved_run, comparison, _, _, live_price_warnings = (
                 build_report_payload(
@@ -1473,7 +1472,7 @@ def run(argv: list[str] | None = None) -> int:
                 notification = _notify(build_scheduled_failure_email, result)
                 if notification is not None:
                     result = replace(result, notification=notification.as_dict())
-            try:
+            if scheduled_run is not None:
                 scheduled_run = store.finish_scheduled_run(
                     scheduled_run.id,
                     status=ScheduledRunStatus.FAILED.value,
@@ -1491,8 +1490,6 @@ def run(argv: list[str] | None = None) -> int:
                     safe_error_message=message,
                 )
                 result = replace(result, scheduled_run=scheduled_run.as_dict())
-            except Exception:
-                pass
             if args.json:
                 print(json.dumps(result.as_dict(), indent=2))
             else:
