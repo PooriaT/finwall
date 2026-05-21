@@ -695,3 +695,11 @@ Finwall keeps SQLite as the default persistence backend for local development an
 - For scheduled cloud runs, configure external persistence so run history and comparisons are not stored in ephemeral local files.
 - Report history save/compare flows use the selected backend through the storage factory.
 - This change does not add deployment automation, scheduling infrastructure, authentication, or broker integration.
+
+## API server
+
+Run locally:
+
+```bash
+FINWALL_API_TOKEN=change-me poetry run uvicorn "finwall.api:create_app" --factory --host 127.0.0.1 --port 8000
+```

@@ -94,6 +94,11 @@ class Settings:
         os.getenv("FINWALL_STORAGE_BACKEND", "sqlite").strip().lower()
     )
     database_url: str = os.getenv("FINWALL_DATABASE_URL", "").strip()
+    database_path: str = os.getenv("FINWALL_DATABASE_PATH", "finwall.db").strip()
+    api_enabled: bool = _parse_bool(os.getenv("FINWALL_API_ENABLED"), False)
+    api_token: str = os.getenv("FINWALL_API_TOKEN", "").strip()
+    api_host: str = os.getenv("FINWALL_API_HOST", "127.0.0.1").strip()
+    api_port: int = _parse_positive_int(os.getenv("FINWALL_API_PORT"), 8000)
 
 
 settings = Settings()
