@@ -49,6 +49,16 @@ def test_narrative_settings_defaults_and_validation(monkeypatch) -> None:
     assert reloaded.settings.narrative_style == "plain_english"
 
 
+def test_ollama_settings_defaults_and_timeout_validation(monkeypatch) -> None:
+    monkeypatch.delenv("FINWALL_OLLAMA_BASE_URL", raising=False)
+    monkeypatch.delenv("FINWALL_OLLAMA_MODEL", raising=False)
+    monkeypatch.setenv("FINWALL_OLLAMA_TIMEOUT_SECONDS", "-5")
+    reloaded = importlib.reload(config)
+    assert reloaded.settings.ollama_base_url == "http://localhost:11434"
+    assert reloaded.settings.ollama_model == "gemma3:latest"
+    assert reloaded.settings.ollama_timeout_seconds == 30.0
+
+
 def test_email_to_csv_parsing(monkeypatch) -> None:
     monkeypatch.setenv(
         "FINWALL_EMAIL_TO", "a@example.com, b@example.com ,,c@example.com"

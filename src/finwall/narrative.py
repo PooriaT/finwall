@@ -9,8 +9,11 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Callable, Protocol
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
+from finwall.config import settings
 from finwall.fundamental_summary import FundamentalSummaryReport
 from finwall.news_summary import NewsSummaryReport
 from finwall.reports import DecisionSupportReport
@@ -23,15 +26,39 @@ NARRATIVE_SECTIONS: tuple[str, ...] = (
     "action_plan",
     "limitations",
 )
-PROHIBITED_PHRASES: tuple[str, ...] = (
-    "guaranteed",
-    "risk-free",
-    "sure profit",
-    "must buy",
-    "must sell",
-    "execute trade",
-    "financial advice",
+PROVIDER_DISABLED = "disabled"
+PROVIDER_STATIC = "static"
+PROVIDER_FAKE = "fake"
+PROVIDER_OLLAMA = "ollama"
+
+PROHIBITED_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"\bguaranteed(?:\s+(?:return|profit|outcome))?\b", re.IGNORECASE),
+    re.compile(r"\bguaranteed\s+return\b", re.IGNORECASE),
+    re.compile(r"\bguaranteed\s+profit\b", re.IGNORECASE),
+    re.compile(r"\brisk[-\s]?free\b", re.IGNORECASE),
+    re.compile(r"\bcannot\s+lose\b", re.IGNORECASE),
+    re.compile(r"\bwill\s+definitely\b", re.IGNORECASE),
+    re.compile(r"\bmust\s+buy\b", re.IGNORECASE),
+    re.compile(r"\bmust\s+sell\b", re.IGNORECASE),
+    re.compile(r"\bbuy\s+now\b", re.IGNORECASE),
+    re.compile(r"\bsell\s+now\b", re.IGNORECASE),
+    re.compile(r"\bexecute\s+this\s+trade\b", re.IGNORECASE),
+    re.compile(r"\bplace\s+this\s+order\b", re.IGNORECASE),
+    re.compile(r"\btarget\s+price\s+will\s+be\b", re.IGNORECASE),
+    re.compile(r"\bprice\s+will\s+reach\b", re.IGNORECASE),
+    re.compile(r"\bi\s+recommend\s+buying\b", re.IGNORECASE),
+    re.compile(r"\bi\s+recommend\s+selling\b", re.IGNORECASE),
+    re.compile(r"\bfinancial\s+advice\b", re.IGNORECASE),
 )
+
+ALLOWED_FINANCIAL_ADVICE_DISCLAIMER_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"\bnot\s+financial\s+advice\b", re.IGNORECASE),
+    re.compile(r"\bdoes\s+not\s+provide\s+financial\s+advice\b", re.IGNORECASE),
+)
+
+CURRENCY_PERCENT_PATTERN = re.compile(r"\$\s?\d[\d,]*(?:\.\d+)?|\b\d+(?:\.\d+)?%")
+NUMERIC_LITERAL_PATTERN = re.compile(r"[-+]?\d+(?:\.\d+)?")
+TICKER_PATTERN = re.compile(r"\b[A-Z]{2,6}\b")
 
 
 @dataclass(frozen=True)
@@ -80,6 +107,25 @@ class NarrativeResponse:
 
 
 class NarrativeProvider(Protocol):
+    """Provider contract for narrative generation.
+
+    Expected output shape from ``generate_narrative``::
+
+        {
+            "sections": [
+                {
+                    "section": "portfolio_overview",
+                    "text": "...",
+                    "evidence_keys_used": ["portfolio_snapshot"],
+                }
+            ],
+            "warnings": [],
+        }
+
+    Providers should return a JSON-like object matching this shape.
+    Finwall always validates provider output before producing final response.
+    """
+
     name: str
 
     def generate_narrative(self, request: NarrativeRequest) -> object: ...
@@ -125,21 +171,79 @@ class StaticNarrativeProvider:
         return {"sections": sections, "warnings": []}
 
 
-def build_narrative_provider(provider_name: str) -> NarrativeProvider:
-    name = provider_name.strip().lower()
-    if name in {"", "disabled"}:
-        return DisabledNarrativeProvider()
-    if name in {"static", "fake"}:
-        return StaticNarrativeProvider(name=name)
-    return DisabledNarrativeProvider(name=name)
-
-
 @dataclass(frozen=True)
 class DisabledNarrativeProvider:
     name: str = "disabled"
 
     def generate_narrative(self, request: NarrativeRequest) -> object:
         return {"sections": [], "warnings": ["narrative provider disabled"]}
+
+
+@dataclass(frozen=True)
+class OllamaNarrativeProvider:
+    base_url: str
+    model: str
+    timeout_seconds: float
+    name: str = PROVIDER_OLLAMA
+
+    def generate_narrative(self, request: NarrativeRequest) -> object:
+        prompt = build_narrative_prompt(request)
+        endpoint = f"{self.base_url.rstrip('/')}/api/generate"
+        payload = json.dumps(
+            {
+                "model": self.model,
+                "prompt": prompt,
+                "stream": False,
+                "format": narrative_response_schema(),
+                "options": {"temperature": 0},
+            }
+        ).encode("utf-8")
+        http_request = Request(
+            endpoint,
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urlopen(http_request, timeout=self.timeout_seconds) as response:
+                if response.status != 200:
+                    raise ValueError(f"non-200 from ollama api: {response.status}")
+                outer_raw = response.read().decode("utf-8")
+        except (TimeoutError, ConnectionError, URLError, HTTPError) as exc:
+            raise ValueError("failed to reach ollama api") from exc
+
+        try:
+            outer_payload = json.loads(outer_raw)
+        except json.JSONDecodeError as exc:
+            raise ValueError("invalid ollama api json response") from exc
+        nested = outer_payload.get("response")
+        if not isinstance(nested, str):
+            raise ValueError("missing ollama response field")
+        try:
+            return json.loads(nested)
+        except json.JSONDecodeError as exc:
+            raise ValueError("invalid nested ollama json payload") from exc
+
+
+PROVIDER_BUILDERS: dict[str, Callable[[], NarrativeProvider]] = {
+    PROVIDER_DISABLED: DisabledNarrativeProvider,
+    PROVIDER_STATIC: StaticNarrativeProvider,
+    PROVIDER_FAKE: lambda: StaticNarrativeProvider(name=PROVIDER_FAKE),
+    PROVIDER_OLLAMA: lambda: OllamaNarrativeProvider(
+        base_url=settings.ollama_base_url,
+        model=settings.ollama_model,
+        timeout_seconds=settings.ollama_timeout_seconds,
+    ),
+}
+
+
+def build_narrative_provider(provider_name: str) -> NarrativeProvider:
+    name = provider_name.strip().lower()
+    normalized = name or PROVIDER_DISABLED
+    builder = PROVIDER_BUILDERS.get(normalized)
+    if builder is not None:
+        return builder()
+    return DisabledNarrativeProvider(name=normalized)
 
 
 def build_narrative_evidence(
@@ -170,23 +274,65 @@ def build_narrative_evidence(
     return evidence
 
 
+def narrative_response_schema() -> dict[str, object]:
+    return {
+        "type": "object",
+        "required": ["sections", "warnings"],
+        "properties": {
+            "sections": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "required": ["section", "text", "evidence_keys_used"],
+                    "properties": {
+                        "section": {"type": "string", "enum": list(NARRATIVE_SECTIONS)},
+                        "text": {"type": "string"},
+                        "evidence_keys_used": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "minItems": 1,
+                            "uniqueItems": True,
+                        },
+                    },
+                },
+            },
+            "warnings": {"type": "array", "items": {"type": "string"}},
+        },
+    }
+
+
 def build_narrative_prompt(request: NarrativeRequest) -> str:
+    schema = json.dumps(narrative_response_schema(), indent=2)
+    evidence_json = json.dumps(request.evidence, indent=2, sort_keys=True)
     return (
-        "You are a constrained narrative rewriter for Finwall. "
-        "Use ONLY the provided structured evidence. "
-        "Do not invent prices, holdings, metrics, articles, source links, "
-        "market data, recommendations, or risk warnings. "
-        "Do not override deterministic recommendation statuses. "
-        "Do not override risk-engine warnings. "
-        "Do not imply guaranteed outcomes. Do not claim Finwall executes trades. "
-        "Do not provide personalized financial advice. "
-        "State when evidence is missing or incomplete. "
-        "Keep output decision-support oriented.\n"
-        "Return JSON object with keys: sections, warnings.\n"
-        f"Allowed section names: {', '.join(request.requested_sections)}\n"
-        f"Max words per section: {request.max_words}\n"
-        f"Style: {request.style}\n"
-        f"Evidence JSON:\n{json.dumps(request.evidence, indent=2, sort_keys=True)}"
+        "ROLE\n"
+        "You are a constrained narrative formatter for Finwall deterministic reports.\n\n"
+        "AUTHORITY RULES\n"
+        "- Deterministic report fields are authoritative.\n"
+        "- Risk warnings are authoritative.\n"
+        "- Recommendation statuses are authoritative.\n\n"
+        "YOU MUST NOT\n"
+        "- Add unsupported claims, fabricated prices, holdings, metrics, news, or source links.\n"
+        "- Fabricate risk warnings or claim Finwall executes trades.\n"
+        "- Express guaranteed outcomes, guaranteed returns, or prediction certainty.\n"
+        "- Give direct trade instructions (buy/sell now, place order, execute trade).\n"
+        "- Override deterministic risk controls or recommendation statuses.\n"
+        "- Add new buy/sell/hold recommendations.\n\n"
+        "YOU MAY\n"
+        "- Explain deterministic evidence in cautious decision-support language only.\n"
+        "- State uncertainty when evidence is incomplete.\n"
+        "- Repeat the decision-support disclaimer without adding financial advice.\n\n"
+        "OUTPUT FORMAT\n"
+        "- Return JSON only. No prose outside JSON.\n"
+        "- Use only allowed section names and keep section text under max words.\n"
+        "- Include evidence_keys_used for each section with at least one valid evidence key.\n"
+        f"- Allowed section names: {', '.join(request.requested_sections)}\n"
+        f"- Max words per section: {request.max_words}\n"
+        f"- Style: {request.style}\n"
+        f"- Required JSON schema:\n{schema}\n\n"
+        "EVIDENCE\n"
+        "Use only this evidence JSON as source of truth:\n"
+        f"{evidence_json}"
     )
 
 
@@ -217,8 +363,8 @@ def generate_narrative(
 ) -> NarrativeResponse:
     try:
         raw = provider.generate_narrative(request)
-    except Exception as exc:  # noqa: BLE001
-        return _fallback(provider.name, f"provider error: {exc}")
+    except Exception:  # noqa: BLE001
+        return _fallback(provider.name, "provider error: provider call failed")
     return validate_narrative_response(raw, request, provider.name)
 
 
@@ -247,27 +393,67 @@ def validate_narrative_response(
             return _fallback(provider_name, f"unknown section: {section}")
         if not isinstance(text, str) or not text.strip():
             return _fallback(provider_name, f"empty text for section: {section}")
-        lowered = text.lower()
-        if any(term in lowered for term in PROHIBITED_PHRASES):
-            return _fallback(provider_name, "prohibited phrasing detected")
+        if _has_prohibited_content(text):
+            return _fallback(
+                provider_name,
+                "invalid narrative output: prohibited trading instruction",
+            )
+        if _has_unsupported_numeric_claim(text, request):
+            return _fallback(
+                provider_name, "invalid narrative output: unsupported numeric claim"
+            )
+        if _has_unsupported_ticker_claim(text, request):
+            return _fallback(
+                provider_name, "invalid narrative output: unsupported ticker claim"
+            )
         if not isinstance(evidence_keys, list) or any(
             not isinstance(key, str) for key in evidence_keys
         ):
-            return _fallback(provider_name, "invalid evidence_keys_used")
+            return _fallback(
+                provider_name, "invalid narrative output: invalid evidence_keys_used"
+            )
+        if not evidence_keys:
+            return _fallback(
+                provider_name, "invalid narrative output: empty evidence key list"
+            )
+        normalized_keys: list[str] = []
+        seen_keys: set[str] = set()
         for key in evidence_keys:
             if key not in request.evidence:
-                return _fallback(provider_name, f"unknown evidence key: {key}")
+                return _fallback(
+                    provider_name, "invalid narrative output: unknown evidence key"
+                )
+            if key not in seen_keys:
+                normalized_keys.append(key)
+                seen_keys.add(key)
         if _has_unsupported_recommendation_status(text, request):
             return _fallback(
-                provider_name, "unsupported recommendation status override"
+                provider_name,
+                "invalid narrative output: recommendation override detected",
+            )
+        if _contradicts_risk_authority(text, request):
+            return _fallback(
+                provider_name, "invalid narrative output: risk warning contradiction"
             )
         sections.append(
             NarrativeSection(
                 section=section,
                 text=text.strip(),
-                evidence_keys_used=tuple(evidence_keys),
+                evidence_keys_used=tuple(normalized_keys),
             )
         )
+
+    if not sections:
+        if warnings_raw == ["narrative provider disabled"]:
+            return NarrativeResponse(
+                available=True,
+                provider=provider_name,
+                sections=tuple(),
+                warnings=("narrative provider disabled",),
+                fallback_used=False,
+                error=None,
+            )
+        return _fallback(provider_name, "invalid narrative output: empty sections")
 
     warnings = tuple(str(item) for item in warnings_raw)
     return NarrativeResponse(
@@ -319,3 +505,73 @@ def format_narrative_markdown(response: NarrativeResponse) -> str:
         for warning in response.warnings:
             lines.append(f"- {warning}")
     return "\n".join(lines).strip()
+
+
+def _has_prohibited_content(text: str) -> bool:
+    for allowed in ALLOWED_FINANCIAL_ADVICE_DISCLAIMER_PATTERNS:
+        text = allowed.sub("", text)
+    return any(pattern.search(text) for pattern in PROHIBITED_PATTERNS)
+
+
+def _has_unsupported_numeric_claim(text: str, request: NarrativeRequest) -> bool:
+    evidence_numbers = _extract_normalized_numeric_literals(
+        json.dumps(request.evidence, sort_keys=True)
+    )
+    for token in CURRENCY_PERCENT_PATTERN.findall(text):
+        if _normalize_numeric_token(token) not in evidence_numbers:
+            return True
+    return False
+
+
+def _extract_normalized_numeric_literals(source: str) -> set[str]:
+    return {
+        _normalize_numeric_token(token)
+        for token in NUMERIC_LITERAL_PATTERN.findall(source)
+    }
+
+
+def _normalize_numeric_token(token: str) -> str:
+    cleaned = token.replace("$", "").replace(",", "").replace("%", "").strip()
+    if not cleaned:
+        return ""
+    try:
+        numeric = float(cleaned)
+    except ValueError:
+        return cleaned.lower()
+    if numeric.is_integer():
+        return str(int(numeric))
+    return f"{numeric:.12g}"
+
+
+def _has_unsupported_ticker_claim(text: str, request: NarrativeRequest) -> bool:
+    evidence_blob = json.dumps(request.evidence, sort_keys=True)
+    for ticker in TICKER_PATTERN.findall(text):
+        if ticker in {"JSON"}:
+            continue
+        if ticker not in evidence_blob:
+            return True
+    return False
+
+
+def _contradicts_risk_authority(text: str, request: NarrativeRequest) -> bool:
+    lowered = text.lower()
+    risks_payload = request.evidence.get("risks_and_warnings", [])
+    has_risk_warnings = _has_active_risk_warnings(risks_payload)
+    contradiction_phrases = (
+        "risk is low",
+        "safe to buy",
+        "ignore the stop-loss warning",
+        "warning has been resolved",
+        "buy more despite concentration warning",
+    )
+    return has_risk_warnings and any(p in lowered for p in contradiction_phrases)
+
+
+def _has_active_risk_warnings(risks_payload: object) -> bool:
+    if isinstance(risks_payload, str):
+        return bool(risks_payload.strip())
+    if isinstance(risks_payload, dict):
+        return any(_has_active_risk_warnings(value) for value in risks_payload.values())
+    if isinstance(risks_payload, list):
+        return any(_has_active_risk_warnings(item) for item in risks_payload)
+    return False
