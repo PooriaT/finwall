@@ -454,6 +454,33 @@ def test_ticker_and_risk_contradiction_fallback() -> None:
     )
     assert risk.fallback_used is True
 
+    warning_evidence_dict = dict(request.evidence)
+    warning_evidence_dict["risks_and_warnings"] = {
+        "risk_warnings": ["Concentration warning active."]
+    }
+    request_with_warning_dict = NarrativeRequest(
+        evidence=warning_evidence_dict,
+        requested_sections=request.requested_sections,
+        max_words=request.max_words,
+        style=request.style,
+    )
+
+    risk_dict = validate_narrative_response(
+        {
+            "sections": [
+                {
+                    "section": "risk_context",
+                    "text": "Risk is low and safe to buy.",
+                    "evidence_keys_used": ["risks_and_warnings"],
+                }
+            ],
+            "warnings": [],
+        },
+        request_with_warning_dict,
+        "fake",
+    )
+    assert risk_dict.fallback_used is True
+
 
 def test_ollama_invalid_output_falls_back_and_valid_passes() -> None:
     request = _request()

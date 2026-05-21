@@ -568,16 +568,10 @@ def _contradicts_risk_authority(text: str, request: NarrativeRequest) -> bool:
 
 
 def _has_active_risk_warnings(risks_payload: object) -> bool:
+    if isinstance(risks_payload, str):
+        return bool(risks_payload.strip())
+    if isinstance(risks_payload, dict):
+        return any(_has_active_risk_warnings(value) for value in risks_payload.values())
     if isinstance(risks_payload, list):
-        for item in risks_payload:
-            if isinstance(item, str) and item.strip():
-                return True
-            if isinstance(item, dict):
-                for value in item.values():
-                    if isinstance(value, str) and value.strip():
-                        return True
-                    if isinstance(value, list) and any(
-                        isinstance(inner, str) and inner.strip() for inner in value
-                    ):
-                        return True
+        return any(_has_active_risk_warnings(item) for item in risks_payload)
     return False
