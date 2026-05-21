@@ -30,6 +30,7 @@ from finwall.report_history import (
 )
 from finwall.reports import DecisionSupportReport
 from finwall.risk import RiskAssessment
+from finwall.scheduled_report import StoredScheduledRun
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -156,6 +157,23 @@ CREATE TABLE IF NOT EXISTS report_suggested_orders (
     limit_price TEXT,
     stop_price TEXT,
     description TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS scheduled_report_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    portfolio_id INTEGER NOT NULL REFERENCES portfolios(id) ON DELETE CASCADE,
+    run_date TEXT NOT NULL,
+    run_context TEXT NOT NULL,
+    status TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    finished_at TEXT,
+    report_run_id INTEGER REFERENCES report_runs(id),
+    notification_attempted INTEGER NOT NULL DEFAULT 0,
+    notification_sent INTEGER NOT NULL DEFAULT 0,
+    notification_provider TEXT,
+    error_category TEXT NOT NULL,
+    safe_error_message TEXT,
+    UNIQUE(portfolio_id, run_date, run_context)
 );
 """
 
@@ -480,6 +498,120 @@ class SQLitePortfolioStore:
                 for row in rows
             )
 
+    def get_scheduled_run(
+        self, portfolio_name: str, run_date: str, run_context: str
+    ) -> StoredScheduledRun | None:
+        with self._connect() as connection:
+            portfolio_id = self._require_portfolio_id(connection, portfolio_name)
+            row = connection.execute(
+                """
+                SELECT srr.*, p.name AS portfolio_name
+                FROM scheduled_report_runs srr
+                INNER JOIN portfolios p ON p.id = srr.portfolio_id
+                WHERE srr.portfolio_id = ? AND srr.run_date = ? AND srr.run_context = ?
+                """,
+                (portfolio_id, run_date, run_context),
+            ).fetchone()
+            return self._to_stored_scheduled_run(row) if row is not None else None
+
+    def start_scheduled_run(
+        self, portfolio_name: str, run_date: str, run_context: str
+    ) -> StoredScheduledRun:
+        with self._connect() as connection:
+            portfolio_id = self._require_portfolio_id(connection, portfolio_name)
+            connection.execute(
+                """
+                INSERT INTO scheduled_report_runs (
+                    portfolio_id, run_date, run_context, status, started_at, error_category
+                ) VALUES (?, ?, ?, 'started', datetime('now'), 'none')
+                ON CONFLICT(portfolio_id, run_date, run_context) DO UPDATE SET
+                    status = CASE
+                        WHEN scheduled_report_runs.status = 'failed' THEN 'started'
+                        ELSE scheduled_report_runs.status
+                    END,
+                    started_at = CASE
+                        WHEN scheduled_report_runs.status = 'failed' THEN datetime('now')
+                        ELSE scheduled_report_runs.started_at
+                    END,
+                    finished_at = CASE
+                        WHEN scheduled_report_runs.status = 'failed' THEN NULL
+                        ELSE scheduled_report_runs.finished_at
+                    END
+                """,
+                (portfolio_id, run_date, run_context),
+            )
+            row = connection.execute(
+                """
+                SELECT srr.*, p.name AS portfolio_name
+                FROM scheduled_report_runs srr
+                INNER JOIN portfolios p ON p.id = srr.portfolio_id
+                WHERE srr.portfolio_id = ? AND srr.run_date = ? AND srr.run_context = ?
+                """,
+                (portfolio_id, run_date, run_context),
+            ).fetchone()
+            return self._to_stored_scheduled_run(row)
+
+    def finish_scheduled_run(
+        self,
+        scheduled_run_id: int,
+        *,
+        status: str,
+        report_run_id: int | None,
+        notification_attempted: bool,
+        notification_sent: bool,
+        notification_provider: str | None,
+        error_category: str,
+        safe_error_message: str | None,
+    ) -> StoredScheduledRun:
+        with self._connect() as connection:
+            connection.execute(
+                """
+                UPDATE scheduled_report_runs
+                SET status = ?, finished_at = datetime('now'), report_run_id = ?,
+                    notification_attempted = ?, notification_sent = ?,
+                    notification_provider = ?, error_category = ?, safe_error_message = ?
+                WHERE id = ?
+                """,
+                (
+                    status,
+                    report_run_id,
+                    int(notification_attempted),
+                    int(notification_sent),
+                    notification_provider,
+                    error_category,
+                    safe_error_message,
+                    scheduled_run_id,
+                ),
+            )
+            row = connection.execute(
+                """
+                SELECT srr.*, p.name AS portfolio_name
+                FROM scheduled_report_runs srr
+                INNER JOIN portfolios p ON p.id = srr.portfolio_id
+                WHERE srr.id = ?
+                """,
+                (scheduled_run_id,),
+            ).fetchone()
+            return self._to_stored_scheduled_run(row)
+
+    def list_scheduled_runs(
+        self, portfolio_name: str, limit: int = 10
+    ) -> tuple[StoredScheduledRun, ...]:
+        with self._connect() as connection:
+            portfolio_id = self._require_portfolio_id(connection, portfolio_name)
+            rows = connection.execute(
+                """
+                SELECT srr.*, p.name AS portfolio_name
+                FROM scheduled_report_runs srr
+                INNER JOIN portfolios p ON p.id = srr.portfolio_id
+                WHERE srr.portfolio_id = ?
+                ORDER BY srr.id DESC
+                LIMIT ?
+                """,
+                (portfolio_id, limit),
+            ).fetchall()
+            return tuple(self._to_stored_scheduled_run(row) for row in rows)
+
     def _upsert_portfolio(
         self, connection: sqlite3.Connection, portfolio: Portfolio
     ) -> int:
@@ -514,6 +646,23 @@ class SQLitePortfolioStore:
             price_completeness_status=row["price_completeness_status"],
             valuation_status=row["valuation_status"],
             recommendation_summary=row["recommendation_summary"],
+        )
+
+    def _to_stored_scheduled_run(self, row: sqlite3.Row) -> StoredScheduledRun:
+        return StoredScheduledRun(
+            id=row["id"],
+            portfolio_name=row["portfolio_name"],
+            run_date=row["run_date"],
+            run_context=row["run_context"],
+            status=row["status"],
+            started_at=row["started_at"],
+            finished_at=row["finished_at"],
+            report_run_id=row["report_run_id"],
+            notification_attempted=bool(row["notification_attempted"]),
+            notification_sent=bool(row["notification_sent"]),
+            notification_provider=row["notification_provider"],
+            error_category=row["error_category"],
+            safe_error_message=row["safe_error_message"],
         )
 
     def _replace_portfolio_rows(

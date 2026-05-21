@@ -1064,3 +1064,66 @@ def test_scheduled_report_skip_does_not_send_email(
     payload = json.loads(capsys.readouterr().out)
     assert payload["status"] == "skipped"
     assert fake.messages == []
+
+
+def test_run_scheduled_report_duplicate_suppressed(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    database = tmp_path / "finwall.db"
+    run(["--database", str(database), "add-holding", "NVDA", "1", "100"])
+    capsys.readouterr()
+    fake = _FakeEmailProvider(None)
+    monkeypatch.setattr(
+        "finwall.cli.build_email_provider", lambda *args, **kwargs: fake
+    )
+
+    run(
+        [
+            "--database",
+            str(database),
+            "run-scheduled-report",
+            "--run-date",
+            "2026-05-20",
+            "--price",
+            "NVDA=120",
+            "--email",
+            "--json",
+        ]
+    )
+    capsys.readouterr()
+    code = run(
+        [
+            "--database",
+            str(database),
+            "run-scheduled-report",
+            "--run-date",
+            "2026-05-20",
+            "--price",
+            "NVDA=120",
+            "--email",
+            "--json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert code == 0
+    assert payload["status"] == "duplicate"
+    assert payload["scheduled_run"]["status"] == "generated"
+    assert fake.messages
+
+
+def test_scheduled_runs_command_json(tmp_path, capsys) -> None:
+    database = tmp_path / "finwall.db"
+    run(
+        [
+            "--database",
+            str(database),
+            "run-scheduled-report",
+            "--run-date",
+            "2026-05-23",
+            "--json",
+        ]
+    )
+    capsys.readouterr()
+    run(["--database", str(database), "scheduled-runs", "--json"])
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["scheduled_runs"]

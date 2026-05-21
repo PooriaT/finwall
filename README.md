@@ -637,7 +637,11 @@ Behavior:
 
 - On non-trading days (weekend or supported US market holiday), the command safely skips and exits `0` unless `--force` is used.
 - On trading days (or with `--force`), the existing decision-support report pipeline runs.
-- JSON output includes explicit scheduled status (`generated`, `skipped`, or `failed`) and trading-day decision metadata.
+- JSON output includes explicit scheduled status (`generated`, `skipped`, `failed`, or `duplicate`) and trading-day decision metadata.
+- Scheduled runs are logged in local storage with lifecycle and notification outcomes (`started`, `generated`, `skipped`, `failed`, `duplicate`) plus safe error categories.
+- Duplicate suppression is applied by portfolio + run date + run context so completed runs do not regenerate reports or send duplicate emails.
+- Failed runs are recorded with safe, deterministic categories/messages and do not persist raw tracebacks or secrets.
+- This is intentionally lightweight, application-level observability only; third-party observability tooling remains out of scope.
 - Unexpected failures return a non-zero exit code with a safe error message.
 
 Notes on scope:
@@ -659,6 +663,15 @@ Email notifications for scheduled reports:
 - `--email-to` overrides configured recipients for the current command only (comma-separated).
 - Supported providers: `disabled` and `smtp`.
 - Missing/invalid email config is handled safely with disabled/no-op behavior and warning details in notification output.
+- Notification attempted/sent/provider outcomes are persisted on scheduled run records for both success and failure notifications.
+
+List recent scheduled runs:
+
+```bash
+poetry run finwall --database finwall.db scheduled-runs
+poetry run finwall --database finwall.db scheduled-runs --json
+poetry run finwall --database finwall.db scheduled-runs --limit 20
+```
 - Email notifications are local CLI integrations only (not cloud deployment or scheduler infrastructure).
 
 SMTP environment variables:
