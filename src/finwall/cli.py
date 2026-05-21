@@ -86,7 +86,7 @@ from finwall.report_history import (
     StoredRecommendationStatus,
     compare_recommendation_statuses,
 )
-from finwall.reports import build_decision_support_report
+from finwall.report_pipeline import build_deterministic_report_artifacts
 from finwall.risk import RiskAssessment, assess_portfolio_risk
 from finwall.scheduled_report import (
     ScheduledReportResult,
@@ -844,56 +844,23 @@ def build_report_payload(
     ReportRunComparison | None,
     tuple[str, ...],
 ]:
-    latest_prices = dict(parse_price(item) for item in args.price)
-    market_index_quote = None
-    market_condition_report = None
-    live_price_warnings: list[str] = []
-    if args.live_prices or args.market_index:
-        provider = build_market_data_provider(
-            settings.market_data_provider,
-            settings.market_data_timeout_seconds,
-        )
-        if args.live_prices:
-            fetched_prices, warnings = fetch_portfolio_latest_prices(
-                portfolio, provider
-            )
-            latest_prices = {**fetched_prices, **latest_prices}
-            for warning in warnings:
-                warning_message = f"unable to fetch price for {warning}"
-                live_price_warnings.append(warning_message)
-                if print_live_price_warnings:
-                    print(f"Warning: {warning_message}")
-        if args.market_index:
-            market_index_quote = provider.get_index_quote(args.market_index)
-            market_condition_report = classify_market_condition(
-                provider=provider,
-                primary_symbol=args.market_index,
-                include_nasdaq=args.include_nasdaq,
-                days=args.market_condition_days,
-            )
+    """Build deterministic report payload and deterministic storage comparison metadata."""
+    artifacts = build_deterministic_report_artifacts(
+        args=args,
+        portfolio=portfolio,
+        settings=settings,
+        print_live_price_warnings=print_live_price_warnings,
+    )
 
-    snapshot = generate_snapshot(portfolio, latest_prices)
-    risk_assessment = assess_portfolio_risk(portfolio, snapshot)
-    recommendation_report = build_recommendation_report(
-        portfolio, snapshot, risk_assessment
-    )
-    report = build_decision_support_report(
-        portfolio,
-        snapshot,
-        risk_assessment,
-        recommendation_report,
-        market_index_quote,
-        market_condition_report,
-    )
     saved_run = None
     comparison: ReportRunComparison | None = None
     if args.save_run:
         context = getattr(args, "save_command_context", "report")
         report_run_id = store.save_report_run(
             portfolio_name=portfolio.name,
-            report=report,
-            recommendation_report=recommendation_report,
-            risk_assessment=risk_assessment,
+            report=artifacts.report,
+            recommendation_report=artifacts.recommendation_report,
+            risk_assessment=artifacts.risk_assessment,
             command_context=context,
         )
         saved_run = store.get_latest_report_run(portfolio.name)
@@ -927,7 +894,7 @@ def build_report_payload(
                 blocked_by_risk=item.blocked_by_risk,
                 suggested_action=item.suggested_action,
             )
-            for item in recommendation_report.holdings
+            for item in artifacts.recommendation_report.holdings
         )
         comparison = compare_recommendation_statuses(
             previous=previous_statuses,
@@ -936,7 +903,7 @@ def build_report_payload(
             current_run_id=None,
         )
 
-    payload: dict[str, object] = report.as_dict()
+    payload: dict[str, object] = dict(artifacts.payload)
     if saved_run is not None:
         payload["saved_run"] = {
             "id": saved_run.id,
@@ -952,12 +919,12 @@ def build_report_payload(
         }
     return (
         payload,
-        report,
+        artifacts.report,
         saved_run,
         comparison,
-        risk_assessment,
-        recommendation_report,
-        tuple(live_price_warnings),
+        artifacts.risk_assessment,
+        artifacts.recommendation_report,
+        artifacts.live_price_warnings,
     )
 
 

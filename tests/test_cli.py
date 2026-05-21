@@ -426,7 +426,8 @@ def test_report_market_condition_uses_extended_lookback(tmp_path, monkeypatch) -
         )
 
     monkeypatch.setattr(
-        "finwall.cli.classify_market_condition", fake_classify_market_condition
+        "finwall.report_pipeline.classify_market_condition",
+        fake_classify_market_condition,
     )
 
     run(
@@ -714,6 +715,59 @@ def test_news_summary_warns_on_unsupported_provider(
     assert "unsupported news provider 'custom-provider'" in out
 
 
+def test_report_json_shape_stable_with_optional_narrative(tmp_path, capsys) -> None:
+    database = tmp_path / "finwall.db"
+    run(["--database", str(database), "add-holding", "NVDA", "1", "100"])
+
+    run(["--database", str(database), "report", "--price", "NVDA=120", "--json"])
+    base = json.loads(capsys.readouterr().out)
+
+    run(
+        [
+            "--database",
+            str(database),
+            "report",
+            "--price",
+            "NVDA=120",
+            "--narrative",
+            "--json",
+        ]
+    )
+    with_narrative = json.loads(capsys.readouterr().out)
+
+    assert "narrative" in with_narrative
+    assert set(base.keys()) == set(with_narrative.keys()) - {"narrative"}
+
+
+def test_report_narrative_fallback_preserves_recommendation_statuses(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    database = tmp_path / "finwall.db"
+    run(["--database", str(database), "add-holding", "NVDA", "1", "100"])
+
+    run(["--database", str(database), "report", "--price", "NVDA=120", "--json"])
+    deterministic = json.loads(capsys.readouterr().out)
+
+    monkeypatch.setenv("FINWALL_NARRATIVE_PROVIDER", "disabled")
+    run(
+        [
+            "--database",
+            str(database),
+            "report",
+            "--price",
+            "NVDA=120",
+            "--narrative",
+            "--json",
+        ]
+    )
+    with_narrative = json.loads(capsys.readouterr().out)
+
+    assert (
+        with_narrative["holding_recommendations"]
+        == deterministic["holding_recommendations"]
+    )
+
+
 def test_report_narrative_markdown_and_json(tmp_path, monkeypatch, capsys) -> None:
     database = tmp_path / "finwall.db"
     run(["--database", str(database), "add-holding", "NVDA", "1", "100"])
@@ -903,7 +957,7 @@ def test_run_scheduled_report_json_keeps_stdout_as_json_with_live_price_warnings
     capsys.readouterr()
 
     monkeypatch.setattr(
-        "finwall.cli.fetch_portfolio_latest_prices",
+        "finwall.report_pipeline.fetch_portfolio_latest_prices",
         lambda *args, **kwargs: ({}, ("NVDA",)),
     )
     run(
