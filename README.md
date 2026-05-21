@@ -59,6 +59,13 @@ Use fake/test data while learning.
 Finwall can optionally generate plain-language narrative explainers from deterministic
 report evidence by setting `FINWALL_NARRATIVE_PROVIDER=ollama`.
 
+Narrative providers are explainers/formatters only: deterministic report fields, risk warnings,
+and recommendation statuses remain authoritative. Provider output is validated for evidence
+grounding, prohibited trading instructions, unsupported numeric/ticker claims, and
+recommendation/risk overrides. Invalid or unsafe output automatically falls back to a safe
+deterministic narrative warning, including for local Ollama responses. No narrative output
+should be treated as financial advice.
+
 - Ollama integration is local-only (`http://localhost:11434` by default).
 - Deterministic report fields remain authoritative for risk and recommendations.
 - If Ollama is unavailable or returns invalid output, Finwall safely falls back to a

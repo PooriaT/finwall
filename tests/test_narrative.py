@@ -12,6 +12,7 @@ from finwall.narrative import (
     build_narrative_prompt,
     build_narrative_provider,
     generate_narrative,
+    narrative_response_schema,
     validate_narrative_response,
 )
 from finwall.recommendations import build_recommendation_report
@@ -41,8 +42,9 @@ def test_build_evidence_and_prompt_constraints() -> None:
     request = _request()
     assert "portfolio_snapshot" in request.evidence
     prompt = build_narrative_prompt(request)
-    assert "Use ONLY the provided structured evidence" in prompt
-    assert "Do not invent prices" in prompt
+    assert "AUTHORITY RULES" in prompt
+    assert "Return JSON only" in prompt
+    assert "Add unsupported claims" in prompt
 
 
 def test_validate_valid_response() -> None:
@@ -129,7 +131,7 @@ def test_unsupported_recommendation_status_triggers_fallback() -> None:
         "fake",
     )
     assert response.fallback_used is True
-    assert "unsupported recommendation status" in (response.error or "")
+    assert "recommendation override detected" in (response.error or "")
 
 
 def test_unknown_provider_falls_back_without_crashing() -> None:
@@ -301,3 +303,236 @@ def test_ollama_provider_failures_raise_value_error(monkeypatch) -> None:
 def test_build_narrative_provider_ollama_registered() -> None:
     provider = build_narrative_provider("ollama")
     assert provider.name == "ollama"
+
+
+def test_narrative_response_schema_shape() -> None:
+    schema = narrative_response_schema()
+    assert schema["type"] == "object"
+    assert "sections" in schema["properties"]
+
+
+def test_prompt_has_structured_guardrails() -> None:
+    prompt = build_narrative_prompt(_request())
+    assert "ROLE" in prompt
+    assert "AUTHORITY RULES" in prompt
+    assert "Return JSON only" in prompt
+    assert "Use only this evidence JSON" in prompt
+
+
+def test_empty_or_unknown_evidence_keys_fallback() -> None:
+    request = _request()
+    empty_keys = validate_narrative_response(
+        {
+            "sections": [
+                {
+                    "section": "portfolio_overview",
+                    "text": "Grounded.",
+                    "evidence_keys_used": [],
+                }
+            ],
+            "warnings": [],
+        },
+        request,
+        "fake",
+    )
+    assert empty_keys.fallback_used is True
+
+    unknown = validate_narrative_response(
+        {
+            "sections": [
+                {
+                    "section": "portfolio_overview",
+                    "text": "Grounded.",
+                    "evidence_keys_used": ["missing"],
+                }
+            ],
+            "warnings": [],
+        },
+        request,
+        "fake",
+    )
+    assert unknown.fallback_used is True
+
+
+def test_prohibited_and_numeric_claim_checks() -> None:
+    request = _request()
+    prohibited = validate_narrative_response(
+        {
+            "sections": [
+                {
+                    "section": "action_plan",
+                    "text": "You must buy now.",
+                    "evidence_keys_used": ["final_action_plan"],
+                }
+            ],
+            "warnings": [],
+        },
+        request,
+        "fake",
+    )
+    assert prohibited.fallback_used is True
+
+    numeric = validate_narrative_response(
+        {
+            "sections": [
+                {
+                    "section": "portfolio_overview",
+                    "text": "Target is $9999 and return 88%.",
+                    "evidence_keys_used": ["portfolio_snapshot"],
+                }
+            ],
+            "warnings": [],
+        },
+        request,
+        "fake",
+    )
+    assert numeric.fallback_used is True
+
+
+def test_disclaimer_financial_advice_phrase_allowed() -> None:
+    request = _request()
+    response = validate_narrative_response(
+        {
+            "sections": [
+                {
+                    "section": "limitations",
+                    "text": (
+                        "This is not financial advice. "
+                        "Finwall does not provide financial advice."
+                    ),
+                    "evidence_keys_used": ["disclaimer"],
+                }
+            ],
+            "warnings": [],
+        },
+        request,
+        "fake",
+    )
+    assert response.fallback_used is False
+
+
+def test_ticker_and_risk_contradiction_fallback() -> None:
+    request = _request()
+    ticker = validate_narrative_response(
+        {
+            "sections": [
+                {
+                    "section": "portfolio_overview",
+                    "text": "TSLA setup from deterministic evidence.",
+                    "evidence_keys_used": ["portfolio_snapshot"],
+                }
+            ],
+            "warnings": [],
+        },
+        request,
+        "fake",
+    )
+    assert ticker.fallback_used is True
+
+    warning_evidence = dict(request.evidence)
+    warning_evidence["risks_and_warnings"] = ["Concentration warning active."]
+    request_with_warning = NarrativeRequest(
+        evidence=warning_evidence,
+        requested_sections=request.requested_sections,
+        max_words=request.max_words,
+        style=request.style,
+    )
+
+    risk = validate_narrative_response(
+        {
+            "sections": [
+                {
+                    "section": "risk_context",
+                    "text": "Risk is low and safe to buy.",
+                    "evidence_keys_used": ["risks_and_warnings"],
+                }
+            ],
+            "warnings": [],
+        },
+        request_with_warning,
+        "fake",
+    )
+    assert risk.fallback_used is True
+
+
+def test_ollama_invalid_output_falls_back_and_valid_passes() -> None:
+    request = _request()
+
+    class UnsafeProvider:
+        name = "ollama"
+
+        def generate_narrative(self, request):
+            return {
+                "sections": [
+                    {
+                        "section": "action_plan",
+                        "text": "Buy now for guaranteed profit.",
+                        "evidence_keys_used": ["final_action_plan"],
+                    }
+                ],
+                "warnings": [],
+            }
+
+    class SafeProvider:
+        name = "ollama"
+
+        def generate_narrative(self, request):
+            return {
+                "sections": [
+                    {
+                        "section": "portfolio_overview",
+                        "text": "Portfolio snapshot is summarized from deterministic fields.",
+                        "evidence_keys_used": ["portfolio_snapshot"],
+                    }
+                ],
+                "warnings": [],
+            }
+
+    assert generate_narrative(request, UnsafeProvider()).fallback_used is True
+    assert generate_narrative(request, SafeProvider()).fallback_used is False
+
+
+def test_numeric_claim_normalization_accepts_supported_currency_percent() -> None:
+    request = _request()
+    response = validate_narrative_response(
+        {
+            "sections": [
+                {
+                    "section": "portfolio_overview",
+                    "text": "Current value is $120.00 and gain is 20%.",
+                    "evidence_keys_used": ["portfolio_snapshot"],
+                }
+            ],
+            "warnings": [],
+        },
+        request,
+        "fake",
+    )
+    assert response.fallback_used is False
+
+
+def test_risk_contradiction_not_triggered_when_no_active_risk_warnings() -> None:
+    request = _request()
+    no_warning_evidence = dict(request.evidence)
+    no_warning_evidence["risks_and_warnings"] = []
+    request_without_warnings = NarrativeRequest(
+        evidence=no_warning_evidence,
+        requested_sections=request.requested_sections,
+        max_words=request.max_words,
+        style=request.style,
+    )
+    response = validate_narrative_response(
+        {
+            "sections": [
+                {
+                    "section": "risk_context",
+                    "text": "Risk is low based on current deterministic thresholds.",
+                    "evidence_keys_used": ["risks_and_warnings"],
+                }
+            ],
+            "warnings": [],
+        },
+        request_without_warnings,
+        "fake",
+    )
+    assert response.fallback_used is False
