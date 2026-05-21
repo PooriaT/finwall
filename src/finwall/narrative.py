@@ -31,15 +31,33 @@ PROVIDER_STATIC = "static"
 PROVIDER_FAKE = "fake"
 PROVIDER_OLLAMA = "ollama"
 
-PROHIBITED_PHRASES: tuple[str, ...] = (
-    "guaranteed",
-    "risk-free",
-    "sure profit",
-    "must buy",
-    "must sell",
-    "execute trade",
-    "financial advice",
+PROHIBITED_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"\bguaranteed(?:\s+(?:return|profit|outcome))?\b", re.IGNORECASE),
+    re.compile(r"\bguaranteed\s+return\b", re.IGNORECASE),
+    re.compile(r"\bguaranteed\s+profit\b", re.IGNORECASE),
+    re.compile(r"\brisk[-\s]?free\b", re.IGNORECASE),
+    re.compile(r"\bcannot\s+lose\b", re.IGNORECASE),
+    re.compile(r"\bwill\s+definitely\b", re.IGNORECASE),
+    re.compile(r"\bmust\s+buy\b", re.IGNORECASE),
+    re.compile(r"\bmust\s+sell\b", re.IGNORECASE),
+    re.compile(r"\bbuy\s+now\b", re.IGNORECASE),
+    re.compile(r"\bsell\s+now\b", re.IGNORECASE),
+    re.compile(r"\bexecute\s+this\s+trade\b", re.IGNORECASE),
+    re.compile(r"\bplace\s+this\s+order\b", re.IGNORECASE),
+    re.compile(r"\btarget\s+price\s+will\s+be\b", re.IGNORECASE),
+    re.compile(r"\bprice\s+will\s+reach\b", re.IGNORECASE),
+    re.compile(r"\bi\s+recommend\s+buying\b", re.IGNORECASE),
+    re.compile(r"\bi\s+recommend\s+selling\b", re.IGNORECASE),
+    re.compile(r"\bfinancial\s+advice\b", re.IGNORECASE),
 )
+
+ALLOWED_FINANCIAL_ADVICE_DISCLAIMER_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"\bnot\s+financial\s+advice\b", re.IGNORECASE),
+    re.compile(r"\bdoes\s+not\s+provide\s+financial\s+advice\b", re.IGNORECASE),
+)
+
+CURRENCY_PERCENT_PATTERN = re.compile(r"\$\s?\d[\d,]*(?:\.\d+)?|\b\d+(?:\.\d+)?%")
+TICKER_PATTERN = re.compile(r"\b[A-Z]{2,6}\b")
 
 
 @dataclass(frozen=True)
@@ -175,7 +193,7 @@ class OllamaNarrativeProvider:
                 "model": self.model,
                 "prompt": prompt,
                 "stream": False,
-                "format": "json",
+                "format": narrative_response_schema(),
                 "options": {"temperature": 0},
             }
         ).encode("utf-8")
@@ -255,23 +273,65 @@ def build_narrative_evidence(
     return evidence
 
 
+def narrative_response_schema() -> dict[str, object]:
+    return {
+        "type": "object",
+        "required": ["sections", "warnings"],
+        "properties": {
+            "sections": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "required": ["section", "text", "evidence_keys_used"],
+                    "properties": {
+                        "section": {"type": "string", "enum": list(NARRATIVE_SECTIONS)},
+                        "text": {"type": "string"},
+                        "evidence_keys_used": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "minItems": 1,
+                            "uniqueItems": True,
+                        },
+                    },
+                },
+            },
+            "warnings": {"type": "array", "items": {"type": "string"}},
+        },
+    }
+
+
 def build_narrative_prompt(request: NarrativeRequest) -> str:
+    schema = json.dumps(narrative_response_schema(), indent=2)
+    evidence_json = json.dumps(request.evidence, indent=2, sort_keys=True)
     return (
-        "You are a constrained narrative rewriter for Finwall. "
-        "Use ONLY the provided structured evidence. "
-        "Do not invent prices, holdings, metrics, articles, source links, "
-        "market data, recommendations, or risk warnings. "
-        "Do not override deterministic recommendation statuses. "
-        "Do not override risk-engine warnings. "
-        "Do not imply guaranteed outcomes. Do not claim Finwall executes trades. "
-        "Do not provide personalized financial advice. "
-        "State when evidence is missing or incomplete. "
-        "Keep output decision-support oriented.\n"
-        "Return JSON object with keys: sections, warnings.\n"
-        f"Allowed section names: {', '.join(request.requested_sections)}\n"
-        f"Max words per section: {request.max_words}\n"
-        f"Style: {request.style}\n"
-        f"Evidence JSON:\n{json.dumps(request.evidence, indent=2, sort_keys=True)}"
+        "ROLE\n"
+        "You are a constrained narrative formatter for Finwall deterministic reports.\n\n"
+        "AUTHORITY RULES\n"
+        "- Deterministic report fields are authoritative.\n"
+        "- Risk warnings are authoritative.\n"
+        "- Recommendation statuses are authoritative.\n\n"
+        "YOU MUST NOT\n"
+        "- Add unsupported claims, fabricated prices, holdings, metrics, news, or source links.\n"
+        "- Fabricate risk warnings or claim Finwall executes trades.\n"
+        "- Express guaranteed outcomes, guaranteed returns, or prediction certainty.\n"
+        "- Give direct trade instructions (buy/sell now, place order, execute trade).\n"
+        "- Override deterministic risk controls or recommendation statuses.\n"
+        "- Add new buy/sell/hold recommendations.\n\n"
+        "YOU MAY\n"
+        "- Explain deterministic evidence in cautious decision-support language only.\n"
+        "- State uncertainty when evidence is incomplete.\n"
+        "- Repeat the decision-support disclaimer without adding financial advice.\n\n"
+        "OUTPUT FORMAT\n"
+        "- Return JSON only. No prose outside JSON.\n"
+        "- Use only allowed section names and keep section text under max words.\n"
+        "- Include evidence_keys_used for each section with at least one valid evidence key.\n"
+        f"- Allowed section names: {', '.join(request.requested_sections)}\n"
+        f"- Max words per section: {request.max_words}\n"
+        f"- Style: {request.style}\n"
+        f"- Required JSON schema:\n{schema}\n\n"
+        "EVIDENCE\n"
+        "Use only this evidence JSON as source of truth:\n"
+        f"{evidence_json}"
     )
 
 
@@ -332,27 +392,67 @@ def validate_narrative_response(
             return _fallback(provider_name, f"unknown section: {section}")
         if not isinstance(text, str) or not text.strip():
             return _fallback(provider_name, f"empty text for section: {section}")
-        lowered = text.lower()
-        if any(term in lowered for term in PROHIBITED_PHRASES):
-            return _fallback(provider_name, "prohibited phrasing detected")
+        if _has_prohibited_content(text):
+            return _fallback(
+                provider_name,
+                "invalid narrative output: prohibited trading instruction",
+            )
+        if _has_unsupported_numeric_claim(text, request):
+            return _fallback(
+                provider_name, "invalid narrative output: unsupported numeric claim"
+            )
+        if _has_unsupported_ticker_claim(text, request):
+            return _fallback(
+                provider_name, "invalid narrative output: unsupported ticker claim"
+            )
         if not isinstance(evidence_keys, list) or any(
             not isinstance(key, str) for key in evidence_keys
         ):
-            return _fallback(provider_name, "invalid evidence_keys_used")
+            return _fallback(
+                provider_name, "invalid narrative output: invalid evidence_keys_used"
+            )
+        if not evidence_keys:
+            return _fallback(
+                provider_name, "invalid narrative output: empty evidence key list"
+            )
+        normalized_keys: list[str] = []
+        seen_keys: set[str] = set()
         for key in evidence_keys:
             if key not in request.evidence:
-                return _fallback(provider_name, f"unknown evidence key: {key}")
+                return _fallback(
+                    provider_name, "invalid narrative output: unknown evidence key"
+                )
+            if key not in seen_keys:
+                normalized_keys.append(key)
+                seen_keys.add(key)
         if _has_unsupported_recommendation_status(text, request):
             return _fallback(
-                provider_name, "unsupported recommendation status override"
+                provider_name,
+                "invalid narrative output: recommendation override detected",
+            )
+        if _contradicts_risk_authority(text, request):
+            return _fallback(
+                provider_name, "invalid narrative output: risk warning contradiction"
             )
         sections.append(
             NarrativeSection(
                 section=section,
                 text=text.strip(),
-                evidence_keys_used=tuple(evidence_keys),
+                evidence_keys_used=tuple(normalized_keys),
             )
         )
+
+    if not sections:
+        if warnings_raw == ["narrative provider disabled"]:
+            return NarrativeResponse(
+                available=True,
+                provider=provider_name,
+                sections=tuple(),
+                warnings=("narrative provider disabled",),
+                fallback_used=False,
+                error=None,
+            )
+        return _fallback(provider_name, "invalid narrative output: empty sections")
 
     warnings = tuple(str(item) for item in warnings_raw)
     return NarrativeResponse(
@@ -404,3 +504,41 @@ def format_narrative_markdown(response: NarrativeResponse) -> str:
         for warning in response.warnings:
             lines.append(f"- {warning}")
     return "\n".join(lines).strip()
+
+
+def _has_prohibited_content(text: str) -> bool:
+    for allowed in ALLOWED_FINANCIAL_ADVICE_DISCLAIMER_PATTERNS:
+        text = allowed.sub("", text)
+    return any(pattern.search(text) for pattern in PROHIBITED_PATTERNS)
+
+
+def _has_unsupported_numeric_claim(text: str, request: NarrativeRequest) -> bool:
+    evidence_blob = json.dumps(request.evidence, sort_keys=True).lower()
+    for match in CURRENCY_PERCENT_PATTERN.findall(text):
+        if match.lower() not in evidence_blob:
+            return True
+    return False
+
+
+def _has_unsupported_ticker_claim(text: str, request: NarrativeRequest) -> bool:
+    evidence_blob = json.dumps(request.evidence, sort_keys=True)
+    for ticker in TICKER_PATTERN.findall(text):
+        if ticker in {"JSON"}:
+            continue
+        if ticker not in evidence_blob:
+            return True
+    return False
+
+
+def _contradicts_risk_authority(text: str, request: NarrativeRequest) -> bool:
+    lowered = text.lower()
+    warning_blob = json.dumps(request.evidence.get("risks_and_warnings", [])).lower()
+    has_risk_warnings = "warning" in warning_blob or "risk" in warning_blob
+    contradiction_phrases = (
+        "risk is low",
+        "safe to buy",
+        "ignore the stop-loss warning",
+        "warning has been resolved",
+        "buy more despite concentration warning",
+    )
+    return has_risk_warnings and any(p in lowered for p in contradiction_phrases)
