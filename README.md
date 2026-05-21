@@ -78,6 +78,7 @@ See [docs/api-admin.md](docs/api-admin.md).
 - Security and privacy: `docs/security.md`
 - Safety limits: `docs/safety-limits.md`
 - Deployment ADR: `docs/adr/0001-finwall-scheduled-report-deployment.md`
+- Architecture overview: `docs/architecture/overview.md`
 - Minimal admin interface details: `docs/deployment/minimal-admin-interface.md`
 
 ## Development
