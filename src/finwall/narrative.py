@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Callable, Protocol
 
 from finwall.fundamental_summary import FundamentalSummaryReport
 from finwall.news_summary import NewsSummaryReport
@@ -23,6 +23,10 @@ NARRATIVE_SECTIONS: tuple[str, ...] = (
     "action_plan",
     "limitations",
 )
+PROVIDER_DISABLED = "disabled"
+PROVIDER_STATIC = "static"
+PROVIDER_FAKE = "fake"
+
 PROHIBITED_PHRASES: tuple[str, ...] = (
     "guaranteed",
     "risk-free",
@@ -80,6 +84,25 @@ class NarrativeResponse:
 
 
 class NarrativeProvider(Protocol):
+    """Provider contract for narrative generation.
+
+    Expected output shape from ``generate_narrative``::
+
+        {
+            "sections": [
+                {
+                    "section": "portfolio_overview",
+                    "text": "...",
+                    "evidence_keys_used": ["portfolio_snapshot"],
+                }
+            ],
+            "warnings": [],
+        }
+
+    Providers should return a JSON-like object matching this shape.
+    Finwall always validates provider output before producing final response.
+    """
+
     name: str
 
     def generate_narrative(self, request: NarrativeRequest) -> object: ...
@@ -125,21 +148,28 @@ class StaticNarrativeProvider:
         return {"sections": sections, "warnings": []}
 
 
-def build_narrative_provider(provider_name: str) -> NarrativeProvider:
-    name = provider_name.strip().lower()
-    if name in {"", "disabled"}:
-        return DisabledNarrativeProvider()
-    if name in {"static", "fake"}:
-        return StaticNarrativeProvider(name=name)
-    return DisabledNarrativeProvider(name=name)
-
-
 @dataclass(frozen=True)
 class DisabledNarrativeProvider:
     name: str = "disabled"
 
     def generate_narrative(self, request: NarrativeRequest) -> object:
         return {"sections": [], "warnings": ["narrative provider disabled"]}
+
+
+PROVIDER_BUILDERS: dict[str, Callable[[], NarrativeProvider]] = {
+    PROVIDER_DISABLED: DisabledNarrativeProvider,
+    PROVIDER_STATIC: StaticNarrativeProvider,
+    PROVIDER_FAKE: lambda: StaticNarrativeProvider(name=PROVIDER_FAKE),
+}
+
+
+def build_narrative_provider(provider_name: str) -> NarrativeProvider:
+    name = provider_name.strip().lower()
+    normalized = name or PROVIDER_DISABLED
+    builder = PROVIDER_BUILDERS.get(normalized)
+    if builder is not None:
+        return builder()
+    return DisabledNarrativeProvider(name=normalized)
 
 
 def build_narrative_evidence(
@@ -217,8 +247,8 @@ def generate_narrative(
 ) -> NarrativeResponse:
     try:
         raw = provider.generate_narrative(request)
-    except Exception as exc:  # noqa: BLE001
-        return _fallback(provider.name, f"provider error: {exc}")
+    except Exception:  # noqa: BLE001
+        return _fallback(provider.name, "provider error: provider call failed")
     return validate_narrative_response(raw, request, provider.name)
 
 

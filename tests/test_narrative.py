@@ -5,6 +5,7 @@ from finwall.narrative import (
     NARRATIVE_SECTIONS,
     DisabledNarrativeProvider,
     NarrativeRequest,
+    StaticNarrativeProvider,
     build_narrative_evidence,
     build_narrative_prompt,
     build_narrative_provider,
@@ -103,6 +104,7 @@ def test_disabled_provider_and_exception_fallback() -> None:
 
 def test_build_narrative_provider_from_settings_name() -> None:
     assert build_narrative_provider("disabled").name == "disabled"
+    assert build_narrative_provider("").name == "disabled"
     assert build_narrative_provider("static").name == "static"
     assert build_narrative_provider("fake").name == "fake"
     assert build_narrative_provider("unknown").name == "unknown"
@@ -126,3 +128,55 @@ def test_unsupported_recommendation_status_triggers_fallback() -> None:
     )
     assert response.fallback_used is True
     assert "unsupported recommendation status" in (response.error or "")
+
+
+def test_unknown_provider_falls_back_without_crashing() -> None:
+    request = _request()
+    provider = build_narrative_provider("unknown")
+    response = generate_narrative(request, provider)
+    assert response.available is True
+    assert response.fallback_used is False
+    assert response.provider == "unknown"
+
+
+def test_invalid_provider_output_falls_back_safely() -> None:
+    request = _request()
+
+    class InvalidPayloadProvider:
+        name = "fake"
+
+        def generate_narrative(self, request):
+            return {"sections": "bad", "warnings": []}
+
+    response = generate_narrative(request, InvalidPayloadProvider())
+    assert response.fallback_used is True
+    assert "invalid narrative output" in (response.error or "")
+    assert "source of truth" in response.sections[0].text.lower()
+
+
+def test_provider_exception_sanitized_error_message() -> None:
+    request = _request()
+
+    class SecretBoomProvider:
+        name = "fake"
+
+        def generate_narrative(self, request):
+            raise RuntimeError("token=abc123\ntraceback details")
+
+    response = generate_narrative(request, SecretBoomProvider())
+    assert response.fallback_used is True
+    assert response.error == "provider error: provider call failed"
+    assert "abc123" not in (response.error or "")
+    assert "traceback" not in (response.error or "").lower()
+
+
+def test_static_and_disabled_provider_json_shape() -> None:
+    request = _request()
+    static_response = generate_narrative(request, StaticNarrativeProvider())
+    assert isinstance(static_response.as_dict()["sections"], list)
+    assert isinstance(static_response.as_dict()["warnings"], list)
+
+    disabled_response = generate_narrative(request, DisabledNarrativeProvider())
+    payload = disabled_response.as_dict()
+    assert isinstance(payload["sections"], list)
+    assert isinstance(payload["warnings"], list)
