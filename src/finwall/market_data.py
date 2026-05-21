@@ -118,7 +118,16 @@ class HistoricalPriceResult:
     def as_dict(self) -> dict[str, object]:
         return {
             "ticker": self.ticker,
-            "bars": [bar.__dict__ for bar in self.bars],
+            "bars": [
+                {
+                    "ticker": bar.ticker,
+                    "date": bar.date,
+                    "close": str(bar.close) if bar.close is not None else None,
+                    "volume": bar.volume,
+                    "source": bar.source,
+                }
+                for bar in self.bars
+            ],
             "source": self.source,
             "available": self.available,
             "error": self.error,

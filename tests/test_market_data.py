@@ -140,3 +140,26 @@ def test_static_provider_returns_configured_prices_and_index_quote() -> None:
     prices = provider.get_latest_prices(["NVDA", "AAPL"])
     assert prices["NVDA"].available is True
     assert prices["AAPL"].available is False
+
+
+def test_historical_result_as_dict_is_json_serializable() -> None:
+    provider = StaticMarketDataProvider(
+        historical_prices={
+            "NVDA": (
+                __import__(
+                    "finwall.market_data", fromlist=["HistoricalPriceBar"]
+                ).HistoricalPriceBar(
+                    "NVDA",
+                    "2026-01-01",
+                    Decimal("101.25"),
+                    12345,
+                    "static",
+                ),
+            )
+        }
+    )
+    payload = provider.get_historical_price_result("NVDA", 5).as_dict()
+    assert payload["bars"][0]["close"] == "101.25"
+    import json
+
+    json.dumps(payload)
