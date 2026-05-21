@@ -26,18 +26,11 @@ from finwall.market_data import (
 )
 from finwall.models import (
     ActiveOrder,
-    CashBalance,
-    Holding,
-    InvestmentGoal,
     OrderSide,
     OrderType,
     Portfolio,
     RiskLevel,
-    RiskProfile,
-    Timeline,
-    TradeSide,
     TradeTransaction,
-    WatchlistItem,
 )
 from finwall.narrative import (
     NARRATIVE_SECTIONS,
@@ -50,6 +43,42 @@ from finwall.narrative import (
 from finwall.news import build_news_data_provider, build_news_report
 from finwall.news_summary import build_news_summary_report
 from finwall.order_evaluation import ProposedOrder, evaluate_proposed_order
+from finwall.portfolio_updates import (
+    add_holding as _add_holding,
+)
+from finwall.portfolio_updates import (
+    add_or_update_order as _add_or_update_order,
+)
+from finwall.portfolio_updates import (
+    add_watchlist_item as _add_watchlist_item,
+)
+from finwall.portfolio_updates import (
+    record_buy as _record_buy,
+)
+from finwall.portfolio_updates import (
+    record_sell as _record_sell,
+)
+from finwall.portfolio_updates import (
+    remove_order as _remove_order,
+)
+from finwall.portfolio_updates import (
+    remove_watchlist_item as _remove_watchlist_item,
+)
+from finwall.portfolio_updates import (
+    save_portfolio_update as _save_portfolio_update,
+)
+from finwall.portfolio_updates import (
+    set_goal as _set_goal,
+)
+from finwall.portfolio_updates import (
+    set_risk_profile as _set_risk_profile,
+)
+from finwall.portfolio_updates import (
+    set_timeline as _set_timeline,
+)
+from finwall.portfolio_updates import (
+    upsert_cash as _upsert_cash,
+)
 from finwall.recommendations import build_recommendation_report
 from finwall.report_history import (
     ReportRunComparison,
@@ -86,16 +115,7 @@ def load_portfolio(store: PortfolioStore, name: str) -> Portfolio:
 
 
 def upsert_cash(portfolio: Portfolio, currency: str, delta: Decimal) -> Portfolio:
-    balances = list(portfolio.cash_balances)
-    for index, balance in enumerate(balances):
-        if balance.currency == currency:
-            amount = balance.amount + delta
-            balances[index] = CashBalance(currency=currency, amount=amount)
-            return replace(portfolio, cash_balances=tuple(balances))
-    return replace(
-        portfolio,
-        cash_balances=portfolio.cash_balances + (CashBalance(currency, delta),),
-    )
+    return _upsert_cash(portfolio, currency, delta)
 
 
 def add_holding(
@@ -105,9 +125,7 @@ def add_holding(
     average_price: Decimal,
     sector: str | None = None,
 ) -> Portfolio:
-    holdings = tuple(item for item in portfolio.holdings if item.ticker != ticker)
-    holding = Holding(ticker, share_count, average_price, sector)
-    return replace(portfolio, holdings=holdings + (holding,))
+    return _add_holding(portfolio, ticker, share_count, average_price, sector)
 
 
 def record_buy(
@@ -118,25 +136,7 @@ def record_buy(
     currency: str,
     traded_on: date,
 ) -> Portfolio:
-    cost = share_count * price
-    portfolio = upsert_cash(portfolio, currency, -cost)
-    existing = next(
-        (item for item in portfolio.holdings if item.ticker == ticker), None
-    )
-    if existing is None:
-        portfolio = add_holding(portfolio, ticker, share_count, price)
-    else:
-        total_shares = existing.share_count + share_count
-        total_cost = existing.share_count * existing.average_purchase_price + cost
-        portfolio = add_holding(
-            portfolio,
-            ticker,
-            total_shares,
-            total_cost / total_shares,
-            existing.sector,
-        )
-    transaction = TradeTransaction(ticker, TradeSide.BUY, share_count, price, traded_on)
-    return replace(portfolio, transactions=portfolio.transactions + (transaction,))
+    return _record_buy(portfolio, ticker, share_count, price, currency, traded_on)
 
 
 def record_sell(
@@ -147,56 +147,25 @@ def record_sell(
     currency: str,
     traded_on: date,
 ) -> Portfolio:
-    existing = next(
-        (item for item in portfolio.holdings if item.ticker == ticker), None
-    )
-    if existing is None or existing.share_count < share_count:
-        raise ValueError("cannot sell more shares than available")
-    portfolio = upsert_cash(portfolio, currency, share_count * price)
-    remaining = existing.share_count - share_count
-    holdings = tuple(item for item in portfolio.holdings if item.ticker != ticker)
-    if remaining > Decimal("0"):
-        holding = Holding(
-            ticker,
-            remaining,
-            existing.average_purchase_price,
-            existing.sector,
-        )
-        holdings = holdings + (holding,)
-    transaction = TradeTransaction(
-        ticker, TradeSide.SELL, share_count, price, traded_on
-    )
-    return replace(
-        portfolio,
-        holdings=holdings,
-        transactions=portfolio.transactions + (transaction,),
-    )
+    return _record_sell(portfolio, ticker, share_count, price, currency, traded_on)
 
 
 def add_or_update_order(portfolio: Portfolio, order: ActiveOrder) -> Portfolio:
-    orders = tuple(
-        item for item in portfolio.active_orders if item.ticker != order.ticker
-    )
-    return replace(portfolio, active_orders=orders + (order,))
+    return _add_or_update_order(portfolio, order)
 
 
 def remove_order(portfolio: Portfolio, ticker: str) -> Portfolio:
-    orders = tuple(item for item in portfolio.active_orders if item.ticker != ticker)
-    return replace(portfolio, active_orders=orders)
+    return _remove_order(portfolio, ticker)
 
 
 def add_watchlist_item(
     portfolio: Portfolio, ticker: str, note: str | None
 ) -> Portfolio:
-    items = tuple(item for item in portfolio.watchlist if item.ticker != ticker)
-    return replace(portfolio, watchlist=items + (WatchlistItem(ticker, note),))
+    return _add_watchlist_item(portfolio, ticker, note)
 
 
 def remove_watchlist_item(portfolio: Portfolio, ticker: str) -> Portfolio:
-    return replace(
-        portfolio,
-        watchlist=tuple(item for item in portfolio.watchlist if item.ticker != ticker),
-    )
+    return _remove_watchlist_item(portfolio, ticker)
 
 
 def set_goal(
@@ -204,11 +173,7 @@ def set_goal(
     name: str,
     target_amount: Decimal | None,
 ) -> Portfolio:
-    timeline = portfolio.goals[0].timeline if portfolio.goals else None
-    return replace(
-        portfolio,
-        goals=(InvestmentGoal(name, target_amount, timeline),),
-    )
+    return _set_goal(portfolio, name, target_amount)
 
 
 def set_timeline(
@@ -216,9 +181,7 @@ def set_timeline(
     start_date: date,
     target_date: date | None,
 ) -> Portfolio:
-    timeline = Timeline(start_date, target_date)
-    goal = portfolio.goals[0] if portfolio.goals else InvestmentGoal("Default goal")
-    return replace(portfolio, goals=(replace(goal, timeline=timeline),))
+    return _set_timeline(portfolio, start_date, target_date)
 
 
 def set_risk_profile(
@@ -226,7 +189,7 @@ def set_risk_profile(
     level: RiskLevel,
     notes: str | None,
 ) -> Portfolio:
-    return replace(portfolio, risk_profile=RiskProfile(level, notes))
+    return _set_risk_profile(portfolio, level, notes)
 
 
 def parse_decimal(value: str) -> Decimal:
@@ -252,10 +215,7 @@ def save_portfolio_update(
     portfolio: Portfolio,
     existing_transactions: tuple[TradeTransaction, ...],
 ) -> None:
-    new_transactions = portfolio.transactions[len(existing_transactions) :]
-    store.save_portfolio(replace(portfolio, transactions=()))
-    for transaction in new_transactions:
-        store.add_trade_transaction(portfolio_name, transaction)
+    _save_portfolio_update(store, portfolio_name, portfolio, existing_transactions)
 
 
 def build_parser() -> argparse.ArgumentParser:
