@@ -311,7 +311,10 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
     def cash_withdraw(payload: CashRequest, _: str = Depends(auth)):
         portfolio = get_portfolio()
         amount = _to_decimal(payload.amount, "amount")
-        updated = upsert_cash(portfolio, payload.currency, -amount)
+        try:
+            updated = upsert_cash(portfolio, payload.currency, -amount)
+        except ValueError as exc:
+            raise HTTPException(400, detail=str(exc)) from exc
         return persist(updated, portfolio)
 
     @app.post("/api/v1/portfolio/holdings")
@@ -354,14 +357,17 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
     @app.post("/api/v1/portfolio/trades/buy")
     def trade_buy(payload: TradeRequest, _: str = Depends(auth)):
         portfolio = get_portfolio()
-        updated = record_buy(
-            portfolio,
-            payload.ticker,
-            _to_decimal(payload.shares, "shares"),
-            _to_decimal(payload.price, "price"),
-            payload.currency,
-            payload.trade_date or date.today(),
-        )
+        try:
+            updated = record_buy(
+                portfolio,
+                payload.ticker,
+                _to_decimal(payload.shares, "shares"),
+                _to_decimal(payload.price, "price"),
+                payload.currency,
+                payload.trade_date or date.today(),
+            )
+        except ValueError as exc:
+            raise HTTPException(400, detail=str(exc)) from exc
         return persist(updated, portfolio)
 
     @app.post("/api/v1/portfolio/trades/sell")

@@ -173,6 +173,43 @@ def test_api_token_missing_rejects(tmp_path):
     assert response.status_code == 401
 
 
+def test_cash_withdraw_invalid_returns_400(tmp_path):
+    client = build_client(tmp_path)
+    h = auth_headers()
+
+    missing_currency = client.post(
+        "/api/v1/portfolio/cash/withdraw",
+        headers=h,
+        json={"currency": "USD", "amount": "10"},
+    )
+    assert missing_currency.status_code == 400
+
+    client.post(
+        "/api/v1/portfolio/cash/add",
+        headers=h,
+        json={"currency": "USD", "amount": "5"},
+    )
+    overdraw = client.post(
+        "/api/v1/portfolio/cash/withdraw",
+        headers=h,
+        json={"currency": "USD", "amount": "10"},
+    )
+    assert overdraw.status_code == 400
+
+
+def test_trade_buy_invalid_payload_returns_400(tmp_path):
+    client = build_client(tmp_path)
+    h = auth_headers()
+
+    response = client.post(
+        "/api/v1/portfolio/trades/buy",
+        headers=h,
+        json={"ticker": "NVDA", "shares": "0", "price": "120", "currency": "USD"},
+    )
+
+    assert response.status_code == 400
+
+
 def test_admin_login_logout_and_cookie_auth(tmp_path):
     client = build_client(tmp_path)
     assert client.get("/admin", follow_redirects=False).status_code == 401
