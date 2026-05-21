@@ -1,0 +1,151 @@
+name: Scheduled Report
+
+on:
+  schedule:
+    # 10:30 ET weekdays (roughly 1 hour after US market open), in UTC.
+    - cron: "30 14 * * 1-5"
+    # 16:15 ET weekdays (shortly after US market close), in UTC.
+    - cron: "15 20 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      run_context:
+        description: "Scheduled run context"
+        type: choice
+        options:
+          - morning
+          - after_close
+        required: true
+      run_date:
+        description: "Optional run date (YYYY-MM-DD)"
+        type: string
+        required: false
+      force:
+        description: "Force run even if market calendar would skip"
+        type: boolean
+        default: false
+        required: false
+      save_run:
+        description: "Persist report run metadata"
+        type: boolean
+        default: true
+        required: false
+      compare:
+        description: "Compare recommendation status against last saved run"
+        type: boolean
+        default: true
+        required: false
+      email:
+        description: "Send success email notification"
+        type: boolean
+        default: true
+        required: false
+      email_on_failure:
+        description: "Send failure email notification"
+        type: boolean
+        default: true
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scheduled-report
+  cancel-in-progress: false
+
+jobs:
+  run-scheduled-report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      FINWALL_ENV: production
+      FINWALL_STORAGE_BACKEND: ${{ secrets.FINWALL_STORAGE_BACKEND }}
+      FINWALL_DATABASE_URL: ${{ secrets.FINWALL_DATABASE_URL }}
+      FINWALL_EMAIL_PROVIDER: ${{ secrets.FINWALL_EMAIL_PROVIDER }}
+      FINWALL_EMAIL_FROM: ${{ secrets.FINWALL_EMAIL_FROM }}
+      FINWALL_EMAIL_TO: ${{ secrets.FINWALL_EMAIL_TO }}
+      FINWALL_SMTP_HOST: ${{ secrets.FINWALL_SMTP_HOST }}
+      FINWALL_SMTP_PORT: ${{ secrets.FINWALL_SMTP_PORT }}
+      FINWALL_SMTP_USERNAME: ${{ secrets.FINWALL_SMTP_USERNAME }}
+      FINWALL_SMTP_PASSWORD: ${{ secrets.FINWALL_SMTP_PASSWORD }}
+      FINWALL_SMTP_USE_STARTTLS: ${{ secrets.FINWALL_SMTP_USE_STARTTLS }}
+      FINWALL_MARKET_DATA_PROVIDER: ${{ secrets.FINWALL_MARKET_DATA_PROVIDER }}
+      FINWALL_MARKET_DATA_TIMEOUT_SECONDS: ${{ secrets.FINWALL_MARKET_DATA_TIMEOUT_SECONDS }}
+      FINWALL_FUNDAMENTAL_DATA_PROVIDER: ${{ secrets.FINWALL_FUNDAMENTAL_DATA_PROVIDER }}
+      FINWALL_FUNDAMENTAL_DATA_TIMEOUT_SECONDS: ${{ secrets.FINWALL_FUNDAMENTAL_DATA_TIMEOUT_SECONDS }}
+      FINWALL_NEWS_PROVIDER: ${{ secrets.FINWALL_NEWS_PROVIDER }}
+      FINWALL_NEWS_TIMEOUT_SECONDS: ${{ secrets.FINWALL_NEWS_TIMEOUT_SECONDS }}
+      FINWALL_NEWS_MAX_ARTICLES_PER_TOPIC: ${{ secrets.FINWALL_NEWS_MAX_ARTICLES_PER_TOPIC }}
+      FINWALL_NEWS_MAX_AGE_HOURS: ${{ secrets.FINWALL_NEWS_MAX_AGE_HOURS }}
+      FINWALL_NARRATIVE_PROVIDER: ${{ secrets.FINWALL_NARRATIVE_PROVIDER }}
+      FINWALL_NARRATIVE_MAX_WORDS: ${{ secrets.FINWALL_NARRATIVE_MAX_WORDS }}
+      FINWALL_NARRATIVE_STYLE: ${{ secrets.FINWALL_NARRATIVE_STYLE }}
+      # Ephemeral fallback for smoke tests only when FINWALL_DATABASE_URL is not set.
+      FINWALL_DATABASE_PATH: finwall.db
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Poetry
+        run: pip install poetry
+
+      - name: Install dependencies
+        run: poetry install
+
+      - name: Run scheduled report command
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${GITHUB_EVENT_NAME}" == "schedule" ]]; then
+            if [[ "${GITHUB_EVENT_SCHEDULE}" == "30 14 * * 1-5" ]]; then
+              RUN_CONTEXT="morning"
+            elif [[ "${GITHUB_EVENT_SCHEDULE}" == "15 20 * * 1-5" ]]; then
+              RUN_CONTEXT="after_close"
+            else
+              echo "Unexpected schedule expression: ${GITHUB_EVENT_SCHEDULE}" >&2
+              exit 1
+            fi
+            RUN_DATE=""
+            FORCE="false"
+            SAVE_RUN="true"
+            COMPARE="true"
+            EMAIL="true"
+            EMAIL_ON_FAILURE="true"
+          else
+            RUN_CONTEXT="${{ github.event.inputs.run_context }}"
+            RUN_DATE="${{ github.event.inputs.run_date }}"
+            FORCE="${{ github.event.inputs.force }}"
+            SAVE_RUN="${{ github.event.inputs.save_run }}"
+            COMPARE="${{ github.event.inputs.compare }}"
+            EMAIL="${{ github.event.inputs.email }}"
+            EMAIL_ON_FAILURE="${{ github.event.inputs.email_on_failure }}"
+          fi
+
+          CMD=(poetry run finwall --database "${FINWALL_DATABASE_PATH}" run-scheduled-report --run-context "${RUN_CONTEXT}" --json)
+
+          if [[ -n "${RUN_DATE}" ]]; then
+            CMD+=(--run-date "${RUN_DATE}")
+          fi
+          if [[ "${FORCE}" == "true" ]]; then
+            CMD+=(--force)
+          fi
+          if [[ "${SAVE_RUN}" == "true" ]]; then
+            CMD+=(--save-run)
+          fi
+          if [[ "${COMPARE}" == "true" ]]; then
+            CMD+=(--compare)
+          fi
+          if [[ "${EMAIL}" == "true" ]]; then
+            CMD+=(--email)
+          fi
+          if [[ "${EMAIL_ON_FAILURE}" == "true" ]]; then
+            CMD+=(--email-on-failure)
+          fi
+
+          "${CMD[@]}"

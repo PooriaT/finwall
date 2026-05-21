@@ -648,6 +648,7 @@ Notes on scope:
 ## Deployment decision
 
 The deployment/storage decision for scheduled report automation is documented in `docs/adr/0001-finwall-scheduled-report-deployment.md`.
+For a repository-managed scheduler option, see `docs/deployment/github-actions-scheduled-report.md`.
 
 Summary: local SQLite remains the default for local/manual use. The recommended MVP production path is Render Cron Jobs plus external managed database storage. Cloud scheduler implementation and production database support are intentionally future issues.
 
