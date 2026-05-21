@@ -1,3 +1,9 @@
+"""Downstream narrative layer for deterministic Finwall outputs only.
+
+This module may explain deterministic report evidence but must not compute
+recommendation statuses, risk thresholds, or portfolio analytics.
+"""
+
 from __future__ import annotations
 
 import json
