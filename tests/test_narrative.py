@@ -429,6 +429,15 @@ def test_ticker_and_risk_contradiction_fallback() -> None:
     )
     assert ticker.fallback_used is True
 
+    warning_evidence = dict(request.evidence)
+    warning_evidence["risks_and_warnings"] = ["Concentration warning active."]
+    request_with_warning = NarrativeRequest(
+        evidence=warning_evidence,
+        requested_sections=request.requested_sections,
+        max_words=request.max_words,
+        style=request.style,
+    )
+
     risk = validate_narrative_response(
         {
             "sections": [
@@ -440,7 +449,7 @@ def test_ticker_and_risk_contradiction_fallback() -> None:
             ],
             "warnings": [],
         },
-        request,
+        request_with_warning,
         "fake",
     )
     assert risk.fallback_used is True
@@ -481,3 +490,49 @@ def test_ollama_invalid_output_falls_back_and_valid_passes() -> None:
 
     assert generate_narrative(request, UnsafeProvider()).fallback_used is True
     assert generate_narrative(request, SafeProvider()).fallback_used is False
+
+
+def test_numeric_claim_normalization_accepts_supported_currency_percent() -> None:
+    request = _request()
+    response = validate_narrative_response(
+        {
+            "sections": [
+                {
+                    "section": "portfolio_overview",
+                    "text": "Current value is $120.00 and gain is 20%.",
+                    "evidence_keys_used": ["portfolio_snapshot"],
+                }
+            ],
+            "warnings": [],
+        },
+        request,
+        "fake",
+    )
+    assert response.fallback_used is False
+
+
+def test_risk_contradiction_not_triggered_when_no_active_risk_warnings() -> None:
+    request = _request()
+    no_warning_evidence = dict(request.evidence)
+    no_warning_evidence["risks_and_warnings"] = []
+    request_without_warnings = NarrativeRequest(
+        evidence=no_warning_evidence,
+        requested_sections=request.requested_sections,
+        max_words=request.max_words,
+        style=request.style,
+    )
+    response = validate_narrative_response(
+        {
+            "sections": [
+                {
+                    "section": "risk_context",
+                    "text": "Risk is low based on current deterministic thresholds.",
+                    "evidence_keys_used": ["risks_and_warnings"],
+                }
+            ],
+            "warnings": [],
+        },
+        request_without_warnings,
+        "fake",
+    )
+    assert response.fallback_used is False

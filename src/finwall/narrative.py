@@ -57,6 +57,7 @@ ALLOWED_FINANCIAL_ADVICE_DISCLAIMER_PATTERNS: tuple[re.Pattern[str], ...] = (
 )
 
 CURRENCY_PERCENT_PATTERN = re.compile(r"\$\s?\d[\d,]*(?:\.\d+)?|\b\d+(?:\.\d+)?%")
+NUMERIC_LITERAL_PATTERN = re.compile(r"[-+]?\d+(?:\.\d+)?")
 TICKER_PATTERN = re.compile(r"\b[A-Z]{2,6}\b")
 
 
@@ -513,11 +514,33 @@ def _has_prohibited_content(text: str) -> bool:
 
 
 def _has_unsupported_numeric_claim(text: str, request: NarrativeRequest) -> bool:
-    evidence_blob = json.dumps(request.evidence, sort_keys=True).lower()
-    for match in CURRENCY_PERCENT_PATTERN.findall(text):
-        if match.lower() not in evidence_blob:
+    evidence_numbers = _extract_normalized_numeric_literals(
+        json.dumps(request.evidence, sort_keys=True)
+    )
+    for token in CURRENCY_PERCENT_PATTERN.findall(text):
+        if _normalize_numeric_token(token) not in evidence_numbers:
             return True
     return False
+
+
+def _extract_normalized_numeric_literals(source: str) -> set[str]:
+    return {
+        _normalize_numeric_token(token)
+        for token in NUMERIC_LITERAL_PATTERN.findall(source)
+    }
+
+
+def _normalize_numeric_token(token: str) -> str:
+    cleaned = token.replace("$", "").replace(",", "").replace("%", "").strip()
+    if not cleaned:
+        return ""
+    try:
+        numeric = float(cleaned)
+    except ValueError:
+        return cleaned.lower()
+    if numeric.is_integer():
+        return str(int(numeric))
+    return f"{numeric:.12g}"
 
 
 def _has_unsupported_ticker_claim(text: str, request: NarrativeRequest) -> bool:
@@ -532,8 +555,8 @@ def _has_unsupported_ticker_claim(text: str, request: NarrativeRequest) -> bool:
 
 def _contradicts_risk_authority(text: str, request: NarrativeRequest) -> bool:
     lowered = text.lower()
-    warning_blob = json.dumps(request.evidence.get("risks_and_warnings", [])).lower()
-    has_risk_warnings = "warning" in warning_blob or "risk" in warning_blob
+    risks_payload = request.evidence.get("risks_and_warnings", [])
+    has_risk_warnings = _has_active_risk_warnings(risks_payload)
     contradiction_phrases = (
         "risk is low",
         "safe to buy",
@@ -542,3 +565,19 @@ def _contradicts_risk_authority(text: str, request: NarrativeRequest) -> bool:
         "buy more despite concentration warning",
     )
     return has_risk_warnings and any(p in lowered for p in contradiction_phrases)
+
+
+def _has_active_risk_warnings(risks_payload: object) -> bool:
+    if isinstance(risks_payload, list):
+        for item in risks_payload:
+            if isinstance(item, str) and item.strip():
+                return True
+            if isinstance(item, dict):
+                for value in item.values():
+                    if isinstance(value, str) and value.strip():
+                        return True
+                    if isinstance(value, list) and any(
+                        isinstance(inner, str) and inner.strip() for inner in value
+                    ):
+                        return True
+    return False
