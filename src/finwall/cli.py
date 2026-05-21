@@ -1368,9 +1368,7 @@ def run(argv: list[str] | None = None) -> int:
                 return 0
 
             if not trading.is_trading_day and not args.force:
-                message = (
-                    f"Skipped scheduled report for {trading.calendar_date}: {trading.reason}"
-                )
+                message = f"Skipped scheduled report for {trading.calendar_date}: {trading.reason}"
                 scheduled_run = store.finish_scheduled_run(
                     scheduled_run.id,
                     status=ScheduledRunStatus.SKIPPED.value,
