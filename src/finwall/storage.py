@@ -21,6 +21,7 @@ from finwall.models import (
     TradeTransaction,
     WatchlistItem,
 )
+from finwall.portfolio_audit import PortfolioAuditEvent
 from finwall.recommendations import RecommendationReport
 from finwall.report_history import (
     StoredRecommendationStatus,
@@ -156,6 +157,22 @@ CREATE TABLE IF NOT EXISTS report_suggested_orders (
     limit_price TEXT,
     stop_price TEXT,
     description TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS portfolio_audit_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    portfolio_id INTEGER NOT NULL REFERENCES portfolios(id) ON DELETE CASCADE,
+    changed_at TEXT NOT NULL,
+    actor TEXT NOT NULL,
+    source TEXT NOT NULL,
+    action TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    entity_id TEXT,
+    status TEXT NOT NULL,
+    summary TEXT NOT NULL,
+    before_json TEXT,
+    after_json TEXT,
+    safe_error_message TEXT
 );
 """
 
@@ -476,6 +493,85 @@ class SQLitePortfolioStore:
                     limit_price=row["limit_price"],
                     stop_price=row["stop_price"],
                     description=row["description"],
+                )
+                for row in rows
+            )
+
+    def record_portfolio_audit_event(
+        self,
+        portfolio_name: str,
+        *,
+        actor: str,
+        source: str,
+        action: str,
+        entity_type: str,
+        entity_id: str | None,
+        status: str,
+        summary: str,
+        before_json: str | None,
+        after_json: str | None,
+        safe_error_message: str | None,
+    ) -> int:
+        with self._connect() as connection:
+            portfolio_id = self._require_portfolio_id(connection, portfolio_name)
+            row = connection.execute(
+                """
+                INSERT INTO portfolio_audit_events (
+                    portfolio_id, changed_at, actor, source, action, entity_type,
+                    entity_id, status, summary, before_json, after_json, safe_error_message
+                ) VALUES (?, datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    portfolio_id,
+                    actor,
+                    source,
+                    action,
+                    entity_type,
+                    entity_id,
+                    status,
+                    summary,
+                    before_json,
+                    after_json,
+                    safe_error_message,
+                ),
+            )
+            return int(row.lastrowid)
+
+    def list_portfolio_audit_events(
+        self,
+        portfolio_name: str,
+        limit: int = 50,
+    ) -> tuple[PortfolioAuditEvent, ...]:
+        with self._connect() as connection:
+            portfolio_id = self._require_portfolio_id(connection, portfolio_name)
+            rows = connection.execute(
+                """
+                SELECT pae.id, p.name AS portfolio_name, pae.changed_at, pae.actor, pae.source,
+                       pae.action, pae.entity_type, pae.entity_id, pae.status, pae.summary,
+                       pae.before_json, pae.after_json, pae.safe_error_message
+                FROM portfolio_audit_events pae
+                INNER JOIN portfolios p ON p.id = pae.portfolio_id
+                WHERE pae.portfolio_id = ?
+                ORDER BY pae.id DESC
+                LIMIT ?
+                """,
+                (portfolio_id, limit),
+            ).fetchall()
+            return tuple(
+                PortfolioAuditEvent(
+                    id=row["id"],
+                    portfolio_name=row["portfolio_name"],
+                    changed_at=row["changed_at"],
+                    actor=row["actor"],
+                    source=row["source"],
+                    action=row["action"],
+                    entity_type=row["entity_type"],
+                    entity_id=row["entity_id"],
+                    status=row["status"],
+                    summary=row["summary"],
+                    before_json=row["before_json"],
+                    after_json=row["after_json"],
+                    safe_error_message=row["safe_error_message"],
                 )
                 for row in rows
             )

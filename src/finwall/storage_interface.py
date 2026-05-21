@@ -1,6 +1,7 @@
 from typing import Protocol
 
 from finwall.models import CashBalance, Portfolio, TradeTransaction
+from finwall.portfolio_audit import PortfolioAuditEvent
 from finwall.recommendations import RecommendationReport
 from finwall.report_history import (
     StoredRecommendationStatus,
@@ -51,3 +52,23 @@ class PortfolioStore(Protocol):
     def list_report_suggested_orders(
         self, report_run_id: int
     ) -> tuple[StoredSuggestedOrder, ...]: ...
+    def record_portfolio_audit_event(
+        self,
+        portfolio_name: str,
+        *,
+        actor: str,
+        source: str,
+        action: str,
+        entity_type: str,
+        entity_id: str | None,
+        status: str,
+        summary: str,
+        before_json: str | None,
+        after_json: str | None,
+        safe_error_message: str | None,
+    ) -> int: ...
+    def list_portfolio_audit_events(
+        self,
+        portfolio_name: str,
+        limit: int = 50,
+    ) -> tuple[PortfolioAuditEvent, ...]: ...
