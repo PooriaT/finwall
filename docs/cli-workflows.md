@@ -55,6 +55,7 @@ poetry run finwall --database finwall.db market-condition --primary-index SP500 
 poetry run finwall --database finwall.db fundamentals-summary --json
 poetry run finwall --database finwall.db news-summary --include-market --include-sectors
 poetry run finwall --database finwall.db security-check --json
+poetry run finwall --database finwall.db market-data-diagnostics --ticker NVDA --index SP500 --json
 ```
 
 ## Persistence and run history

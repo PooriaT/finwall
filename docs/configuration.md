@@ -28,8 +28,12 @@ Finwall reads runtime settings from environment variables. `.env.example` provid
 
 | Variable | Purpose | Default | Required (local-only) | Required (scheduled/email/API) | Example |
 |---|---|---|---|---|---|
-| `FINWALL_MARKET_DATA_PROVIDER` | Market quote provider. | `static` | No | Optional | `static` |
-| `FINWALL_MARKET_DATA_TIMEOUT_SECONDS` | Quote-provider timeout. | `5` | No | Optional | `5` |
+| `FINWALL_MARKET_DATA_PROVIDER` | Market quote provider (`static` or `yahoo`). Unsupported values fall back to `static`. | `static` | No | Optional | `yahoo` |
+| `FINWALL_MARKET_DATA_TIMEOUT_SECONDS` | Provider request timeout in seconds (non-positive/invalid values fall back to `5`). | `5` | No | Optional | `5` |
+
+`static` is deterministic and local-only (no network). `yahoo` is best-effort and uses unofficial public Yahoo endpoints.
+
+See [docs/market-data-providers.md](market-data-providers.md) for provider capabilities, diagnostics, and limitations.
 
 ## Fundamentals
 
