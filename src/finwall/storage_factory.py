@@ -32,5 +32,6 @@ def build_portfolio_store(
             "Postgres storage backend is not implemented yet. Use sqlite for now."
         )
     raise ValueError(
-        "Unsupported storage backend. Allowed values are 'sqlite'/'sqlite3' and 'postgres'/'postgresql'."
+        "Unsupported storage backend. "
+        "Allowed values are 'sqlite'/'sqlite3' and 'postgres'/'postgresql'."
     )
