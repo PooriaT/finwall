@@ -93,7 +93,15 @@ def test_yahoo_latest_prices_ignores_non_dict_quote_entries(monkeypatch) -> None
         "_fetch_json",
         lambda _url: {
             "quoteResponse": {
-                "result": [None, "bad-item", {"symbol": "AAPL", "regularMarketPrice": 190.1, "currency": "USD"}]
+                "result": [
+                    None,
+                    "bad-item",
+                    {
+                        "symbol": "AAPL",
+                        "regularMarketPrice": 190.1,
+                        "currency": "USD",
+                    },
+                ]
             }
         },
     )
