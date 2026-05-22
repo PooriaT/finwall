@@ -53,6 +53,7 @@ Use fake/test data while learning.
 - Portfolio setup and daily CLI flows: [docs/local-setup.md](docs/local-setup.md)
 - Expanded command examples: [docs/cli-workflows.md](docs/cli-workflows.md)
 - Environment variable reference: [docs/configuration.md](docs/configuration.md)
+- Market data providers and limitations: [docs/market-data-providers.md](docs/market-data-providers.md)
 
 ## Optional local Ollama narrative provider
 
@@ -100,6 +101,7 @@ See [docs/api-admin.md](docs/api-admin.md).
 - Local setup: `docs/local-setup.md`
 - CLI workflows: `docs/cli-workflows.md`
 - Configuration: `docs/configuration.md`
+- Market data providers: `docs/market-data-providers.md`
 - Scheduled reports: `docs/deployment/scheduled-reports.md`
 - GitHub Actions scheduled report: `docs/deployment/github-actions-scheduled-report.md`
 - API/admin mode: `docs/api-admin.md`
