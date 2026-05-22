@@ -142,7 +142,13 @@ class YahooMarketDataProvider:
             }
 
         quotes = payload.get("quoteResponse", {}).get("result", [])
-        by_symbol = {item.get("symbol", "").upper(): item for item in quotes}
+        if not isinstance(quotes, list):
+            quotes = []
+        by_symbol = {
+            item.get("symbol", "").upper(): item
+            for item in quotes
+            if isinstance(item, dict)
+        }
 
         results: dict[str, MarketPrice] = {}
         for ticker in normalized:
@@ -211,9 +217,11 @@ class YahooMarketDataProvider:
             return ()
 
         result = payload.get("chart", {}).get("result", [])
-        if not result:
+        if not isinstance(result, list) or not result:
             return ()
         item = result[0]
+        if not isinstance(item, dict):
+            return ()
         timestamps = item.get("timestamp", [])
         indicators = item.get("indicators", {}).get("quote", [])
         quote_data = indicators[0] if indicators else {}
