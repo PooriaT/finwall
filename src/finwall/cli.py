@@ -1483,8 +1483,12 @@ def run(argv: list[str] | None = None) -> int:
             settings.market_data_provider,
             settings.market_data_timeout_seconds,
         )
-        tickers = sorted({item.upper() for item in args.ticker})
-        indexes = sorted({item.upper() for item in args.index})
+        tickers = sorted(
+            {normalized for item in args.ticker if (normalized := item.strip().upper())}
+        )
+        indexes = sorted(
+            {normalized for item in args.index if (normalized := item.strip().upper())}
+        )
         latest = provider.get_latest_prices(tickers) if tickers else {}
         historical = (
             {
