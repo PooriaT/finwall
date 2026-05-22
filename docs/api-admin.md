@@ -1,5 +1,7 @@
 # API/admin mode
 
+> Status: **Internal/admin**. Token-authenticated self-managed maintenance tooling; not a public SaaS product, not multi-user RBAC, and not a broker interface.
+
 Finwall includes a **minimal internal** FastAPI app and server-rendered admin pages. This is operational tooling, not a public SaaS dashboard.
 
 ## Run locally with Uvicorn
@@ -46,6 +48,9 @@ The admin interface provides minimal forms/navigation for the same internal port
 - No frontend framework-based dashboard.
 
 ## Security guidance
+
+This mode is intended for internal/self-managed operation. Do not treat it as enterprise-hardened or internet-public SaaS without additional host/network/deployment controls.
+
 
 - Prefer `127.0.0.1` host unless deliberate network exposure is protected.
 - Use a strong random API token and rotate it if exposed.

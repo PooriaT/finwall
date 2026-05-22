@@ -32,14 +32,16 @@ Finwall is for people who want to:
 
 ## Product modes at a glance
 
-| Mode | Role | Typical user action |
+See [docs/product-modes.md](docs/product-modes.md) for the canonical capability-maturity reference.
+
+| Mode | Maturity | Typical user action |
 | --- | --- | --- |
-| CLI portfolio maintenance | Primary | Update cash, holdings, trades/orders, watchlist, goals, and risk profile |
-| Deterministic reports | Primary | Generate snapshot/risk/recommendation/report outputs |
-| Scheduled reports | Secondary automation | Run reports on a schedule with app-level guardrails |
-| Email notifications | Secondary automation | Receive scheduled-run success/failure summaries |
-| API/admin mode | Internal maintenance | Update portfolio state through authenticated internal endpoints/forms |
-| Narrative provider | Optional explanation | Rewrite deterministic evidence into plain-language explanation |
+| CLI portfolio maintenance | Supported primary | Update cash, holdings, trades/orders, watchlist, goals, and risk profile |
+| Deterministic reports | Supported primary | Generate snapshot/risk/recommendation/report outputs |
+| Scheduled reports | Supported secondary | Run reports on a schedule with app-level guardrails |
+| Email notifications | Supported secondary | Receive scheduled-run success/failure summaries |
+| API/admin mode | Internal/admin | Update portfolio state through authenticated internal endpoints/forms |
+| Narrative provider | Experimental / optional explanation | Rewrite deterministic evidence into plain-language explanation |
 
 ## Primary workflow
 
@@ -86,6 +88,9 @@ See: [docs/local-setup.md](docs/local-setup.md), [docs/cli-workflows.md](docs/cl
 
 ### Deterministic analysis and reports
 
+> Status: **Supported primary** for snapshots/risk/recommendations/report structure. Technical/fundamental/news/market-condition outputs are **experimental/optional decision-support inputs** and may be incomplete or provider-limited.
+
+
 Use deterministic commands for snapshots and decision-support analysis, including:
 
 - snapshots and full reports
@@ -97,6 +102,9 @@ See: [docs/cli-workflows.md](docs/cli-workflows.md).
 
 ### Optional explanation
 
+> Status: **Experimental / optional explanation**. Narrative output is downstream from deterministic evidence and cannot override deterministic report fields.
+
+
 Narrative output is optional and downstream from deterministic evidence.
 
 - Deterministic report fields remain authoritative.
@@ -107,6 +115,9 @@ For configuration details, see [docs/configuration.md](docs/configuration.md).
 
 ## Optional automation and notifications
 
+> Status: **Supported secondary**. Implemented for self-managed automation, but not the primary local usage path.
+
+
 Automation is an optional layer, not the default usage path.
 
 - Scheduled reports: [docs/deployment/scheduled-reports.md](docs/deployment/scheduled-reports.md)
@@ -114,6 +125,9 @@ Automation is an optional layer, not the default usage path.
 - SMTP email notifications: [docs/email-notifications.md](docs/email-notifications.md)
 
 ## Optional API/admin maintenance surface
+
+> Status: **Internal/admin**. Self-managed maintenance tooling only; not a public SaaS dashboard.
+
 
 API/admin mode is a minimal, token-authenticated, internal/self-managed maintenance surface.
 

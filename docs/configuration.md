@@ -1,5 +1,7 @@
 # Configuration reference
 
+> Status: Configuration supports **supported primary** local SQLite workflows plus **supported secondary** automation surfaces. Some providers/backends remain optional or constrained.
+
 Finwall reads runtime settings from environment variables. `.env.example` provides safe placeholders.
 
 ## Secret handling basics
@@ -25,6 +27,9 @@ Finwall reads runtime settings from environment variables. `.env.example` provid
 > Current limitation: selecting `FINWALL_STORAGE_BACKEND=postgres` fails at runtime because Postgres storage is not implemented yet. Use SQLite for now in both local and scheduled environments.
 
 ## Market data
+
+Market/fundamentals/news inputs are decision-support enrichments. They can be stale, partial, or unavailable depending on provider behavior and runtime conditions.
+
 
 | Variable | Purpose | Default | Required (local-only) | Required (scheduled/email/API) | Example |
 |---|---|---|---|---|---|
@@ -58,8 +63,8 @@ Finwall reads runtime settings from environment variables. `.env.example` provid
 | `FINWALL_OLLAMA_MODEL` | Ollama model name (used when provider is `ollama`). | `gemma3:latest` | No | Optional | `gemma3:latest` |
 | `FINWALL_OLLAMA_TIMEOUT_SECONDS` | Ollama request timeout (seconds). | `30` | No | Optional | `30` |
 
-When `FINWALL_NARRATIVE_PROVIDER=ollama`, narratives are explainers only. They cannot
-override deterministic recommendation, risk, or report outputs.
+When `FINWALL_NARRATIVE_PROVIDER=ollama`, narratives are optional explainers only. They cannot
+override deterministic recommendation, risk, or report outputs. Invalid/unsafe narrative output should safely fall back to deterministic messaging.
 
 ## Email / SMTP
 

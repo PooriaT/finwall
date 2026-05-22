@@ -1,5 +1,7 @@
 # Finwall architecture overview
 
+> Status: Architecture currently centers on deterministic decision-support flows (**supported primary**), with API/admin as **internal/admin** and narrative/provider enrichments as **experimental/optional**.
+
 This document describes the **current** Finwall architecture boundaries and request/data flows so contributors can add changes without moving decision logic into the wrong layer.
 
 Finwall is a **decision-support tool**, not a broker integration and not an execution engine.

@@ -1,5 +1,7 @@
 # Safety limits and known limitations
 
+> Status: Safety boundaries are **supported primary** product constraints and apply across CLI, scheduled runs, API/admin, and optional narrative features.
+
 Finwall is a decision-support tool, not an execution platform.
 
 ## Plain-language boundaries
@@ -25,3 +27,13 @@ Finwall is a decision-support tool, not an execution platform.
 - API/admin mode is minimal internal tooling and should not be exposed as a public service without additional controls.
 
 For security and secret-handling practices, see [docs/security.md](security.md).
+
+
+## Explicitly out of scope
+
+- Broker integration.
+- Automatic trading.
+- Order execution.
+- Public SaaS multi-tenant authentication/authorization.
+- Enterprise compliance/security certification guarantees.
+- Guaranteed predictions or returns.
