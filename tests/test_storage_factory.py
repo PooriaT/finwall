@@ -55,3 +55,19 @@ def test_postgres_backend_not_implemented_yet() -> None:
             database_path="finwall.db",
             database_url="postgresql://USER:PASSWORD@HOST:5432/DBNAME",
         )
+
+
+def test_sqlite3_alias_selects_sqlite_store() -> None:
+    store = build_portfolio_store(
+        backend="sqlite3", database_path="finwall.db", database_url=None
+    )
+    assert isinstance(store, SQLitePortfolioStore)
+
+
+def test_postgresql_alias_not_implemented_yet() -> None:
+    with pytest.raises(ValueError, match="not implemented yet"):
+        build_portfolio_store(
+            backend="postgresql",
+            database_path="finwall.db",
+            database_url="postgresql://USER:PASSWORD@HOST:5432/DBNAME",
+        )
