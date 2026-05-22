@@ -1,5 +1,7 @@
 # Minimal Admin Interface
 
+> Status: **Internal/admin**. Minimal self-managed interface for maintenance tasks, not a public SaaS dashboard.
+
 Finwall includes a minimal internal admin UI at `/admin` in the API app.
 
 ## Setup

@@ -1,5 +1,7 @@
 # Scheduled reports
 
+> Status: **Supported secondary**. Scheduled reports are implemented for self-managed automation, but they are not the primary local workflow.
+
 This guide explains Finwall's app-level scheduled command and deployment-oriented usage.
 
 ## App-level command
