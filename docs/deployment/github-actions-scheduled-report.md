@@ -1,5 +1,7 @@
 # GitHub Actions scheduled report automation
 
+> Status: **Supported secondary** self-managed automation. This workflow is not a managed SaaS scheduler and still depends on your storage/security/deployment posture.
+
 This repository provides a GitHub Actions workflow at `.github/workflows/scheduled-report.yml` that runs Finwall's existing `run-scheduled-report` CLI command twice on weekdays and also supports manual triggering for deterministic testing/backfill.
 
 ## What this workflow does

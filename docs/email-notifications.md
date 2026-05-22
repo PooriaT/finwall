@@ -1,5 +1,7 @@
 # Email notifications
 
+> Status: **Supported secondary** notification layer for scheduled workflows, not a primary product workflow.
+
 Finwall supports scheduled report notifications through a provider switch.
 
 ## Provider modes
