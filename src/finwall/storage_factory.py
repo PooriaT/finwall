@@ -22,15 +22,15 @@ def build_portfolio_store(
     cli_database_override: bool = False,
 ) -> PortfolioStore:
     normalized = backend.strip().lower()
-    if normalized == "sqlite":
+    if normalized in {"sqlite", "sqlite3"}:
         resolved_path = resolve_sqlite_database_path(
             database_path, database_url, cli_database_override
         )
         return SQLitePortfolioStore(Path(resolved_path))
-    if normalized == "postgres":
+    if normalized in {"postgres", "postgresql"}:
         raise ValueError(
             "Postgres storage backend is not implemented yet. Use sqlite for now."
         )
     raise ValueError(
-        "Unsupported storage backend. Allowed values are 'sqlite' and 'postgres'."
+        "Unsupported storage backend. Allowed values are 'sqlite'/'sqlite3' and 'postgres'/'postgresql'."
     )
