@@ -376,12 +376,6 @@ def build_parser() -> argparse.ArgumentParser:
     scheduled_runs.add_argument("--json", action="store_true")
     scheduled_runs.add_argument("--limit", type=int, default=10)
 
-    market_data_diag = subparsers.add_parser("market-data-diagnostics")
-    market_data_diag.add_argument("--ticker", action="append", default=[])
-    market_data_diag.add_argument("--index", action="append", default=[])
-    market_data_diag.add_argument("--historical-days", type=int, default=30)
-    market_data_diag.add_argument("--json", action="store_true")
-
     market_condition = subparsers.add_parser("market-condition")
     market_condition.add_argument(
         "--primary-index", choices=sorted(INDEX_SYMBOL_MAP.keys()), default="SP500"
@@ -1477,78 +1471,6 @@ def run(argv: list[str] | None = None) -> int:
 
         print(f"{args.symbol}: unavailable ({quote.error or 'unknown error'})")
         return 1
-
-    if args.command == "market-data-diagnostics":
-        provider = build_market_data_provider(
-            settings.market_data_provider,
-            settings.market_data_timeout_seconds,
-        )
-        tickers = sorted({item.upper() for item in args.ticker})
-        indexes = sorted({item.upper() for item in args.index})
-        latest = provider.get_latest_prices(tickers) if tickers else {}
-        historical = (
-            {
-                ticker: provider.get_historical_price_result(
-                    ticker, args.historical_days
-                )
-                for ticker in tickers
-            }
-            if tickers
-            else {}
-        )
-        index_quotes = {symbol: provider.get_index_quote(symbol) for symbol in indexes}
-        if args.json:
-            payload = {
-                "tickers": {
-                    ticker: {
-                        "latest": {
-                            "available": latest[ticker].available,
-                            "price": str(latest[ticker].price)
-                            if latest[ticker].price is not None
-                            else None,
-                            "error": latest[ticker].error,
-                            "error_code": latest[ticker].error_code,
-                            "diagnostic": latest[ticker].diagnostic.as_dict()
-                            if latest[ticker].diagnostic
-                            else None,
-                        },
-                        "historical": historical[ticker].as_dict(),
-                    }
-                    for ticker in tickers
-                },
-                "indexes": {
-                    symbol: {
-                        "available": index_quotes[symbol].available,
-                        "price": str(index_quotes[symbol].price)
-                        if index_quotes[symbol].price is not None
-                        else None,
-                        "error": index_quotes[symbol].error,
-                        "error_code": index_quotes[symbol].error_code,
-                        "diagnostic": index_quotes[symbol].diagnostic.as_dict()
-                        if index_quotes[symbol].diagnostic
-                        else None,
-                    }
-                    for symbol in indexes
-                },
-            }
-            print(json.dumps(payload, indent=2))
-            return 0
-        for ticker in tickers:
-            item = latest[ticker]
-            print(f"{ticker} latest: {'ok' if item.available else 'unavailable'}")
-            if item.error:
-                print(f"  reason: {item.error}")
-            status = "ok" if historical[ticker].available else "unavailable"
-            bar_count = len(historical[ticker].bars)
-            print(f"{ticker} historical: {status} bars={bar_count}")
-            if historical[ticker].error:
-                print(f"  reason: {historical[ticker].error}")
-        for symbol in indexes:
-            quote = index_quotes[symbol]
-            print(f"{symbol} index: {'ok' if quote.available else 'unavailable'}")
-            if quote.error:
-                print(f"  reason: {quote.error}")
-        return 0
 
     if args.command == "add-cash":
         portfolio = upsert_cash(portfolio, args.currency, args.amount)
