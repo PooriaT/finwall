@@ -217,6 +217,10 @@ def test_trade_buy_invalid_payload_returns_400(tmp_path):
 
 def test_admin_login_logout_and_cookie_auth(tmp_path):
     client = build_client(tmp_path)
+    login = client.get("/admin/login")
+    assert login.status_code == 200
+    assert "Finwall Admin Login" in login.text
+    assert "/admin/static/admin.css" in login.text
     assert client.get("/admin", follow_redirects=False).status_code == 401
     bad = client.post("/admin/login", data={"token": "bad"})
     assert bad.status_code == 401
@@ -225,8 +229,20 @@ def test_admin_login_logout_and_cookie_auth(tmp_path):
     assert "finwall_admin_token" in ok.headers.get("set-cookie", "")
     home = client.get("/admin")
     assert home.status_code == 200
+    assert "Admin Home" in home.text
+    assert "Portfolio" in home.text
+    assert "Logout" in home.text
+    assert "secret" not in home.text
     out = client.post("/admin/logout", follow_redirects=False)
     assert out.status_code == 303
+
+
+def test_admin_css_static_asset_served(tmp_path):
+    client = build_client(tmp_path)
+    response = client.get("/admin/static/admin.css")
+    assert response.status_code == 200
+    assert "text/css" in response.headers["content-type"]
+    assert ".nav" in response.text
 
 
 def test_admin_forms_update_portfolio(tmp_path):
@@ -234,13 +250,17 @@ def test_admin_forms_update_portfolio(tmp_path):
     client.post("/admin/login", data={"token": "secret"})
     assert (
         client.post(
-            "/admin/cash/add", data={"currency": "USD", "amount": "100"}
+            "/admin/cash/add",
+            data={"currency": "USD", "amount": "100"},
+            follow_redirects=False,
         ).status_code
         == 303
     )
     assert (
         client.post(
-            "/admin/cash/withdraw", data={"currency": "USD", "amount": "25"}
+            "/admin/cash/withdraw",
+            data={"currency": "USD", "amount": "25"},
+            follow_redirects=False,
         ).status_code
         == 303
     )
@@ -253,11 +273,14 @@ def test_admin_forms_update_portfolio(tmp_path):
                 "average_price": "100",
                 "sector": "Tech",
             },
+            follow_redirects=False,
         ).status_code
         == 303
     )
     assert (
-        client.post("/admin/holdings/delete", data={"ticker": "NVDA"}).status_code
+        client.post(
+            "/admin/holdings/delete", data={"ticker": "NVDA"}, follow_redirects=False
+        ).status_code
         == 303
     )
     assert (
@@ -275,13 +298,17 @@ def test_admin_forms_update_portfolio(tmp_path):
     )
     assert (
         client.post(
-            "/admin/watchlist", data={"ticker": "AAPL", "note": "watch"}
+            "/admin/watchlist",
+            data={"ticker": "AAPL", "note": "watch"},
+            follow_redirects=False,
         ).status_code
         == 303
     )
     assert (
         client.post(
-            "/admin/goal", data={"name": "Grow", "target_amount": "5000"}
+            "/admin/goal",
+            data={"name": "Grow", "target_amount": "5000"},
+            follow_redirects=False,
         ).status_code
         == 303
     )
@@ -289,12 +316,15 @@ def test_admin_forms_update_portfolio(tmp_path):
         client.post(
             "/admin/timeline",
             data={"start_date": "2026-01-01", "target_date": "2027-01-01"},
+            follow_redirects=False,
         ).status_code
         == 303
     )
     assert (
         client.post(
-            "/admin/risk-profile", data={"level": "moderate", "notes": "balanced"}
+            "/admin/risk-profile",
+            data={"level": "moderate", "notes": "balanced"},
+            follow_redirects=False,
         ).status_code
         == 303
     )
@@ -342,7 +372,49 @@ def test_admin_form_error_sanitized(tmp_path):
     client = build_client(tmp_path)
     client.post("/admin/login", data={"token": "secret"})
     response = client.post(
-        "/admin/cash", data={"currency": "USD", "amount": "bad\nTraceback"}
+        "/admin/cash/add", data={"currency": "USD", "amount": "bad\nTraceback"}
     )
     assert response.status_code == 422
     assert "Traceback" not in response.text
+    assert "invalid decimal" in response.text
+
+
+def test_admin_flash_renders_after_redirect(tmp_path):
+    client = build_client(tmp_path)
+    client.post("/admin/login", data={"token": "secret"})
+    response = client.post("/admin/cash/add", data={"currency": "USD", "amount": "100"})
+    assert response.status_code == 200
+    assert "Cash updated" in response.text
+
+
+def test_admin_pages_use_shared_layout_and_do_not_render_token(tmp_path):
+    client = build_client(tmp_path)
+    client.post("/admin/login", data={"token": "secret"})
+    for path in (
+        "/admin",
+        "/admin/portfolio",
+        "/admin/audit",
+        "/admin/cash",
+        "/admin/holdings",
+        "/admin/trades",
+        "/admin/orders",
+        "/admin/watchlist",
+        "/admin/settings",
+    ):
+        response = client.get(path)
+        assert response.status_code == 200
+        assert "Finwall Admin" in response.text
+        assert "/admin/static/admin.css" in response.text
+        assert "Admin Home" in response.text
+        assert "secret" not in response.text
+
+
+def test_admin_orders_form_lists_supported_order_types(tmp_path):
+    client = build_client(tmp_path)
+    client.post("/admin/login", data={"token": "secret"})
+
+    response = client.get("/admin/orders")
+
+    assert response.status_code == 200
+    assert "limit, stop_loss, stop_limit" in response.text
+    assert "market, limit, stop" not in response.text
