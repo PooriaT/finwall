@@ -689,6 +689,16 @@ def _install_fake_yfinance(monkeypatch, ticker_class) -> None:
     )
 
 
+class _FakeHistory:
+    def __init__(self, rows, *, empty: bool = False, attrs=None) -> None:
+        self._rows = rows
+        self.empty = empty
+        self.attrs = attrs or {}
+
+    def iterrows(self):
+        return iter(self._rows)
+
+
 def test_yfinance_missing_dependency_returns_safe_unavailable_prices(
     monkeypatch,
 ) -> None:
@@ -716,10 +726,21 @@ def test_yfinance_latest_prices_success_with_fake_module(monkeypatch) -> None:
     class FakeTicker:
         def __init__(self, symbol: str) -> None:
             self.symbol = symbol
-            self.fast_info = {
-                "last_price": 190.25,
-                "currency": "USD",
+
+        def history(self, **kwargs):
+            assert kwargs == {
+                "period": "5d",
+                "interval": "1d",
+                "auto_adjust": False,
+                "timeout": 1.0,
             }
+            return _FakeHistory(
+                [
+                    ("2026-01-01", {"Close": 188.5, "Volume": 1000}),
+                    ("2026-01-02", {"Close": 190.25, "Volume": 2000}),
+                ],
+                attrs={"currency": "USD"},
+            )
 
     _install_fake_yfinance(monkeypatch, FakeTicker)
     provider = YFinanceMarketDataProvider(timeout_seconds=1.0)
@@ -736,8 +757,11 @@ def test_yfinance_latest_prices_success_with_fake_module(monkeypatch) -> None:
 def test_yfinance_latest_prices_missing_price_is_unavailable(monkeypatch) -> None:
     class FakeTicker:
         def __init__(self, _symbol: str) -> None:
-            self.fast_info = {"currency": "USD"}
-            self.info = {}
+            pass
+
+        def history(self, **kwargs):
+            assert kwargs["timeout"] == 1.0
+            return _FakeHistory([], empty=True)
 
     _install_fake_yfinance(monkeypatch, FakeTicker)
     provider = YFinanceMarketDataProvider(timeout_seconds=1.0)
@@ -761,15 +785,6 @@ def test_yfinance_latest_prices_provider_exception_is_safe(monkeypatch) -> None:
 
     assert prices["AAPL"].available is False
     assert prices["AAPL"].error == "yfinance latest quote request failed"
-
-
-class _FakeHistory:
-    def __init__(self, rows, *, empty: bool = False) -> None:
-        self._rows = rows
-        self.empty = empty
-
-    def iterrows(self):
-        return iter(self._rows)
 
 
 def test_yfinance_historical_prices_success_with_fake_data(monkeypatch) -> None:
@@ -832,7 +847,13 @@ def test_yfinance_index_quote_uses_existing_index_symbol_mapping(
     class FakeTicker:
         def __init__(self, symbol: str) -> None:
             requested_symbols.append(symbol)
-            self.fast_info = {"last_price": 5100.5, "currency": "USD"}
+
+        def history(self, **kwargs):
+            assert kwargs["timeout"] == 1.0
+            return _FakeHistory(
+                [("2026-01-02", {"Close": 5100.5, "Volume": 1000})],
+                attrs={"currency": "USD"},
+            )
 
     _install_fake_yfinance(monkeypatch, FakeTicker)
     provider = YFinanceMarketDataProvider(timeout_seconds=1.0)

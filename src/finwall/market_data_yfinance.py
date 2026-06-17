@@ -37,7 +37,7 @@ class YFinanceMarketDataProvider:
         for ticker in normalized:
             try:
                 ticker_data = yfinance.Ticker(ticker)
-                quote = _extract_latest_quote(ticker_data)
+                quote = _extract_latest_quote(ticker_data, self.timeout_seconds)
             except Exception:
                 results[ticker] = _unavailable_price(
                     ticker, self.source, "yfinance latest quote request failed"
@@ -101,15 +101,6 @@ class YFinanceMarketDataProvider:
                 auto_adjust=False,
                 timeout=self.timeout_seconds,
             )
-        except TypeError:
-            try:
-                history = ticker_data.history(
-                    period=f"{days}d",
-                    interval="1d",
-                    auto_adjust=False,
-                )
-            except Exception:
-                return ()
         except Exception:
             return ()
 
@@ -143,42 +134,19 @@ def _unavailable_price(ticker: str, source: str, error: str | None) -> MarketPri
     )
 
 
-def _extract_latest_quote(ticker_data: object) -> _LatestQuote:
-    fast_info = getattr(ticker_data, "fast_info", None)
-    price = _first_decimal(
-        fast_info,
-        (
-            "last_price",
-            "lastPrice",
-            "regularMarketPrice",
-            "regular_market_price",
-        ),
+def _extract_latest_quote(
+    ticker_data: object, timeout_seconds: float
+) -> _LatestQuote:
+    history = ticker_data.history(
+        period="5d",
+        interval="1d",
+        auto_adjust=False,
+        timeout=timeout_seconds,
     )
-    currency = _first_string(fast_info, ("currency", "quoteCurrency"))
-    if price is not None:
-        return _LatestQuote(price, currency)
-
-    info = getattr(ticker_data, "info", None)
-    return _LatestQuote(
-        _first_decimal(
-            info,
-            (
-                "regularMarketPrice",
-                "currentPrice",
-                "previousClose",
-            ),
-        ),
-        currency or _first_string(info, ("currency", "financialCurrency")),
-    )
-
-
-def _first_decimal(container: object, keys: tuple[str, ...]) -> Decimal | None:
-    for key in keys:
-        value = _get_value(container, key)
-        parsed = _to_decimal(value)
-        if parsed is not None:
-            return parsed
-    return None
+    bars = _history_to_bars("", history, "")
+    if not bars:
+        return _LatestQuote(None, _history_currency(history))
+    return _LatestQuote(bars[-1].close, _history_currency(history))
 
 
 def _first_string(container: object, keys: tuple[str, ...]) -> str | None:
@@ -187,6 +155,15 @@ def _first_string(container: object, keys: tuple[str, ...]) -> str | None:
         if isinstance(value, str) and value.strip():
             return value.strip()
     return None
+
+
+def _history_currency(history: object) -> str | None:
+    attrs = getattr(history, "attrs", None)
+    currency = _first_string(attrs, ("currency", "Currency"))
+    if currency is not None:
+        return currency
+    metadata = getattr(history, "metadata", None)
+    return _first_string(metadata, ("currency", "Currency"))
 
 
 def _get_value(container: object, key: str) -> object:
