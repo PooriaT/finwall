@@ -3,12 +3,14 @@ import logging
 from dataclasses import asdict, replace
 from datetime import date
 from decimal import Decimal, InvalidOperation
-from html import escape
+from urllib.parse import parse_qs
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from finwall.admin_ui import ADMIN_STATIC_DIR, render_admin_template
 from finwall.config import Settings, settings
 from finwall.models import ActiveOrder, OrderSide, OrderType, Portfolio, RiskLevel
 from finwall.portfolio_audit import (
@@ -93,6 +95,12 @@ def _to_decimal(value: str, field_name: str) -> Decimal:
         raise HTTPException(422, detail=f"invalid decimal for {field_name}") from exc
 
 
+async def _read_form(request: Request) -> dict[str, str]:
+    body = (await request.body()).decode()
+    parsed = parse_qs(body, keep_blank_values=True)
+    return {key: values[-1] if values else "" for key, values in parsed.items()}
+
+
 def create_app(app_settings: Settings = settings) -> FastAPI:
     app = FastAPI(title="Finwall API")
     app.state.settings = app_settings
@@ -102,6 +110,11 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
         database_url=app_settings.database_url,
     )
     app.state.store.initialize()
+    app.mount(
+        "/admin/static",
+        StaticFiles(directory=str(ADMIN_STATIC_DIR)),
+        name="admin_static",
+    )
 
     def _token_is_valid(raw_token: str | None) -> bool:
         token = app.state.settings.api_token
@@ -124,22 +137,6 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
         if not _token_is_valid(request.cookies.get(ADMIN_COOKIE_NAME)):
             raise HTTPException(401, detail="invalid authentication credentials")
         return "web-admin"
-
-    def _layout(title: str, body: str, message: str | None = None) -> str:
-        flash = f"<p><strong>{escape(message)}</strong></p>" if message else ""
-        return (
-            "<!doctype html><html><head><meta charset='utf-8'><title>"
-            f"{escape(title)}</title></head><body>"
-            "<nav><a href='/admin'>Admin Home</a> | <a href='/admin/portfolio'>Portfolio</a> | "
-            "<a href='/admin/cash'>Cash</a> | <a href='/admin/holdings'>Holdings</a> | "
-            "<a href='/admin/trades'>Trades</a> | <a href='/admin/orders'>Orders</a> | "
-            "<a href='/admin/watchlist'>Watchlist</a> | "
-            "<a href='/admin/settings'>Settings</a> | "
-            "<a href='/admin/audit'>Audit</a> "
-            "<form style='display:inline' method='post' action='/admin/logout'>"
-            "<button type='submit'>Logout</button></form></nav><hr/>"
-            f"{flash}{body}</body></html>"
-        )
 
     def _redirect(path: str, message: str | None = None) -> RedirectResponse:
         target = path if not message else f"{path}?msg={message}"
@@ -204,24 +201,23 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
     def health() -> dict[str, str]:
         return {"status": "ok"}
 
-    @app.get("/admin/login", response_class=HTMLResponse)
+    @app.get("/admin/login")
     def admin_login_get(request: Request):
-        msg = request.query_params.get("msg")
-        html = (
-            "<h1>Finwall Admin Login</h1>"
-            "<form method='post' action='/admin/login'>"
-            "<label>API token <input type='password' name='token' required></label>"
-            "<button type='submit'>Login</button></form>"
+        return render_admin_template(
+            request, "login.html", title="Admin Login", active_nav="login"
         )
-        return HTMLResponse(_layout("Admin Login", html, msg))
 
     @app.post("/admin/login")
     async def admin_login_post(request: Request):
-        form = await request.form()
+        form = await _read_form(request)
         token = str(form.get("token", "")).strip()
         if not _token_is_valid(token):
-            return HTMLResponse(
-                _layout("Admin Login", "<h1>Finwall Admin Login</h1>", "Invalid token"),
+            return render_admin_template(
+                request,
+                "login.html",
+                title="Admin Login",
+                active_nav="login",
+                flash="Invalid token",
                 status_code=401,
             )
         response = _redirect("/admin", "Login successful")
@@ -245,16 +241,19 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
         portfolio = get_portfolio()
         goal = portfolio.goals[-1].name if portfolio.goals else "N/A"
         risk = portfolio.risk_profile.level if portfolio.risk_profile else "N/A"
-        summary = (
-            f"<h1>Admin Home</h1><p>Cash balances: {len(portfolio.cash_balances)}</p>"
-            f"<p>Holdings: {len(portfolio.holdings)}</p>"
-            f"<p>Active orders: {len(portfolio.active_orders)}</p>"
-            f"<p>Watchlist items: {len(portfolio.watchlist)}</p>"
-            f"<p>Current goal: {escape(str(goal))}</p>"
-            f"<p>Risk profile: {escape(str(risk))}</p>"
-        )
-        return HTMLResponse(
-            _layout("Admin Home", summary, request.query_params.get("msg"))
+        return render_admin_template(
+            request,
+            "home.html",
+            title="Admin Home",
+            active_nav="home",
+            counts={
+                "cash": len(portfolio.cash_balances),
+                "holdings": len(portfolio.holdings),
+                "orders": len(portfolio.active_orders),
+                "watchlist": len(portfolio.watchlist),
+            },
+            goal=goal,
+            risk=risk,
         )
 
     @app.get("/api/v1/portfolio")
@@ -450,51 +449,35 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
             set_risk_profile(portfolio, payload.level, payload.notes), portfolio
         )
 
-    @app.get("/admin/portfolio", response_class=HTMLResponse)
-    def admin_portfolio(_: str = Depends(admin_auth)):
-        return HTMLResponse(
-            _layout("Portfolio", f"<pre>{escape(str(asdict(get_portfolio())))}</pre>")
+    @app.get("/admin/portfolio")
+    def admin_portfolio(request: Request, _: str = Depends(admin_auth)):
+        return render_admin_template(
+            request,
+            "portfolio.html",
+            title="Portfolio",
+            active_nav="portfolio",
+            portfolio=asdict(get_portfolio()),
         )
 
-    @app.get("/admin/audit", response_class=HTMLResponse)
-    def admin_audit(_: str = Depends(admin_auth)):
+    @app.get("/admin/audit")
+    def admin_audit(request: Request, _: str = Depends(admin_auth)):
         try:
             events = app.state.store.list_portfolio_audit_events(DEFAULT_PORTFOLIO, 100)
         except ValueError:
             events = ()
-        rows = "".join(
-            "<tr>"
-            f"<td>{escape(event.changed_at)}</td><td>{escape(event.actor)}</td>"
-            f"<td>{escape(event.source)}</td><td>{escape(event.action)}</td>"
-            f"<td>{escape(event.entity_type)}</td><td>{escape(str(event.entity_id or ''))}</td>"
-            f"<td>{escape(event.status)}</td><td>{escape(event.summary)}</td>"
-            f"<td>{escape(str(event.safe_error_message or ''))}</td>"
-            "</tr>"
-            for event in events
+        return render_admin_template(
+            request, "audit.html", title="Audit", active_nav="audit", events=events
         )
-        body = (
-            "<h1>Audit events</h1><table border='1'><tr><th>changed_at</th><th>actor</th>"
-            "<th>source</th><th>action</th><th>entity</th><th>entity id</th><th>status</th>"
-            "<th>summary</th><th>error</th></tr>"
-            f"{rows}</table>"
-        )
-        return HTMLResponse(_layout("Audit", body))
 
-    @app.get("/admin/cash", response_class=HTMLResponse)
+    @app.get("/admin/cash")
     def admin_cash(request: Request, _: str = Depends(admin_auth)):
-        body = (
-            "<h1>Cash</h1><form method='post' action='/admin/cash/add'>"
-            "<input name='currency' placeholder='USD' required><input name='amount' required>"
-            "<button>Add cash</button></form>"
-            "<form method='post' action='/admin/cash/withdraw'>"
-            "<input name='currency' placeholder='USD' required><input name='amount' required>"
-            "<button>Withdraw cash</button></form>"
+        return render_admin_template(
+            request, "cash.html", title="Cash", active_nav="cash"
         )
-        return HTMLResponse(_layout("Cash", body, request.query_params.get("msg")))
 
     @app.post("/admin/cash/add")
     async def admin_cash_add(request: Request, _: str = Depends(admin_auth)):
-        form = await request.form()
+        form = await _read_form(request)
         try:
             portfolio = get_portfolio()
             updated = upsert_cash(
@@ -517,14 +500,18 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
             )
             return _redirect("/admin/cash", "Cash updated")
         except Exception as exc:
-            return HTMLResponse(
-                _layout("Cash", "<h1>Cash</h1>", safe_error_message(exc)),
+            return render_admin_template(
+                request,
+                "cash.html",
+                title="Cash",
+                active_nav="cash",
+                flash=safe_error_message(exc),
                 status_code=422,
             )
 
     @app.post("/admin/cash/withdraw")
     async def admin_cash_withdraw(request: Request, _: str = Depends(admin_auth)):
-        form = await request.form()
+        form = await _read_form(request)
         try:
             portfolio = get_portfolio()
             updated = upsert_cash(
@@ -535,27 +522,24 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
             persist(updated, portfolio)
             return _redirect("/admin/cash", "Cash withdrawn")
         except Exception as exc:
-            return HTMLResponse(
-                _layout("Cash", "<h1>Cash</h1>", safe_error_message(exc)),
+            return render_admin_template(
+                request,
+                "cash.html",
+                title="Cash",
+                active_nav="cash",
+                flash=safe_error_message(exc),
                 status_code=422,
             )
 
-    @app.get("/admin/holdings", response_class=HTMLResponse)
+    @app.get("/admin/holdings")
     def admin_holdings(request: Request, _: str = Depends(admin_auth)):
-        body = (
-            "<h1>Holdings</h1>"
-            "<form method='post' action='/admin/holdings'>"
-            "<input name='ticker' required><input name='shares' required>"
-            "<input name='average_price' required><input name='sector'>"
-            "<button>Save holding</button></form>"
-            "<form method='post' action='/admin/holdings/delete'>"
-            "<input name='ticker' required><button>Delete holding</button></form>"
+        return render_admin_template(
+            request, "holdings.html", title="Holdings", active_nav="holdings"
         )
-        return HTMLResponse(_layout("Holdings", body, request.query_params.get("msg")))
 
     @app.post("/admin/holdings")
     async def admin_holdings_upsert(request: Request, _: str = Depends(admin_auth)):
-        form = await request.form()
+        form = await _read_form(request)
         try:
             p = get_portfolio()
             updated = add_holding(
@@ -568,14 +552,18 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
             persist(updated, p)
             return _redirect("/admin/holdings", "Holding saved")
         except Exception as exc:
-            return HTMLResponse(
-                _layout("Holdings", "<h1>Holdings</h1>", safe_error_message(exc)),
+            return render_admin_template(
+                request,
+                "holdings.html",
+                title="Holdings",
+                active_nav="holdings",
+                flash=safe_error_message(exc),
                 status_code=422,
             )
 
     @app.post("/admin/holdings/delete")
     async def admin_holdings_delete(request: Request, _: str = Depends(admin_auth)):
-        form = await request.form()
+        form = await _read_form(request)
         p = get_portfolio()
         persist(
             replace(
@@ -588,23 +576,14 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
         )
         return _redirect("/admin/holdings", "Holding deleted")
 
-    @app.get("/admin/trades", response_class=HTMLResponse)
+    @app.get("/admin/trades")
     def admin_trades(request: Request, _: str = Depends(admin_auth)):
-        body = (
-            "<h1>Trades</h1>"
-            "<form method='post' action='/admin/trades/buy'>"
-            "<input name='ticker' required><input name='shares' required>"
-            "<input name='price' required><input name='currency' required>"
-            "<input name='trade_date'><button>Buy</button></form>"
-            "<form method='post' action='/admin/trades/sell'>"
-            "<input name='ticker' required><input name='shares' required>"
-            "<input name='price' required><input name='currency' required>"
-            "<input name='trade_date'><button>Sell</button></form>"
+        return render_admin_template(
+            request, "trades.html", title="Trades", active_nav="trades"
         )
-        return HTMLResponse(_layout("Trades", body, request.query_params.get("msg")))
 
     async def _trade(request: Request, side: str):
-        form = await request.form()
+        form = await _read_form(request)
         p = get_portfolio()
         trade_date = (
             date.fromisoformat(str(form["trade_date"]))
@@ -628,8 +607,12 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
         try:
             return await _trade(request, "buy")
         except Exception as exc:
-            return HTMLResponse(
-                _layout("Trades", "<h1>Trades</h1>", safe_error_message(exc)),
+            return render_admin_template(
+                request,
+                "trades.html",
+                title="Trades",
+                active_nav="trades",
+                flash=safe_error_message(exc),
                 status_code=422,
             )
 
@@ -638,27 +621,24 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
         try:
             return await _trade(request, "sell")
         except Exception as exc:
-            return HTMLResponse(
-                _layout("Trades", "<h1>Trades</h1>", safe_error_message(exc)),
+            return render_admin_template(
+                request,
+                "trades.html",
+                title="Trades",
+                active_nav="trades",
+                flash=safe_error_message(exc),
                 status_code=422,
             )
 
-    @app.get("/admin/orders", response_class=HTMLResponse)
+    @app.get("/admin/orders")
     def admin_orders(request: Request, _: str = Depends(admin_auth)):
-        body = (
-            "<h1>Orders</h1><form method='post' action='/admin/orders'>"
-            "<input name='ticker' required><input name='side' required>"
-            "<input name='order_type' required><input name='shares' required>"
-            "<input name='limit_price'><input name='stop_price'>"
-            "<button>Save order</button></form>"
-            "<form method='post' action='/admin/orders/delete'>"
-            "<input name='ticker' required><button>Delete order</button></form>"
+        return render_admin_template(
+            request, "orders.html", title="Orders", active_nav="orders"
         )
-        return HTMLResponse(_layout("Orders", body, request.query_params.get("msg")))
 
     @app.post("/admin/orders")
     async def admin_orders_upsert(request: Request, _: str = Depends(admin_auth)):
-        form = await request.form()
+        form = await _read_form(request)
         try:
             order = ActiveOrder(
                 str(form["ticker"]),
@@ -676,32 +656,31 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
             persist(add_or_update_order(p, order), p)
             return _redirect("/admin/orders", "Order saved")
         except Exception as exc:
-            return HTMLResponse(
-                _layout("Orders", "<h1>Orders</h1>", safe_error_message(exc)),
+            return render_admin_template(
+                request,
+                "orders.html",
+                title="Orders",
+                active_nav="orders",
+                flash=safe_error_message(exc),
                 status_code=422,
             )
 
     @app.post("/admin/orders/delete")
     async def admin_orders_delete(request: Request, _: str = Depends(admin_auth)):
-        form = await request.form()
+        form = await _read_form(request)
         p = get_portfolio()
         persist(remove_order(p, str(form["ticker"])), p)
         return _redirect("/admin/orders", "Order deleted")
 
-    @app.get("/admin/watchlist", response_class=HTMLResponse)
+    @app.get("/admin/watchlist")
     def admin_watchlist(request: Request, _: str = Depends(admin_auth)):
-        body = (
-            "<h1>Watchlist</h1><form method='post' action='/admin/watchlist'>"
-            "<input name='ticker' required><input name='note'>"
-            "<button>Save item</button></form>"
-            "<form method='post' action='/admin/watchlist/delete'>"
-            "<input name='ticker' required><button>Delete item</button></form>"
+        return render_admin_template(
+            request, "watchlist.html", title="Watchlist", active_nav="watchlist"
         )
-        return HTMLResponse(_layout("Watchlist", body, request.query_params.get("msg")))
 
     @app.post("/admin/watchlist")
     async def admin_watchlist_upsert(request: Request, _: str = Depends(admin_auth)):
-        form = await request.form()
+        form = await _read_form(request)
         p = get_portfolio()
         persist(
             add_watchlist_item(
@@ -713,29 +692,20 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
 
     @app.post("/admin/watchlist/delete")
     async def admin_watchlist_delete(request: Request, _: str = Depends(admin_auth)):
-        form = await request.form()
+        form = await _read_form(request)
         p = get_portfolio()
         persist(remove_watchlist_item(p, str(form["ticker"])), p)
         return _redirect("/admin/watchlist", "Watchlist item removed")
 
-    @app.get("/admin/settings", response_class=HTMLResponse)
+    @app.get("/admin/settings")
     def admin_settings(request: Request, _: str = Depends(admin_auth)):
-        body = (
-            "<h1>Settings</h1><form method='post' action='/admin/goal'>"
-            "<input name='name' required><input name='target_amount'>"
-            "<button>Set goal</button></form>"
-            "<form method='post' action='/admin/timeline'>"
-            "<input name='start_date' required><input name='target_date'>"
-            "<button>Set timeline</button></form>"
-            "<form method='post' action='/admin/risk-profile'>"
-            "<input name='level' required><input name='notes'>"
-            "<button>Set risk profile</button></form>"
+        return render_admin_template(
+            request, "settings.html", title="Settings", active_nav="settings"
         )
-        return HTMLResponse(_layout("Settings", body, request.query_params.get("msg")))
 
     @app.post("/admin/goal")
     async def admin_goal(request: Request, _: str = Depends(admin_auth)):
-        form = await request.form()
+        form = await _read_form(request)
         p = get_portfolio()
         persist(
             set_goal(
@@ -751,7 +721,7 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
 
     @app.post("/admin/timeline")
     async def admin_timeline(request: Request, _: str = Depends(admin_auth)):
-        form = await request.form()
+        form = await _read_form(request)
         try:
             p = get_portfolio()
             persist(
@@ -766,14 +736,18 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
             )
             return _redirect("/admin/settings", "Timeline set")
         except Exception as exc:
-            return HTMLResponse(
-                _layout("Settings", "<h1>Settings</h1>", safe_error_message(exc)),
+            return render_admin_template(
+                request,
+                "settings.html",
+                title="Settings",
+                active_nav="settings",
+                flash=safe_error_message(exc),
                 status_code=422,
             )
 
     @app.post("/admin/risk-profile")
     async def admin_risk(request: Request, _: str = Depends(admin_auth)):
-        form = await request.form()
+        form = await _read_form(request)
         p = get_portfolio()
         persist(
             set_risk_profile(

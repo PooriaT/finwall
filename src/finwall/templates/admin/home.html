@@ -1,0 +1,5 @@
+{% extends "admin/base.html" %}
+{% from "admin/_components.html" import summary_card %}
+{% block content %}<h1>Admin Home</h1><section class="summary-grid">
+{{ summary_card('Cash balances', counts.cash) }}{{ summary_card('Holdings', counts.holdings) }}{{ summary_card('Active orders', counts.orders) }}{{ summary_card('Watchlist items', counts.watchlist) }}{{ summary_card('Current goal', goal) }}{{ summary_card('Risk profile', risk) }}
+</section>{% endblock %}

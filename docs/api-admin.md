@@ -38,14 +38,15 @@ Implemented API update routes cover portfolio state operations such as:
 - watchlist
 - goal/timeline/risk updates
 
-The admin interface provides minimal forms/navigation for the same internal portfolio-management workflows, including audit views.
+The admin interface provides minimal Jinja2-rendered forms/navigation for the same internal portfolio-management workflows, including audit views. The FastAPI app serves its own lightweight CSS/static assets under `/admin/static`; there is no frontend build step.
 
 ## What it cannot do
 
 - No broker integration.
 - No automatic order execution.
 - No multi-user SaaS auth model.
-- No frontend framework-based dashboard.
+- No React, Next.js, Tailwind, npm, Vite, or frontend build system.
+- No charts, dashboard analytics, recommendations UI, broker integration, or automatic trading.
 
 ## Security guidance
 

@@ -1,0 +1,7 @@
+{% macro summary_card(label, value) -%}
+<div class="summary-card"><span>{{ label }}</span><strong>{{ value }}</strong></div>
+{%- endmacro %}
+
+{% macro empty_state(message) -%}
+<p class="empty-state">{{ message }}</p>
+{%- endmacro %}
