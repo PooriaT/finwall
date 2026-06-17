@@ -56,6 +56,7 @@ poetry run finwall --database finwall.db technicals --holdings-only
 poetry run finwall --database finwall.db market-condition --primary-index SP500 --include-nasdaq
 poetry run finwall --database finwall.db fundamentals-summary --json
 poetry run finwall --database finwall.db news-summary --include-market --include-sectors
+poetry run finwall market-data-check --ticker AAPL --historical-days 30
 poetry run finwall --database finwall.db security-check --json
 ```
 

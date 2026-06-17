@@ -100,7 +100,7 @@ Use deterministic commands for snapshots and decision-support analysis, includin
 
 See: [docs/cli-workflows.md](docs/cli-workflows.md).
 
-Live Yahoo public-endpoint market data is supported for local/self-managed use with `FINWALL_MARKET_DATA_PROVIDER=yahoo` and commands such as `snapshot --live-prices`, `report --live-prices`, `technicals`, and `market-index SP500`. Yahoo data may be unavailable, delayed, stale, partial, or rate-limited; it is not broker-grade market data and Finwall remains decision-support only. See [docs/configuration.md](docs/configuration.md#market-data).
+Live Yahoo public-endpoint market data is supported for local/self-managed use with `FINWALL_MARKET_DATA_PROVIDER=yahoo` and commands such as `snapshot --live-prices`, `report --live-prices`, `technicals`, and `market-index SP500`. Run `poetry run finwall market-data-check --json` to verify the configured provider before relying on live-price reports. Yahoo data may be unavailable, delayed, stale, partial, or rate-limited; it is not broker-grade market data and Finwall remains decision-support only. See [docs/configuration.md](docs/configuration.md#market-data).
 
 ### Optional explanation
 

@@ -5,7 +5,12 @@ from decimal import Decimal
 import pytest
 
 from finwall.cli import run
-from finwall.market_data import IndexQuote, MarketPrice, StaticMarketDataProvider
+from finwall.market_data import (
+    HistoricalPriceBar,
+    IndexQuote,
+    MarketPrice,
+    StaticMarketDataProvider,
+)
 from finwall.storage import SQLitePortfolioStore
 
 
@@ -1330,3 +1335,123 @@ def test_security_check_does_not_initialize_store(
     assert code == 1
     assert '"ok": false' in out.lower()
     assert "FINWALL_DATABASE_URL" in out
+
+
+def test_market_data_check_text_output_with_mock_provider(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    from finwall.config import Settings
+
+    provider = StaticMarketDataProvider(
+        prices={
+            "MSFT": MarketPrice("MSFT", Decimal("420.50"), "USD", "static", True),
+        },
+        historical_prices={
+            "MSFT": (
+                HistoricalPriceBar("MSFT", "2026-01-01", Decimal("410"), 100, "static"),
+            ),
+        },
+    )
+    monkeypatch.setattr(
+        "finwall.market_data_diagnostics.build_market_data_provider",
+        lambda *_: provider,
+    )
+    monkeypatch.setattr(
+        "finwall.cli.settings",
+        Settings(market_data_provider="yahoo", market_data_timeout_seconds=1.5),
+    )
+
+    code = run(
+        [
+            "--database",
+            str(tmp_path / "unused.db"),
+            "market-data-check",
+            "--ticker",
+            "msft",
+            "--historical-days",
+            "1",
+        ]
+    )
+    out = capsys.readouterr().out
+
+    assert code == 0
+    assert "Market data diagnostics" in out
+    assert "Provider: yahoo" in out
+    assert "Timeout: 1.5s" in out
+    assert "[ok] Latest quote: MSFT price available from static" in out
+    assert "[ok] Historical prices: 1 bars returned" in out
+
+
+def test_market_data_check_json_output_reports_failures(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    from finwall.config import Settings
+
+    monkeypatch.setattr(
+        "finwall.market_data_diagnostics.build_market_data_provider",
+        lambda *_: StaticMarketDataProvider(),
+    )
+    monkeypatch.setattr(
+        "finwall.cli.settings",
+        Settings(market_data_provider="static", market_data_timeout_seconds=5.0),
+    )
+
+    code = run(
+        [
+            "--database",
+            str(tmp_path / "unused.db"),
+            "market-data-check",
+            "--json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert code == 1
+    assert payload["ok"] is False
+    assert payload["provider"] == "static"
+    assert payload["sample_ticker"] == "AAPL"
+    assert payload["checks"][1]["name"] == "latest_quote"
+    assert payload["checks"][1]["details"]["safe_error"] == "price not configured"
+    assert payload["checks"][2]["details"]["safe_message"] == "no historical bars returned"
+
+
+def test_market_data_check_does_not_initialize_store(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    from finwall.config import Settings
+
+    provider = StaticMarketDataProvider(
+        prices={
+            "AAPL": MarketPrice("AAPL", Decimal("190.10"), "USD", "static", True),
+        },
+        historical_prices={
+            "AAPL": (
+                HistoricalPriceBar("AAPL", "2026-01-01", Decimal("188"), 100, "static"),
+            ),
+        },
+    )
+    monkeypatch.setattr(
+        "finwall.market_data_diagnostics.build_market_data_provider",
+        lambda *_: provider,
+    )
+    monkeypatch.setattr(
+        "finwall.cli.settings",
+        Settings(
+            market_data_provider="static",
+            storage_backend="postgres",
+            database_url="",
+        ),
+    )
+
+    code = run(
+        [
+            "--database",
+            str(tmp_path / "unused.db"),
+            "market-data-check",
+            "--json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert code == 0
+    assert payload["ok"] is True
