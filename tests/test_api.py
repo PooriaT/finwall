@@ -229,7 +229,7 @@ def test_admin_login_logout_and_cookie_auth(tmp_path):
     assert "finwall_admin_token" in ok.headers.get("set-cookie", "")
     home = client.get("/admin")
     assert home.status_code == 200
-    assert "Admin Home" in home.text
+    assert "Dashboard" in home.text
     assert "Portfolio" in home.text
     assert "Logout" in home.text
     assert "secret" not in home.text
@@ -405,7 +405,7 @@ def test_admin_pages_use_shared_layout_and_do_not_render_token(tmp_path):
         assert response.status_code == 200
         assert "Finwall Admin" in response.text
         assert "/admin/static/admin.css" in response.text
-        assert "Admin Home" in response.text
+        assert "Dashboard" in response.text
         assert "secret" not in response.text
 
 
@@ -418,3 +418,139 @@ def test_admin_orders_form_lists_supported_order_types(tmp_path):
     assert response.status_code == 200
     assert "limit, stop_loss, stop_limit" in response.text
     assert "market, limit, stop" not in response.text
+
+
+def test_admin_dashboard_renders_read_only_overview(tmp_path):
+    client = build_client(tmp_path)
+    h = auth_headers()
+    client.post(
+        "/api/v1/portfolio/cash/add",
+        headers=h,
+        json={"currency": "USD", "amount": "1000"},
+    )
+    client.post(
+        "/api/v1/portfolio/holdings",
+        headers=h,
+        json={"ticker": "NVDA", "shares": "2", "average_price": "100"},
+    )
+    client.post(
+        "/api/v1/portfolio/orders",
+        headers=h,
+        json={
+            "ticker": "NVDA",
+            "side": "sell",
+            "order_type": "stop_loss",
+            "shares": "1",
+            "stop_price": "90",
+        },
+    )
+    client.post(
+        "/api/v1/portfolio/watchlist",
+        headers=h,
+        json={"ticker": "AAPL", "note": "watch"},
+    )
+    client.put(
+        "/api/v1/portfolio/goal",
+        headers=h,
+        json={"name": "Grow", "target_amount": "25000"},
+    )
+    client.put(
+        "/api/v1/portfolio/timeline",
+        headers=h,
+        json={"start_date": "2026-01-01", "target_date": "2027-01-01"},
+    )
+    client.put(
+        "/api/v1/portfolio/risk-profile",
+        headers=h,
+        json={"level": "moderate", "notes": "balanced"},
+    )
+    client.post("/admin/login", data={"token": "secret"})
+
+    response = client.get("/admin")
+
+    assert response.status_code == 200
+    for text in (
+        "Dashboard",
+        "Portfolio Summary",
+        "Cash",
+        "Holdings",
+        "Active Orders",
+        "Watchlist",
+        "Goal And Risk Profile",
+        "Risk Status",
+        "Live Data Status",
+        "Latest Report",
+        "Latest Audit",
+        "NVDA",
+        "AAPL",
+        "Grow",
+        "moderate",
+        "Valuation status",
+        "missing",
+        "Configured market data provider",
+        "static",
+        "/admin/audit",
+    ):
+        assert text in response.text
+    assert "No report has been saved yet." in response.text
+    assert 'form method="post" action="/admin/cash' not in response.text
+    assert 'form method="post" action="/admin/holdings' not in response.text
+    assert 'form method="post" action="/admin/orders' not in response.text
+    assert "secret" not in response.text
+
+
+def test_admin_dashboard_handles_empty_portfolio(tmp_path):
+    client = build_client(tmp_path)
+    client.post("/admin/login", data={"token": "secret"})
+
+    response = client.get("/admin")
+
+    assert response.status_code == 200
+    assert "No cash balances have been recorded." in response.text
+    assert "No holdings have been recorded." in response.text
+    assert "No active orders." in response.text
+    assert "No watchlist items." in response.text
+    assert "Current goal has not been configured." in response.text
+    assert "Risk profile has not been configured." in response.text
+    assert "complete" in response.text
+
+
+def test_admin_dashboard_shows_latest_report_metadata(tmp_path):
+    client = build_client(tmp_path)
+    h = auth_headers()
+    client.post(
+        "/api/v1/portfolio/cash/add",
+        headers=h,
+        json={"currency": "USD", "amount": "1000"},
+    )
+    with client.app.state.store._connect() as connection:
+        portfolio_id = client.app.state.store._require_portfolio_id(
+            connection, "Primary"
+        )
+        connection.execute(
+            """
+            INSERT INTO report_runs (
+                portfolio_id, created_at, command_context, report_summary, report_json,
+                price_completeness_status, valuation_status, recommendation_summary
+            ) VALUES (?, '2026-06-17T00:00:00', 'admin-test', 'summary', '{}',
+                      'complete', 'complete', 'Hold positions')
+            """,
+            (portfolio_id,),
+        )
+    client.post("/admin/login", data={"token": "secret"})
+
+    response = client.get("/admin")
+
+    assert response.status_code == 200
+    assert "Report id" in response.text
+    assert "admin-test" in response.text
+    assert "Hold positions" in response.text
+
+
+def test_admin_dashboard_keeps_api_bearer_auth_working(tmp_path):
+    client = build_client(tmp_path)
+
+    response = client.get("/api/v1/portfolio", headers=auth_headers())
+
+    assert response.status_code == 200
+    assert response.json()["name"] == "Primary"
