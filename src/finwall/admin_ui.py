@@ -12,7 +12,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.responses import Response
 
 ADMIN_NAV = (
-    ("home", "Admin Home", "/admin"),
+    ("home", "Dashboard", "/admin"),
     ("portfolio", "Portfolio", "/admin/portfolio"),
     ("cash", "Cash", "/admin/cash"),
     ("holdings", "Holdings", "/admin/holdings"),
@@ -75,21 +75,102 @@ def _fallback_body(template_name: str, context: Mapping[str, Any]) -> str:
     if template_name == "login.html":
         return '<section class="panel narrow"><h1>Finwall Admin Login</h1><form method="post" action="/admin/login" class="stacked-form"><label>API token <input type="password" name="token" autocomplete="current-password" required></label><button class="button" type="submit">Login</button></form></section>'
     if template_name == "home.html":
-        counts = context["counts"]
-        return (
-            '<h1>Admin Home</h1><section class="summary-grid">'
-            + "".join(
-                [
-                    _summary_card("Cash balances", counts["cash"]),
-                    _summary_card("Holdings", counts["holdings"]),
-                    _summary_card("Active orders", counts["orders"]),
-                    _summary_card("Watchlist items", counts["watchlist"]),
-                    _summary_card("Current goal", context["goal"]),
-                    _summary_card("Risk profile", context["risk"]),
-                ]
+        dashboard = context["dashboard"]
+        valuation = dashboard.valuation
+        body = [
+            "<h1>Dashboard</h1>",
+            '<section class="panel"><h2>Portfolio Summary</h2><section class="summary-grid">',
+            _summary_card("Portfolio name", dashboard.portfolio_name),
+            _summary_card(
+                "Total portfolio value",
+                valuation["total_portfolio_value"] or "Unavailable",
+            ),
+            _summary_card("Invested value", valuation["invested_value"]),
+            _summary_card("Cash balance", valuation["cash_balance"]),
+            _summary_card("Valuation status", valuation["valuation_status"]),
+            _summary_card(
+                "Price completeness status", valuation["price_completeness_status"]
+            ),
+            "</section></section>",
+            '<section class="panel"><h2>Cash</h2>',
+        ]
+        if dashboard.cash_balances:
+            body.extend(
+                f"<p>{escape(str(cash['currency']))} {escape(str(cash['amount']))}</p>"
+                for cash in dashboard.cash_balances
             )
-            + "</section>"
+        else:
+            body.append(
+                '<p class="empty-state">No cash balances have been recorded.</p>'
+            )
+        body.append('</section><section class="panel"><h2>Holdings</h2>')
+        if dashboard.holdings:
+            body.extend(
+                f"<p>{escape(str(holding['ticker']))} {escape(str(holding.get('missing_price_message') or holding.get('price_status')))}</p>"
+                for holding in dashboard.holdings
+            )
+        else:
+            body.append('<p class="empty-state">No holdings have been recorded.</p>')
+        body.append('</section><section class="panel"><h2>Active Orders</h2>')
+        if dashboard.active_orders:
+            body.extend(
+                f"<p>{escape(str(order['ticker']))} {escape(str(order['description']))}</p>"
+                for order in dashboard.active_orders
+            )
+        else:
+            body.append('<p class="empty-state">No active orders.</p>')
+        body.append('</section><section class="panel"><h2>Watchlist</h2>')
+        if dashboard.watchlist:
+            body.extend(
+                f"<p>{escape(str(item['ticker']))} {escape(str(item.get('note') or ''))}</p>"
+                for item in dashboard.watchlist
+            )
+        else:
+            body.append('<p class="empty-state">No watchlist items.</p>')
+        body.append('</section><section class="panel"><h2>Goal And Risk Profile</h2>')
+        if dashboard.goal:
+            body.append(f"<p>{escape(str(dashboard.goal['name']))}</p>")
+        else:
+            body.append(
+                '<p class="empty-state">Current goal has not been configured.</p>'
+            )
+        if dashboard.risk_profile:
+            body.append(f"<p>{escape(str(dashboard.risk_profile['level']))}</p>")
+        else:
+            body.append(
+                '<p class="empty-state">Risk profile has not been configured.</p>'
+            )
+        body.extend(
+            [
+                '</section><section class="panel"><h2>Risk Status</h2>',
+                f"<p>{escape(str(valuation['risk']['summary']))}</p>",
+                '</section><section class="panel"><h2>Live Data Status</h2>',
+                f"<p>Configured market data provider {escape(str(dashboard.live_data['provider']))}</p>",
+                f"<p>{escape(str(dashboard.live_data['source']))}</p>",
+                '</section><section class="panel"><h2>Latest Report</h2>',
+            ]
         )
+        if dashboard.latest_report:
+            body.append(
+                f"<p>Report id {escape(str(dashboard.latest_report['id']))}</p>"
+                f"<p>{escape(str(dashboard.latest_report['command_context']))}</p>"
+                f"<p>{escape(str(dashboard.latest_report['recommendation_summary'] or ''))}</p>"
+            )
+        else:
+            body.append('<p class="empty-state">No report has been saved yet.</p>')
+        body.extend(
+            [
+                '</section><section class="panel"><h2>Latest Audit</h2><a href="/admin/audit">View all audit events</a>',
+            ]
+        )
+        for event in dashboard.latest_audit_events:
+            body.append(
+                f"<p>{escape(str(event['changed_at']))} {escape(str(event['action']))} {escape(str(event['entity_type']))} {escape(str(event.get('entity_id') or ''))} {escape(str(event['status']))} {escape(str(event['summary']))}</p>"
+            )
+        if not dashboard.latest_audit_events:
+            body.append('<p class="empty-state">No audit events yet.</p>')
+        body.append("</section>")
+        return "".join(body)
     if template_name == "portfolio.html":
         return f'<h1>Portfolio</h1><section class="panel"><h2>Portfolio state</h2><pre class="state-dump">{escape(str(context["portfolio"]))}</pre></section>'
     if template_name == "audit.html":

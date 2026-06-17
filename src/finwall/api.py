@@ -10,6 +10,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from finwall.admin_dashboard import build_dashboard_view
 from finwall.admin_ui import ADMIN_STATIC_DIR, render_admin_template
 from finwall.config import Settings, settings
 from finwall.models import ActiveOrder, OrderSide, OrderType, Portfolio, RiskLevel
@@ -239,21 +240,13 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
     @app.get("/admin")
     def admin_home(request: Request, _: str = Depends(admin_auth)):
         portfolio = get_portfolio()
-        goal = portfolio.goals[-1].name if portfolio.goals else "N/A"
-        risk = portfolio.risk_profile.level if portfolio.risk_profile else "N/A"
+        dashboard = build_dashboard_view(portfolio, app.state.store, app.state.settings)
         return render_admin_template(
             request,
             "home.html",
-            title="Admin Home",
+            title="Dashboard",
             active_nav="home",
-            counts={
-                "cash": len(portfolio.cash_balances),
-                "holdings": len(portfolio.holdings),
-                "orders": len(portfolio.active_orders),
-                "watchlist": len(portfolio.watchlist),
-            },
-            goal=goal,
-            risk=risk,
+            dashboard=dashboard,
         )
 
     @app.get("/api/v1/portfolio")

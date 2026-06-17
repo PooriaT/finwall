@@ -1,7 +1,19 @@
-{% macro summary_card(label, value) -%}
-<div class="summary-card"><span>{{ label }}</span><strong>{{ value }}</strong></div>
+{% macro summary_card(label, value, note='') -%}
+<div class="summary-card"><span>{{ label }}</span><strong>{{ value if value is not none else 'Unavailable' }}</strong>{% if note %}<small>{{ note }}</small>{% endif %}</div>
+{%- endmacro %}
+
+{% macro metric_card(label, value, note='') -%}
+{{ summary_card(label, value, note) }}
 {%- endmacro %}
 
 {% macro empty_state(message) -%}
 <p class="empty-state">{{ message }}</p>
+{%- endmacro %}
+
+{% macro status_badge(value) -%}
+<span class="status-badge status-{{ (value|string)|replace('_', '-')|lower }}">{{ value }}</span>
+{%- endmacro %}
+
+{% macro section_header(title, href='', label='Manage') -%}
+<div class="section-header"><h2>{{ title }}</h2>{% if href %}<a href="{{ href }}">{{ label }}</a>{% endif %}</div>
 {%- endmacro %}
