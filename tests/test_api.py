@@ -407,3 +407,14 @@ def test_admin_pages_use_shared_layout_and_do_not_render_token(tmp_path):
         assert "/admin/static/admin.css" in response.text
         assert "Admin Home" in response.text
         assert "secret" not in response.text
+
+
+def test_admin_orders_form_lists_supported_order_types(tmp_path):
+    client = build_client(tmp_path)
+    client.post("/admin/login", data={"token": "secret"})
+
+    response = client.get("/admin/orders")
+
+    assert response.status_code == 200
+    assert "limit, stop_loss, stop_limit" in response.text
+    assert "market, limit, stop" not in response.text
