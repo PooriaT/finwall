@@ -1412,7 +1412,9 @@ def test_market_data_check_json_output_reports_failures(
     assert payload["sample_ticker"] == "AAPL"
     assert payload["checks"][1]["name"] == "latest_quote"
     assert payload["checks"][1]["details"]["safe_error"] == "price not configured"
-    assert payload["checks"][2]["details"]["safe_message"] == "no historical bars returned"
+    assert (
+        payload["checks"][2]["details"]["safe_message"] == "no historical bars returned"
+    )
 
 
 def test_market_data_check_does_not_initialize_store(
