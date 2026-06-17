@@ -189,28 +189,46 @@ def _allocation_by_sector(
     for holding in portfolio.holdings:
         sector = holding.sector or "Uncategorized"
         snapshot = by_ticker[holding.ticker.upper()]
-        entry = sectors.setdefault(sector, {"value": Decimal("0"), "tickers": []})
+        entry = sectors.setdefault(
+            sector,
+            {
+                "value": Decimal("0"),
+                "tickers": [],
+                "priced_tickers": [],
+                "missing_tickers": [],
+            },
+        )
         entry["tickers"].append(holding.ticker)
         if snapshot.estimated_value is None:
+            entry["missing_tickers"].append(holding.ticker)
             missing.append(holding.ticker)
             continue
+        entry["priced_tickers"].append(holding.ticker)
         entry["value"] = entry["value"] + Decimal(snapshot.estimated_value)
     invested = sum((entry["value"] for entry in sectors.values()), Decimal("0"))
     points = []
     for sector in sorted(sectors):
         value = sectors[sector]["value"]
+        priced_tickers = sectors[sector]["priced_tickers"]
+        missing_tickers = sectors[sector]["missing_tickers"]
+        status = "available" if priced_tickers else "missing_price"
         percent = (
             str((value / invested * Decimal("100")).quantize(Decimal("0.01")))
-            if invested
+            if invested and priced_tickers
             else None
         )
         points.append(
             ChartPoint(
                 sector,
                 sector,
-                str(value),
+                str(value) if priced_tickers else None,
                 percent,
-                metadata={"tickers": sectors[sector]["tickers"]},
+                status=status,
+                metadata={
+                    "tickers": sectors[sector]["tickers"],
+                    "priced_tickers": priced_tickers,
+                    "missing_tickers": missing_tickers,
+                },
             )
         )
     warnings = (

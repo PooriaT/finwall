@@ -638,7 +638,12 @@ def test_analysis_charts_include_prices_missing_sectors_and_risk(tmp_path, monke
         "/api/v1/portfolio/analysis/allocation/sectors", headers=h
     ).json()
     assert sectors["points"][0]["key"] == "Technology"
+    assert sectors["points"][0]["value"] is None
+    assert sectors["points"][0]["status"] == "missing_price"
+    assert sectors["points"][0]["metadata"]["missing_tickers"] == ["MSFT"]
     assert sectors["points"][1]["key"] == "Uncategorized"
+    assert sectors["points"][1]["value"] == "300.00"
+    assert sectors["points"][1]["status"] == "available"
     assert sectors["points"][1]["metadata"]["tickers"] == ["AAPL"]
     assert sectors["warnings"]
 
