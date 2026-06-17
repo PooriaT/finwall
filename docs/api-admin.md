@@ -38,7 +38,7 @@ Implemented API update routes cover portfolio state operations such as:
 - watchlist
 - goal/timeline/risk updates
 
-The admin interface provides minimal Jinja2-rendered forms/navigation for the same internal portfolio-management workflows, including audit views. The FastAPI app serves its own lightweight CSS/static assets under `/admin/static`; there is no frontend build step.
+The admin interface provides minimal Jinja2-rendered forms/navigation for the same internal portfolio-management workflows, including audit views and first read-only dashboard charts. The FastAPI app serves its own lightweight CSS/static assets under `/admin/static`; there is no frontend build step.
 
 ## What it cannot do
 
@@ -46,7 +46,7 @@ The admin interface provides minimal Jinja2-rendered forms/navigation for the sa
 - No automatic order execution.
 - No multi-user SaaS auth model.
 - No React, Next.js, Tailwind, npm, Vite, or frontend build system.
-- No charts, dashboard analytics, recommendations UI, broker integration, or automatic trading.
+- No broker integration, automatic trading, complex interactive charting, recommendations UI, multi-user auth, or public SaaS hardening. Dashboard charts are read-only decision-support views only.
 
 ## Security guidance
 
@@ -60,7 +60,7 @@ This mode is intended for internal/self-managed operation. Do not treat it as en
 
 ## Portfolio analysis chart-data endpoints
 
-The following read-only endpoints return authenticated, deterministic JSON payloads intended for future admin chart components. They do not render charts, add frontend charting code, mutate portfolios, place broker orders, or change storage schema. Bearer-token API authentication is required for every endpoint.
+The following read-only endpoints return authenticated, deterministic JSON payloads used by the server-rendered admin dashboard charts and available to API clients. The dashboard composes this same chart-data layer server-side, so it does not expose `FINWALL_API_TOKEN` to browser JavaScript and does not require a CDN chart library or frontend build tooling. These endpoints do not mutate portfolios, place broker orders, add new analytics rules, or change storage schema. Bearer-token API authentication is required for every endpoint.
 
 - `GET /api/v1/portfolio/analysis/charts` returns all chart-ready series in one response.
 - `GET /api/v1/portfolio/analysis/allocation/holdings` returns allocation by holding.
@@ -73,3 +73,8 @@ The following read-only endpoints return authenticated, deterministic JSON paylo
 Use the optional `report_history_limit` query parameter to bound report history in chart payloads. The API defaults to `10` and caps requests at `50`.
 
 These endpoints reuse the existing portfolio snapshot, risk assessment, market-data provider selection, latest-price fetching, and report-history storage services. Values are decision-support data only. Payloads can be partial when prices are missing or a market data provider fails; missing prices are represented with status fields, `null` values where appropriate, warnings, and metadata instead of raw tracebacks.
+
+
+## Admin dashboard charts
+
+The `/admin` dashboard now includes first read-only charts for allocation by holding, cash vs invested, unrealized gain/loss by holding, and risk warnings by severity. Charts are server-rendered HTML/CSS from the existing chart-ready analysis data contract; no React, Next.js, Tailwind, npm, Vite, CDN chart library, broker integration, automatic trading, or new analytics calculations are added. Values are decision-support only and may be partial when market data is missing. Missing-price holdings are shown with muted rows, visible status text, and fallback table/list data rather than being hidden inside visual styling.

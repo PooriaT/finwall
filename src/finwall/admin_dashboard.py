@@ -1,6 +1,7 @@
 from dataclasses import asdict, dataclass
 from decimal import Decimal
 
+from finwall.chart_data import build_portfolio_chart_data_from_snapshot
 from finwall.config import Settings
 from finwall.market_data import (
     build_market_data_provider,
@@ -26,6 +27,7 @@ class DashboardView:
     latest_report: dict[str, object] | None
     latest_audit_events: tuple[dict[str, object], ...]
     warnings: tuple[str, ...]
+    charts: dict[str, object]
 
 
 def build_dashboard_view(
@@ -44,6 +46,9 @@ def build_dashboard_view(
     risk_assessment = assess_portfolio_risk(portfolio, snapshot)
     latest_report = store.get_latest_report_run(portfolio.name)
     latest_audit_events = store.list_portfolio_audit_events(portfolio.name, 5)
+    chart_data = build_portfolio_chart_data_from_snapshot(
+        portfolio, store, snapshot, risk_assessment, tuple(provider_warnings)
+    ).as_dict()["charts"]
 
     live_price_rows = tuple(
         {
@@ -90,6 +95,7 @@ def build_dashboard_view(
         latest_report=asdict(latest_report) if latest_report is not None else None,
         latest_audit_events=tuple(event.as_dict() for event in latest_audit_events),
         warnings=tuple(provider_warnings),
+        charts=chart_data,
     )
 
 

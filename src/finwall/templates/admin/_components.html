@@ -17,3 +17,81 @@
 {% macro section_header(title, href='', label='Manage') -%}
 <div class="section-header"><h2>{{ title }}</h2>{% if href %}<a href="{{ href }}">{{ label }}</a>{% endif %}</div>
 {%- endmacro %}
+
+{% macro chart_warnings(series) -%}
+{% if series.warnings %}<ul class="chart-warning-list" aria-label="{{ series.title }} warnings">{% for warning in series.warnings %}<li>{{ warning }}</li>{% endfor %}</ul>{% endif %}
+{%- endmacro %}
+
+{% macro chart_fallback_table(series, include_percent=True) -%}
+<table class="chart-data-table"><thead><tr><th>Label</th><th>Value</th>{% if include_percent %}<th>Percent</th>{% endif %}<th>Status</th></tr></thead><tbody>{% for point in series.points %}<tr><td>{{ point.label }}</td><td>{{ point.value if point.value is not none else point.metadata.missing_price_message or 'Unavailable' }}</td>{% if include_percent %}<td>{{ point.percent if point.percent is not none else 'Unavailable' }}</td>{% endif %}<td>{{ point.status|replace('_', ' ') }}</td></tr>{% endfor %}</tbody></table>
+{%- endmacro %}
+
+{% macro horizontal_bar_chart(title, series, empty_message='No chart data available.') -%}
+<section class="chart-card" aria-labelledby="{{ series.key }}-title">
+  <h3 id="{{ series.key }}-title">{{ title }}</h3>
+  <p class="chart-summary">Allocation by holding. Values and percentages are shown as text; rows with missing prices are muted.</p>
+  {% if series.points %}
+  <div class="chart-visual" role="img" aria-label="{{ title }} chart with {{ series.points|length }} rows">
+    {% for point in series.points %}
+    {% set width = point.percent|float if point.percent is not none else 0 %}
+    <div class="chart-row{% if point.status != 'available' %} chart-missing{% endif %}">
+      <div class="chart-row-label"><strong>{{ point.label }}</strong><span>{{ point.value if point.value is not none else point.metadata.missing_price_message or 'Missing price' }}</span></div>
+      <div class="chart-bar" aria-hidden="true"><span class="chart-bar-fill" style="width: {{ [width, 100]|min }}%"></span></div>
+      <div class="chart-value">{{ point.percent if point.percent is not none else 'N/A' }}{% if point.percent is not none %}%{% endif %} · {{ point.status|replace('_', ' ') }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  {{ chart_fallback_table(series) }}
+  {% else %}{{ empty_state(empty_message) }}{% endif %}
+  {{ chart_warnings(series) }}
+</section>
+{%- endmacro %}
+
+{% macro stacked_bar_chart(title, series, empty_message='No chart data available.') -%}
+<section class="chart-card" aria-labelledby="{{ series.key }}-title">
+  <h3 id="{{ series.key }}-title">{{ title }}</h3>
+  <p class="chart-summary">Cash and invested amounts are read-only and may be partial when valuation data is incomplete.</p>
+  {% if series.points %}
+  <div class="stacked-chart" role="img" aria-label="{{ title }} stacked bar">
+    {% for point in series.points %}{% set width = point.percent|float if point.percent is not none else 0 %}<span class="stacked-segment stacked-{{ point.key }}" style="width: {{ [width, 100]|min }}%">{{ point.label }} {{ point.percent if point.percent is not none else 'N/A' }}{% if point.percent is not none %}%{% endif %}</span>{% endfor %}
+  </div>
+  <ul class="chart-legend">{% for point in series.points %}<li><strong>{{ point.label }}:</strong> {{ point.value if point.value is not none else 'Unavailable' }}{% if point.percent is not none %} ({{ point.percent }}%){% endif %}. Status: {{ point.metadata.valuation_status or point.status }}; price completeness: {{ point.metadata.price_completeness_status or 'unknown' }}.</li>{% endfor %}</ul>
+  {% else %}{{ empty_state(empty_message) }}{% endif %}
+  {{ chart_warnings(series) }}
+</section>
+{%- endmacro %}
+
+{% macro diverging_bar_chart(title, series, empty_message='No chart data available.') -%}
+<section class="chart-card" aria-labelledby="{{ series.key }}-title">
+  <h3 id="{{ series.key }}-title">{{ title }}</h3>
+  <p class="chart-summary">Positive and negative unrealized gain/loss values are shown with labels; missing prices are listed safely.</p>
+  {% if series.points %}
+  {% set scale = namespace(max_abs=0) %}
+  {% for point in series.points %}{% set raw_for_scale = point.value|float if point.value is not none else 0 %}{% if raw_for_scale|abs > scale.max_abs %}{% set scale.max_abs = raw_for_scale|abs %}{% endif %}{% endfor %}
+  <div class="chart-visual diverging-chart" role="img" aria-label="{{ title }} diverging bar chart">
+    {% for point in series.points %}
+    {% set raw = point.value|float if point.value is not none else 0 %}{% set width = (raw|abs / scale.max_abs * 100) if scale.max_abs else 0 %}
+    <div class="chart-row{% if point.status != 'available' %} chart-missing{% endif %}">
+      <div class="chart-row-label"><strong>{{ point.label }}</strong><span>{{ point.value if point.value is not none else point.metadata.missing_price_message or 'Missing price' }}</span></div>
+      <div class="chart-bar chart-bar-split" aria-hidden="true"><span class="chart-bar-fill {% if raw < 0 %}chart-bar-negative{% elif raw > 0 %}chart-bar-positive{% endif %}" style="width: {{ width }}%"></span></div>
+      <div class="chart-value">{{ point.value if point.value is not none else 'Unavailable' }}{% if point.percent is not none %} · {{ point.percent }}%{% endif %}</div>
+    </div>
+    {% endfor %}
+  </div>
+  {{ chart_fallback_table(series) }}
+  {% else %}{{ empty_state(empty_message) }}{% endif %}
+</section>
+{%- endmacro %}
+
+{% macro count_bar_chart(title, series, empty_message='No chart data available.') -%}
+<section class="chart-card" aria-labelledby="{{ series.key }}-title">
+  <h3 id="{{ series.key }}-title">{{ title }}</h3>
+  <p class="chart-summary">Risk warning counts are grouped by severity with warning details listed below.</p>
+  {% if series.points %}
+  <div class="chart-visual" role="img" aria-label="{{ title }} count bar chart">
+    {% for point in series.points %}{% set count = point.value|int %}<div class="chart-row"><div class="chart-row-label"><strong>{{ point.label|title }}</strong><span>{{ count }} warning{% if count != 1 %}s{% endif %}</span></div><div class="chart-bar" aria-hidden="true"><span class="chart-bar-fill severity-{{ point.key }}" style="width: {{ [count * 20, 100]|min }}%"></span></div><div class="chart-value">{{ count }}</div></div>{% endfor %}
+  </div>
+  <ul class="chart-warning-list">{% for point in series.points %}{% for warning in point.metadata.warnings %}<li><strong>{{ warning.severity|title }} {{ warning.code }}{% if warning.ticker %} ({{ warning.ticker }}){% endif %}:</strong> {{ warning.message }}</li>{% endfor %}{% endfor %}</ul>
+  {% else %}{{ empty_state(empty_message) }}{% endif %}
+</section>
+{%- endmacro %}

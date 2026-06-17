@@ -9,8 +9,8 @@ from finwall.market_data import (
     fetch_portfolio_latest_prices,
 )
 from finwall.models import Portfolio
-from finwall.risk import assess_portfolio_risk
-from finwall.snapshot import HoldingSnapshot, generate_snapshot
+from finwall.risk import RiskAssessment, assess_portfolio_risk
+from finwall.snapshot import HoldingSnapshot, PortfolioSnapshot, generate_snapshot
 from finwall.storage_interface import PortfolioStore
 
 
@@ -88,6 +88,25 @@ def build_portfolio_chart_data(
     )
     snapshot = generate_snapshot(portfolio, latest_prices)
     risk = assess_portfolio_risk(portfolio, snapshot)
+    return build_portfolio_chart_data_from_snapshot(
+        portfolio,
+        store,
+        snapshot,
+        risk,
+        tuple(provider_warnings),
+        report_history_limit=report_history_limit,
+    )
+
+
+def build_portfolio_chart_data_from_snapshot(
+    portfolio: Portfolio,
+    store: PortfolioStore,
+    snapshot: PortfolioSnapshot,
+    risk: RiskAssessment,
+    provider_warnings: tuple[str, ...] = (),
+    *,
+    report_history_limit: int = 10,
+) -> PortfolioChartData:
     bounded_limit = max(0, min(report_history_limit, 50))
     reports = store.list_report_runs(portfolio.name, bounded_limit)
     return PortfolioChartData(
