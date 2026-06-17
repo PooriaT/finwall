@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from finwall.admin_dashboard import build_dashboard_view
 from finwall.admin_ui import ADMIN_STATIC_DIR, render_admin_template
+from finwall.chart_data import build_portfolio_chart_data
 from finwall.config import Settings, settings
 from finwall.models import ActiveOrder, OrderSide, OrderType, Portfolio, RiskLevel
 from finwall.portfolio_audit import (
@@ -252,6 +253,59 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
     @app.get("/api/v1/portfolio")
     def read_portfolio(_: str = Depends(auth)):
         return asdict(get_portfolio())
+
+    def _analysis_charts(report_history_limit: int = 10):
+        bounded_limit = max(0, min(report_history_limit, 50))
+        return build_portfolio_chart_data(
+            get_portfolio(),
+            app.state.store,
+            app.state.settings,
+            report_history_limit=bounded_limit,
+        )
+
+    @app.get("/api/v1/portfolio/analysis/charts")
+    def portfolio_analysis_charts(
+        report_history_limit: int = 10, _: str = Depends(auth)
+    ):
+        return _analysis_charts(report_history_limit).as_dict()
+
+    @app.get("/api/v1/portfolio/analysis/allocation/holdings")
+    def portfolio_allocation_holdings(
+        report_history_limit: int = 10, _: str = Depends(auth)
+    ):
+        return _analysis_charts(report_history_limit).allocation_by_holding.as_dict()
+
+    @app.get("/api/v1/portfolio/analysis/allocation/sectors")
+    def portfolio_allocation_sectors(
+        report_history_limit: int = 10, _: str = Depends(auth)
+    ):
+        return _analysis_charts(report_history_limit).allocation_by_sector.as_dict()
+
+    @app.get("/api/v1/portfolio/analysis/cash-vs-invested")
+    def portfolio_cash_vs_invested(
+        report_history_limit: int = 10, _: str = Depends(auth)
+    ):
+        return _analysis_charts(report_history_limit).cash_vs_invested.as_dict()
+
+    @app.get("/api/v1/portfolio/analysis/unrealized-gain-loss")
+    def portfolio_unrealized_gain_loss(
+        report_history_limit: int = 10, _: str = Depends(auth)
+    ):
+        return _analysis_charts(
+            report_history_limit
+        ).unrealized_gain_loss_by_holding.as_dict()
+
+    @app.get("/api/v1/portfolio/analysis/risk-warnings")
+    def portfolio_risk_warnings(report_history_limit: int = 10, _: str = Depends(auth)):
+        return _analysis_charts(
+            report_history_limit
+        ).risk_warnings_by_severity.as_dict()
+
+    @app.get("/api/v1/portfolio/analysis/report-history")
+    def portfolio_report_history(
+        report_history_limit: int = 10, _: str = Depends(auth)
+    ):
+        return _analysis_charts(report_history_limit).report_history_summary.as_dict()
 
     @app.get("/api/v1/portfolio/audit")
     def read_portfolio_audit(limit: int = 50, _: str = Depends(auth)):
