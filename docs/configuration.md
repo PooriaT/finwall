@@ -46,7 +46,11 @@ FINWALL_MARKET_DATA_PROVIDER=yahoo poetry run finwall --database finwall.db snap
 FINWALL_MARKET_DATA_PROVIDER=yahoo poetry run finwall --database finwall.db report --live-prices
 FINWALL_MARKET_DATA_PROVIDER=yahoo poetry run finwall --database finwall.db technicals
 FINWALL_MARKET_DATA_PROVIDER=yahoo poetry run finwall --database finwall.db market-index SP500
+FINWALL_MARKET_DATA_PROVIDER=yahoo poetry run finwall market-data-check --ticker AAPL --historical-days 30
+FINWALL_MARKET_DATA_PROVIDER=yahoo poetry run finwall market-data-check --json
 ```
+
+Run `market-data-check` before relying on live-price reports when changing providers or diagnosing local connectivity. It reports the configured provider, timeout, a sample latest quote check, and a sample historical-price check without initializing portfolio storage.
 
 ## Fundamentals
 

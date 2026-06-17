@@ -25,6 +25,10 @@ from finwall.market_data import (
     build_market_data_provider,
     fetch_portfolio_latest_prices,
 )
+from finwall.market_data_diagnostics import (
+    MarketDataDiagnosticResult,
+    run_market_data_diagnostics,
+)
 from finwall.models import (
     ActiveOrder,
     OrderSide,
@@ -205,6 +209,13 @@ def parse_optional_date(value: str | None) -> date | None:
     return date.fromisoformat(value) if value is not None else None
 
 
+def parse_positive_int(value: str) -> int:
+    parsed = int(value)
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return parsed
+
+
 def parse_price(value: str) -> tuple[str, Decimal]:
     ticker, price = value.split("=", maxsplit=1)
     return ticker.upper(), Decimal(price)
@@ -371,6 +382,15 @@ def build_parser() -> argparse.ArgumentParser:
     scheduled.add_argument("--email-to")
     security_check = subparsers.add_parser("security-check")
     security_check.add_argument("--json", action="store_true")
+
+    market_data_check = subparsers.add_parser("market-data-check")
+    market_data_check.add_argument("--ticker", default="AAPL")
+    market_data_check.add_argument(
+        "--historical-days",
+        type=parse_positive_int,
+        default=30,
+    )
+    market_data_check.add_argument("--json", action="store_true")
 
     scheduled_runs = subparsers.add_parser("scheduled-runs")
     scheduled_runs.add_argument("--json", action="store_true")
@@ -829,6 +849,23 @@ def print_fundamental_summary_report(report) -> None:
         print(f"- {limitation}")
 
 
+def print_market_data_diagnostics(result: MarketDataDiagnosticResult) -> None:
+    titles = {
+        "provider_configuration": "Provider configuration",
+        "latest_quote": "Latest quote",
+        "historical_prices": "Historical prices",
+    }
+    print("Market data diagnostics")
+    print(f"Provider: {result.provider}")
+    print(f"Timeout: {result.timeout_seconds}s")
+    print(f"Sample ticker: {result.sample_ticker}")
+    print("")
+    for check in result.checks:
+        status = "ok" if check.ok else "failed"
+        title = titles.get(check.name, check.name.replace("_", " "))
+        print(f"[{status}] {title}: {check.summary}")
+
+
 def build_report_payload(
     *,
     args,
@@ -946,6 +983,19 @@ def run(argv: list[str] | None = None) -> int:
                 for warning in warnings:
                     print(f"- {warning}")
         return 0 if ok else 1
+
+    if args.command == "market-data-check":
+        result = run_market_data_diagnostics(
+            provider_name=settings.market_data_provider,
+            timeout_seconds=settings.market_data_timeout_seconds,
+            sample_ticker=args.ticker,
+            historical_days=args.historical_days,
+        )
+        if args.json:
+            print(json.dumps(result.as_dict(), indent=2))
+        else:
+            print_market_data_diagnostics(result)
+        return 0 if result.ok else 1
 
     cli_database_override = any(
         item == "--database" or item.startswith("--database=") for item in raw_args

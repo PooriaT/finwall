@@ -2,6 +2,7 @@ from decimal import Decimal
 from urllib.error import HTTPError, URLError
 
 from finwall.market_data import (
+    HistoricalPriceBar,
     IndexQuote,
     MarketPrice,
     StaticMarketDataProvider,
@@ -9,6 +10,7 @@ from finwall.market_data import (
     build_market_data_provider,
     fetch_portfolio_latest_prices,
 )
+from finwall.market_data_diagnostics import run_market_data_diagnostics
 from finwall.models import Holding, Portfolio
 
 
@@ -47,6 +49,93 @@ def test_fetch_portfolio_latest_prices_skips_missing_and_collects_warnings() -> 
 
     assert latest_prices == {"NVDA": Decimal("900")}
     assert warnings == ["PLTR: missing"]
+
+
+def test_market_data_diagnostics_pass_with_mock_provider() -> None:
+    provider = StaticMarketDataProvider(
+        prices={
+            "AAPL": MarketPrice("AAPL", Decimal("190.10"), "USD", "static", True),
+        },
+        historical_prices={
+            "AAPL": (
+                HistoricalPriceBar("AAPL", "2026-01-01", Decimal("188"), 100, "static"),
+                HistoricalPriceBar("AAPL", "2026-01-02", Decimal("190"), 200, "static"),
+            ),
+        },
+    )
+
+    result = run_market_data_diagnostics(
+        provider_name=" static ",
+        timeout_seconds=2.5,
+        sample_ticker="aapl",
+        historical_days=30,
+        provider=provider,
+    )
+
+    assert result.ok is True
+    assert result.provider == "static"
+    assert result.sample_ticker == "AAPL"
+    assert [check.name for check in result.checks] == [
+        "provider_configuration",
+        "latest_quote",
+        "historical_prices",
+    ]
+    assert result.checks[1].details["price"] == "190.10"
+    assert result.checks[2].details["returned_bars"] == 2
+
+
+def test_market_data_diagnostics_reports_unknown_provider_static_fallback() -> None:
+    provider = StaticMarketDataProvider(
+        prices={
+            "AAPL": MarketPrice("AAPL", Decimal("190.10"), "USD", "static", True),
+        },
+        historical_prices={
+            "AAPL": (
+                HistoricalPriceBar("AAPL", "2026-01-01", Decimal("188"), 100, "static"),
+            ),
+        },
+    )
+
+    result = run_market_data_diagnostics(
+        provider_name="custom",
+        timeout_seconds=5.0,
+        sample_ticker="AAPL",
+        historical_days=30,
+        provider=provider,
+    )
+
+    assert result.ok is False
+    provider_check = result.checks[0]
+    assert provider_check.ok is False
+    assert provider_check.details["recognized"] is False
+    assert provider_check.details["effective_provider"] == "static"
+
+
+class _ExplodingMarketDataProvider:
+    def get_latest_prices(self, tickers):
+        raise RuntimeError("full url https://query1.finance.yahoo.com/private")
+
+    def get_index_quote(self, symbol):
+        raise RuntimeError("not used")
+
+    def get_historical_prices(self, ticker: str, days: int = 250):
+        raise RuntimeError("raw traceback details")
+
+
+def test_market_data_diagnostics_uses_safe_errors_for_provider_exceptions() -> None:
+    result = run_market_data_diagnostics(
+        provider_name="yahoo",
+        timeout_seconds=5.0,
+        sample_ticker="AAPL",
+        historical_days=30,
+        provider=_ExplodingMarketDataProvider(),
+    )
+
+    assert result.ok is False
+    assert result.checks[1].details["safe_error"] == "latest quote check failed"
+    assert result.checks[2].details["safe_error"] == "historical price check failed"
+    payload = result.as_dict()
+    assert "query1.finance.yahoo.com" not in str(payload)
 
 
 def test_build_market_data_provider_supports_static_and_yahoo() -> None:
