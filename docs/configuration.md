@@ -30,11 +30,23 @@ Finwall reads runtime settings from environment variables. `.env.example` provid
 
 Market/fundamentals/news inputs are decision-support enrichments. They can be stale, partial, or unavailable depending on provider behavior and runtime conditions.
 
-
 | Variable | Purpose | Default | Required (local-only) | Required (scheduled/email/API) | Example |
 |---|---|---|---|---|---|
-| `FINWALL_MARKET_DATA_PROVIDER` | Market quote provider. | `static` | No | Optional | `static` |
-| `FINWALL_MARKET_DATA_TIMEOUT_SECONDS` | Quote-provider timeout. | `5` | No | Optional | `5` |
+| `FINWALL_MARKET_DATA_PROVIDER` | Market quote provider. Supported values: `static`, `yahoo`. Unknown values safely fall back to `static`. | `static` | No | Optional | `yahoo` |
+| `FINWALL_MARKET_DATA_TIMEOUT_SECONDS` | Quote-provider timeout in seconds. | `5` | No | Optional | `5` |
+
+`static` uses only manually supplied prices, such as `--price NVDA=120`.
+
+`yahoo` uses Yahoo public endpoints through Python's standard library. It is supported for local/self-managed decision-support workflows, including live portfolio prices, market index quotes, technicals, and market-condition inputs. Yahoo public endpoint data may be unavailable, delayed, stale, partial, or rate-limited, and it is not broker-grade or guaranteed institutional market data. Finwall does not add `yfinance`, does not execute trades, and remains decision-support only.
+
+Examples:
+
+```bash
+FINWALL_MARKET_DATA_PROVIDER=yahoo poetry run finwall --database finwall.db snapshot --live-prices
+FINWALL_MARKET_DATA_PROVIDER=yahoo poetry run finwall --database finwall.db report --live-prices
+FINWALL_MARKET_DATA_PROVIDER=yahoo poetry run finwall --database finwall.db technicals
+FINWALL_MARKET_DATA_PROVIDER=yahoo poetry run finwall --database finwall.db market-index SP500
+```
 
 ## Fundamentals
 

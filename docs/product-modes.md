@@ -27,6 +27,7 @@ Finwall is a self-managed decision-support tool. It is not a broker, not an exec
 - Scheduled-run logging and duplicate suppression.
 - SMTP email notifications for scheduled report outcomes.
 - GitHub Actions scheduled-report workflow as a repo automation option.
+- Yahoo public-endpoint market data via `FINWALL_MARKET_DATA_PROVIDER=yahoo` for local/self-managed live-price, index, technical, and market-condition workflows.
 
 ## Internal/admin
 
@@ -51,7 +52,7 @@ These capabilities are decision-support inputs and may be provider-limited or in
 
 - Postgres backend selection is not implemented at runtime; SQLite is the usable backend today.
 - Multi-currency aggregation has FX-conversion limitations.
-- Market/fundamentals/news freshness and coverage depend on provider constraints.
+- Market/fundamentals/news freshness and coverage depend on provider constraints. Yahoo public market data may be unavailable, delayed, stale, partial, or rate-limited and is not broker-grade or guaranteed institutional market data.
 - API/admin mode is token-authenticated internal tooling, not public SaaS-grade multi-user RBAC.
 - Security posture is application-level/self-managed and not enterprise compliance certification.
 
@@ -62,6 +63,7 @@ The following must not be implied as currently available:
 - Broker integration.
 - Automatic trading.
 - Order execution.
+- `yfinance` dependency support.
 - Public SaaS multi-tenant auth/RBAC product model.
 - Enterprise compliance/security certification guarantees.
 - Guaranteed predictions or investment returns.
