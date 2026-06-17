@@ -57,3 +57,19 @@ This mode is intended for internal/self-managed operation. Do not treat it as en
 - Use a strong random API token and rotate it if exposed.
 - Treat this as internal tooling and combine token auth with host/network controls.
 - See [docs/security.md](security.md) for broader secret/privacy guidance.
+
+## Portfolio analysis chart-data endpoints
+
+The following read-only endpoints return authenticated, deterministic JSON payloads intended for future admin chart components. They do not render charts, add frontend charting code, mutate portfolios, place broker orders, or change storage schema. Bearer-token API authentication is required for every endpoint.
+
+- `GET /api/v1/portfolio/analysis/charts` returns all chart-ready series in one response.
+- `GET /api/v1/portfolio/analysis/allocation/holdings` returns allocation by holding.
+- `GET /api/v1/portfolio/analysis/allocation/sectors` returns allocation by sector, grouping missing sectors as `Uncategorized`.
+- `GET /api/v1/portfolio/analysis/cash-vs-invested` returns cash and invested values with valuation and price-completeness metadata.
+- `GET /api/v1/portfolio/analysis/unrealized-gain-loss` returns unrealized gain/loss by holding where price data is available.
+- `GET /api/v1/portfolio/analysis/risk-warnings` returns risk warning counts grouped by severity with warning details in metadata.
+- `GET /api/v1/portfolio/analysis/report-history` returns saved report-run metadata when history exists.
+
+Use the optional `report_history_limit` query parameter to bound report history in chart payloads. The API defaults to `10` and caps requests at `50`.
+
+These endpoints reuse the existing portfolio snapshot, risk assessment, market-data provider selection, latest-price fetching, and report-history storage services. Values are decision-support data only. Payloads can be partial when prices are missing or a market data provider fails; missing prices are represented with status fields, `null` values where appropriate, warnings, and metadata instead of raw tracebacks.

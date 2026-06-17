@@ -554,3 +554,146 @@ def test_admin_dashboard_keeps_api_bearer_auth_working(tmp_path):
 
     assert response.status_code == 200
     assert response.json()["name"] == "Primary"
+
+
+def test_analysis_chart_endpoints_require_bearer_auth(tmp_path):
+    client = build_client(tmp_path)
+
+    missing = client.get("/api/v1/portfolio/analysis/charts")
+    invalid = client.get(
+        "/api/v1/portfolio/analysis/charts", headers=auth_headers("bad")
+    )
+
+    assert missing.status_code == 401
+    assert invalid.status_code == 401
+    assert "secret" not in missing.text
+    assert "secret" not in invalid.text
+
+
+def test_analysis_aggregate_empty_portfolio_has_expected_chart_keys(tmp_path):
+    client = build_client(tmp_path)
+
+    response = client.get("/api/v1/portfolio/analysis/charts", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["portfolio_name"] == "Primary"
+    assert set(payload["charts"]) == {
+        "allocation_by_holding",
+        "allocation_by_sector",
+        "cash_vs_invested",
+        "unrealized_gain_loss_by_holding",
+        "risk_warnings_by_severity",
+        "report_history_summary",
+    }
+    assert payload["charts"]["allocation_by_holding"]["points"] == []
+    assert payload["charts"]["allocation_by_sector"]["points"] == []
+
+
+def test_analysis_charts_include_prices_missing_sectors_and_risk(tmp_path, monkeypatch):
+    from decimal import Decimal
+
+    from finwall.market_data import MarketPrice, StaticMarketDataProvider
+
+    client = build_client(tmp_path)
+    h = auth_headers()
+    client.post(
+        "/api/v1/portfolio/cash/add",
+        headers=h,
+        json={"currency": "USD", "amount": "1000"},
+    )
+    client.post(
+        "/api/v1/portfolio/holdings",
+        headers=h,
+        json={"ticker": "AAPL", "shares": "2", "average_price": "100"},
+    )
+    client.post(
+        "/api/v1/portfolio/holdings",
+        headers=h,
+        json={
+            "ticker": "MSFT",
+            "shares": "1",
+            "average_price": "300",
+            "sector": "Technology",
+        },
+    )
+
+    def provider(_name, _timeout):
+        return StaticMarketDataProvider(
+            {"AAPL": MarketPrice("AAPL", Decimal("150"), "USD", "test", True)}
+        )
+
+    monkeypatch.setattr("finwall.chart_data.build_market_data_provider", provider)
+
+    aggregate = client.get("/api/v1/portfolio/analysis/charts", headers=h).json()
+    holdings = aggregate["charts"]["allocation_by_holding"]["points"]
+    assert holdings[0]["key"] == "AAPL"
+    assert holdings[0]["value"] == "300.00"
+    assert holdings[0]["status"] == "available"
+    assert holdings[1]["key"] == "MSFT"
+    assert holdings[1]["value"] is None
+    assert holdings[1]["status"] == "missing_price"
+
+    sectors = client.get(
+        "/api/v1/portfolio/analysis/allocation/sectors", headers=h
+    ).json()
+    assert sectors["points"][0]["key"] == "Technology"
+    assert sectors["points"][1]["key"] == "Uncategorized"
+    assert sectors["points"][1]["metadata"]["tickers"] == ["AAPL"]
+    assert sectors["warnings"]
+
+    cash = client.get("/api/v1/portfolio/analysis/cash-vs-invested", headers=h).json()
+    assert cash["points"][0]["metadata"]["valuation_status"] == "missing_prices"
+    assert cash["points"][0]["metadata"]["price_completeness_status"] == "partial"
+
+    unrealized = client.get(
+        "/api/v1/portfolio/analysis/unrealized-gain-loss", headers=h
+    ).json()
+    assert unrealized["points"][0]["value"] == "100.00"
+    assert unrealized["points"][1]["value"] is None
+    assert unrealized["points"][1]["status"] == "missing_price"
+
+    risk = client.get("/api/v1/portfolio/analysis/risk-warnings", headers=h).json()
+    assert any(point["key"] == "medium" for point in risk["points"])
+
+
+def test_analysis_report_history_metadata_and_limit_cap(tmp_path):
+    client = build_client(tmp_path)
+    h = auth_headers()
+    client.post(
+        "/api/v1/portfolio/cash/add",
+        headers=h,
+        json={"currency": "USD", "amount": "1000"},
+    )
+    with client.app.state.store._connect() as connection:
+        portfolio_id = client.app.state.store._require_portfolio_id(
+            connection, "Primary"
+        )
+        for index in range(55):
+            connection.execute(
+                """
+                INSERT INTO report_runs (
+                    portfolio_id, created_at, command_context, report_summary,
+                    report_json, price_completeness_status, valuation_status,
+                    recommendation_summary
+                ) VALUES (?, ?, ?, ?, '{}', 'complete', 'complete', ?)
+                """,
+                (
+                    portfolio_id,
+                    f"2026-06-17T00:00:{index:02d}",
+                    f"ctx-{index}",
+                    f"summary-{index}",
+                    f"recommend-{index}",
+                ),
+            )
+
+    response = client.get(
+        "/api/v1/portfolio/analysis/report-history?report_history_limit=99",
+        headers=h,
+    )
+
+    assert response.status_code == 200
+    points = response.json()["points"]
+    assert len(points) == 50
+    assert points[0]["metadata"]["command_context"] == "ctx-54"
+    assert points[0]["metadata"]["recommendation_summary"] == "recommend-54"
