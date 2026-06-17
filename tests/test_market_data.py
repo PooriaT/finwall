@@ -50,14 +50,22 @@ def test_fetch_portfolio_latest_prices_skips_missing_and_collects_warnings() -> 
 
 
 def test_build_market_data_provider_supports_static_and_yahoo() -> None:
-    assert isinstance(build_market_data_provider("static", 1.0), StaticMarketDataProvider)
+    assert isinstance(
+        build_market_data_provider("static", 1.0), StaticMarketDataProvider
+    )
     assert isinstance(build_market_data_provider("yahoo", 1.0), YahooMarketDataProvider)
 
 
 def test_build_market_data_provider_normalizes_names_and_falls_back_to_static() -> None:
-    assert isinstance(build_market_data_provider(" Yahoo ", 1.0), YahooMarketDataProvider)
-    assert isinstance(build_market_data_provider("STATIC", 1.0), StaticMarketDataProvider)
-    assert isinstance(build_market_data_provider("unknown", 1.0), StaticMarketDataProvider)
+    assert isinstance(
+        build_market_data_provider(" Yahoo ", 1.0), YahooMarketDataProvider
+    )
+    assert isinstance(
+        build_market_data_provider("STATIC", 1.0), StaticMarketDataProvider
+    )
+    assert isinstance(
+        build_market_data_provider("unknown", 1.0), StaticMarketDataProvider
+    )
 
 
 def test_yahoo_latest_prices_returns_price_and_currency(monkeypatch) -> None:
@@ -181,7 +189,9 @@ def test_yahoo_latest_prices_returns_unavailable_for_non_list_quote_result(
     prices = provider.get_latest_prices(["AAPL"])
 
     assert prices["AAPL"].available is False
-    assert prices["AAPL"].error == "malformed Yahoo quote response: result is not a list"
+    assert (
+        prices["AAPL"].error == "malformed Yahoo quote response: result is not a list"
+    )
 
 
 def test_yahoo_latest_prices_marks_missing_ticker_unavailable(monkeypatch) -> None:
