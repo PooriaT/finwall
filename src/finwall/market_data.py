@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import math
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Iterable, Protocol
 from urllib.error import HTTPError, URLError
@@ -15,6 +16,7 @@ INDEX_SYMBOL_MAP = {
     "SP500": "^GSPC",
     "NASDAQ": "^IXIC",
 }
+STALE_QUOTE_SECONDS = 7 * 24 * 60 * 60
 
 
 @dataclass(frozen=True)
@@ -121,7 +123,7 @@ class YahooMarketDataProvider:
         self.source = "yahoo-finance-public"
 
     def get_latest_prices(self, tickers: Iterable[str]) -> dict[str, MarketPrice]:
-        normalized = sorted({ticker.upper() for ticker in tickers if ticker.strip()})
+        normalized = _normalize_tickers(tickers)
         if not normalized:
             return {}
 
@@ -129,6 +131,7 @@ class YahooMarketDataProvider:
         try:
             payload = self._fetch_json(url)
         except (TimeoutError, HTTPError, URLError, ValueError) as exc:
+            error = _format_provider_error(exc)
             return {
                 ticker: MarketPrice(
                     ticker=ticker,
@@ -136,14 +139,24 @@ class YahooMarketDataProvider:
                     currency=None,
                     source=self.source,
                     available=False,
-                    error=str(exc),
+                    error=error,
                 )
                 for ticker in normalized
             }
 
-        quotes = payload.get("quoteResponse", {}).get("result", [])
-        if not isinstance(quotes, list):
-            quotes = []
+        quotes, response_error = _extract_yahoo_quote_results(payload)
+        if response_error is not None:
+            return {
+                ticker: MarketPrice(
+                    ticker=ticker,
+                    price=None,
+                    currency=None,
+                    source=self.source,
+                    available=False,
+                    error=response_error,
+                )
+                for ticker in normalized
+            }
         by_symbol = {
             item.get("symbol", "").upper(): item
             for item in quotes
@@ -160,18 +173,20 @@ class YahooMarketDataProvider:
                     currency=None,
                     source=self.source,
                     available=False,
-                    error="ticker not found in response",
+                    error="ticker not found in Yahoo response",
                 )
                 continue
-            price = _to_decimal(quote.get("regularMarketPrice"))
+            raw_price = quote.get("regularMarketPrice")
+            price = _to_decimal(raw_price)
             currency = quote.get("currency")
+            error = _quote_error(quote, price, currency)
             results[ticker] = MarketPrice(
                 ticker=ticker,
-                price=price,
-                currency=currency,
+                price=price if error is None else None,
+                currency=currency if isinstance(currency, str) and currency else None,
                 source=self.source,
-                available=price is not None,
-                error=None if price is not None else "price missing in response",
+                available=error is None,
+                error=error,
             )
         return results
 
@@ -216,17 +231,35 @@ class YahooMarketDataProvider:
         except (TimeoutError, HTTPError, URLError, ValueError):
             return ()
 
-        result = payload.get("chart", {}).get("result", [])
+        if not isinstance(payload, dict):
+            return ()
+        chart = payload.get("chart")
+        if not isinstance(chart, dict):
+            return ()
+        result = chart.get("result", [])
         if not isinstance(result, list) or not result:
             return ()
         item = result[0]
         if not isinstance(item, dict):
             return ()
         timestamps = item.get("timestamp", [])
-        indicators = item.get("indicators", {}).get("quote", [])
-        quote_data = indicators[0] if indicators else {}
+        if not isinstance(timestamps, list):
+            return ()
+        indicators = item.get("indicators")
+        if not isinstance(indicators, dict):
+            return ()
+        quote_indicators = indicators.get("quote", [])
+        if not isinstance(quote_indicators, list) or not quote_indicators:
+            return ()
+        quote_data = quote_indicators[0]
+        if not isinstance(quote_data, dict):
+            return ()
         closes = quote_data.get("close", [])
         volumes = quote_data.get("volume", [])
+        if not isinstance(closes, list):
+            return ()
+        if not isinstance(volumes, list):
+            volumes = []
 
         bars: list[HistoricalPriceBar] = []
         for index, timestamp in enumerate(timestamps):
@@ -235,15 +268,16 @@ class YahooMarketDataProvider:
                 continue
 
             close = _to_decimal(closes[index]) if index < len(closes) else None
+            if close is None:
+                continue
             raw_volume = volumes[index] if index < len(volumes) else None
             volume = _to_int(raw_volume)
-            bar_date = (
-                __import__("datetime")
-                .datetime.fromtimestamp(
-                    timestamp_value, tz=__import__("datetime").timezone.utc
-                )
-                .date()
-            )
+            try:
+                bar_date = datetime.fromtimestamp(
+                    timestamp_value, tz=timezone.utc
+                ).date()
+            except (OverflowError, OSError, ValueError):
+                continue
             bars.append(
                 HistoricalPriceBar(
                     ticker=normalized,
@@ -254,6 +288,64 @@ class YahooMarketDataProvider:
                 )
             )
         return tuple(bars)
+
+
+def _normalize_tickers(tickers: Iterable[str]) -> list[str]:
+    return sorted({ticker.strip().upper() for ticker in tickers if ticker.strip()})
+
+
+def _format_provider_error(exc: Exception) -> str:
+    if isinstance(exc, TimeoutError):
+        return "market data request timed out"
+    if isinstance(exc, HTTPError):
+        return f"Yahoo market data request failed with HTTP {exc.code}"
+    if isinstance(exc, URLError):
+        return "Yahoo market data request failed due to a network error"
+    if isinstance(exc, ValueError):
+        return "Yahoo market data response was invalid JSON"
+    return "Yahoo market data request failed"
+
+
+def _extract_yahoo_quote_results(payload: object) -> tuple[list[object], str | None]:
+    if not isinstance(payload, dict):
+        return [], "unexpected Yahoo quote response"
+    quote_response = payload.get("quoteResponse")
+    if not isinstance(quote_response, dict):
+        return [], "malformed Yahoo quote response"
+    if "result" not in quote_response:
+        return [], "malformed Yahoo quote response: result missing"
+    quotes = quote_response.get("result")
+    if not isinstance(quotes, list):
+        return [], "malformed Yahoo quote response: result is not a list"
+    return quotes, None
+
+
+def _quote_error(
+    quote: dict[str, object], price: Decimal | None, currency: object
+) -> str | None:
+    if "regularMarketPrice" not in quote or quote.get("regularMarketPrice") is None:
+        return "price missing in Yahoo response"
+    if price is None:
+        return "price invalid in Yahoo response"
+    if not isinstance(currency, str) or not currency.strip():
+        return "currency missing in Yahoo response"
+    stale_error = _stale_quote_error(quote)
+    if stale_error is not None:
+        return stale_error
+    return None
+
+
+def _stale_quote_error(quote: dict[str, object]) -> str | None:
+    timestamp = _to_epoch_seconds(quote.get("regularMarketTime"))
+    if timestamp is None:
+        return None
+    now = int(datetime.now(timezone.utc).timestamp())
+    if timestamp > now + 60 * 60:
+        return "quote freshness timestamp is invalid"
+    if now - timestamp <= STALE_QUOTE_SECONDS:
+        return None
+    date = datetime.fromtimestamp(timestamp, tz=timezone.utc).date().isoformat()
+    return f"quote may be stale; last market time was {date}"
 
 
 def _to_int(value: object) -> int | None:
@@ -270,24 +362,35 @@ def _to_int(value: object) -> int | None:
 
 
 def _to_epoch_seconds(value: object) -> int | None:
-    return _to_int(value)
+    epoch_seconds = _to_int(value)
+    if epoch_seconds is None or epoch_seconds <= 0:
+        return None
+    return epoch_seconds
 
 
 def _to_decimal(value: object) -> Decimal | None:
     if value is None:
         return None
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
     try:
-        return Decimal(str(value))
+        parsed = Decimal(str(value))
     except (InvalidOperation, ValueError):
         return None
+    if not parsed.is_finite():
+        return None
+    return parsed
 
 
 def build_market_data_provider(
     provider_name: str, timeout_seconds: float
 ) -> MarketDataProvider:
-    if provider_name == "yahoo":
+    normalized_provider = provider_name.strip().lower()
+    if normalized_provider == "yahoo":
         return YahooMarketDataProvider(timeout_seconds=timeout_seconds)
-    if provider_name == "static":
+    if normalized_provider == "static":
         return StaticMarketDataProvider()
     return StaticMarketDataProvider()
 
