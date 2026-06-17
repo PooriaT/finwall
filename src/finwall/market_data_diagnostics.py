@@ -8,7 +8,7 @@ from finwall.market_data import (
     build_market_data_provider,
 )
 
-RECOGNIZED_MARKET_DATA_PROVIDERS = {"static", "yahoo"}
+RECOGNIZED_MARKET_DATA_PROVIDERS = {"static", "yahoo", "yfinance"}
 
 
 @dataclass(frozen=True)

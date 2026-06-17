@@ -32,12 +32,26 @@ Market/fundamentals/news inputs are decision-support enrichments. They can be st
 
 | Variable | Purpose | Default | Required (local-only) | Required (scheduled/email/API) | Example |
 |---|---|---|---|---|---|
-| `FINWALL_MARKET_DATA_PROVIDER` | Market quote provider. Supported values: `static`, `yahoo`. Unknown values safely fall back to `static`. | `static` | No | Optional | `yahoo` |
+| `FINWALL_MARKET_DATA_PROVIDER` | Market quote provider. Supported values: `static`, `yahoo`, `yfinance`. Unknown values safely fall back to `static`. | `static` | No | Optional | `yahoo` |
 | `FINWALL_MARKET_DATA_TIMEOUT_SECONDS` | Quote-provider timeout in seconds. | `5` | No | Optional | `5` |
 
 `static` uses only manually supplied prices, such as `--price NVDA=120`.
 
-`yahoo` uses Yahoo public endpoints through Python's standard library. It is supported for local/self-managed decision-support workflows, including live portfolio prices, market index quotes, technicals, and market-condition inputs. Yahoo public endpoint data may be unavailable, delayed, stale, partial, or rate-limited, and it is not broker-grade or guaranteed institutional market data. Finwall does not add `yfinance`, does not execute trades, and remains decision-support only.
+`yahoo` uses Yahoo public endpoints through Python's standard library. It is supported for local/self-managed decision-support workflows, including live portfolio prices, market index quotes, technicals, and market-condition inputs. Yahoo public endpoint data may be unavailable, delayed, stale, partial, or rate-limited, and it is not broker-grade or guaranteed institutional market data. Finwall does not execute trades and remains decision-support only.
+
+`yfinance` is an experimental optional adapter behind Finwall's market-data provider interface. It is disabled by default and requires installing the optional extra before use:
+
+```bash
+poetry install --extras yfinance
+```
+
+Then select it explicitly:
+
+```bash
+FINWALL_MARKET_DATA_PROVIDER=yfinance poetry run finwall market-data-check --ticker AAPL --historical-days 30
+```
+
+The `yfinance` project is unofficial and is not affiliated with, endorsed by, or vetted by Yahoo. Its project documentation points users to Yahoo terms for usage rights. Treat `yfinance` data as decision-support only: it may be unavailable, delayed, stale, partial, malformed, rate-limited, or blocked, and it is not guaranteed production, institutional, real-time, or broker-grade market data. It does not add broker integration, automatic trading, or order execution. Missing `yfinance` installs, provider exceptions, missing latest prices, and malformed historical responses are reported as unavailable results rather than raw third-party exceptions.
 
 Examples:
 
@@ -48,6 +62,7 @@ FINWALL_MARKET_DATA_PROVIDER=yahoo poetry run finwall --database finwall.db tech
 FINWALL_MARKET_DATA_PROVIDER=yahoo poetry run finwall --database finwall.db market-index SP500
 FINWALL_MARKET_DATA_PROVIDER=yahoo poetry run finwall market-data-check --ticker AAPL --historical-days 30
 FINWALL_MARKET_DATA_PROVIDER=yahoo poetry run finwall market-data-check --json
+FINWALL_MARKET_DATA_PROVIDER=yfinance poetry run finwall market-data-check --ticker AAPL --historical-days 30
 ```
 
 Run `market-data-check` before relying on live-price reports when changing providers or diagnosing local connectivity. It reports the configured provider, timeout, a sample latest quote check, and a sample historical-price check without initializing portfolio storage.

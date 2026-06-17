@@ -11,6 +11,7 @@ from finwall.market_data import (
     fetch_portfolio_latest_prices,
 )
 from finwall.market_data_diagnostics import run_market_data_diagnostics
+from finwall.market_data_yfinance import YFinanceMarketDataProvider
 from finwall.models import Holding, Portfolio
 
 
@@ -143,11 +144,17 @@ def test_build_market_data_provider_supports_static_and_yahoo() -> None:
         build_market_data_provider("static", 1.0), StaticMarketDataProvider
     )
     assert isinstance(build_market_data_provider("yahoo", 1.0), YahooMarketDataProvider)
+    assert isinstance(
+        build_market_data_provider("yfinance", 1.0), YFinanceMarketDataProvider
+    )
 
 
 def test_build_market_data_provider_normalizes_names_and_falls_back_to_static() -> None:
     assert isinstance(
         build_market_data_provider(" Yahoo ", 1.0), YahooMarketDataProvider
+    )
+    assert isinstance(
+        build_market_data_provider(" YFINANCE ", 1.0), YFinanceMarketDataProvider
     )
     assert isinstance(
         build_market_data_provider("STATIC", 1.0), StaticMarketDataProvider
@@ -662,3 +669,194 @@ def test_yahoo_historical_prices_returns_empty_for_empty_ticker_or_non_positive_
 
     assert provider.get_historical_prices("", days=5) == ()
     assert provider.get_historical_prices("AAPL", days=0) == ()
+
+
+class _FakeYFinanceModule:
+    def __init__(self, ticker_class):
+        self.Ticker = ticker_class
+
+
+def _install_fake_yfinance(monkeypatch, ticker_class) -> None:
+    import finwall.market_data_yfinance as market_data_yfinance
+
+    fake_module = _FakeYFinanceModule(ticker_class)
+    monkeypatch.setattr(
+        market_data_yfinance.importlib,
+        "import_module",
+        lambda name: fake_module
+        if name == "yfinance"
+        else (_ for _ in ()).throw(ImportError(name)),
+    )
+
+
+def test_yfinance_missing_dependency_returns_safe_unavailable_prices(
+    monkeypatch,
+) -> None:
+    import finwall.market_data_yfinance as market_data_yfinance
+
+    def raise_import_error(_name: str):
+        raise ImportError("No module named yfinance")
+
+    monkeypatch.setattr(
+        market_data_yfinance.importlib,
+        "import_module",
+        raise_import_error,
+    )
+    provider = YFinanceMarketDataProvider(timeout_seconds=1.0)
+
+    prices = provider.get_latest_prices(["AAPL"])
+
+    assert prices["AAPL"].available is False
+    assert prices["AAPL"].source == "yfinance"
+    assert "optional yfinance extra" in prices["AAPL"].error
+    assert provider.get_historical_prices("AAPL", days=5) == ()
+
+
+def test_yfinance_latest_prices_success_with_fake_module(monkeypatch) -> None:
+    class FakeTicker:
+        def __init__(self, symbol: str) -> None:
+            self.symbol = symbol
+            self.fast_info = {
+                "last_price": 190.25,
+                "currency": "USD",
+            }
+
+    _install_fake_yfinance(monkeypatch, FakeTicker)
+    provider = YFinanceMarketDataProvider(timeout_seconds=1.0)
+
+    prices = provider.get_latest_prices([" aapl ", "AAPL"])
+
+    assert list(prices) == ["AAPL"]
+    assert prices["AAPL"].available is True
+    assert prices["AAPL"].price == Decimal("190.25")
+    assert prices["AAPL"].currency == "USD"
+    assert prices["AAPL"].source == "yfinance"
+
+
+def test_yfinance_latest_prices_missing_price_is_unavailable(monkeypatch) -> None:
+    class FakeTicker:
+        def __init__(self, _symbol: str) -> None:
+            self.fast_info = {"currency": "USD"}
+            self.info = {}
+
+    _install_fake_yfinance(monkeypatch, FakeTicker)
+    provider = YFinanceMarketDataProvider(timeout_seconds=1.0)
+
+    prices = provider.get_latest_prices(["AAPL"])
+
+    assert prices["AAPL"].available is False
+    assert prices["AAPL"].price is None
+    assert prices["AAPL"].error == "price missing in yfinance response"
+
+
+def test_yfinance_latest_prices_provider_exception_is_safe(monkeypatch) -> None:
+    class FakeTicker:
+        def __init__(self, _symbol: str) -> None:
+            raise RuntimeError("raw provider details")
+
+    _install_fake_yfinance(monkeypatch, FakeTicker)
+    provider = YFinanceMarketDataProvider(timeout_seconds=1.0)
+
+    prices = provider.get_latest_prices(["AAPL"])
+
+    assert prices["AAPL"].available is False
+    assert prices["AAPL"].error == "yfinance latest quote request failed"
+
+
+class _FakeHistory:
+    def __init__(self, rows, *, empty: bool = False) -> None:
+        self._rows = rows
+        self.empty = empty
+
+    def iterrows(self):
+        return iter(self._rows)
+
+
+def test_yfinance_historical_prices_success_with_fake_data(monkeypatch) -> None:
+    class FakeTicker:
+        def __init__(self, _symbol: str) -> None:
+            pass
+
+        def history(self, **kwargs):
+            assert kwargs["period"] == "5d"
+            assert kwargs["interval"] == "1d"
+            assert kwargs["timeout"] == 1.0
+            return _FakeHistory(
+                [
+                    ("2026-01-01", {"Close": 100.5, "Volume": 1000}),
+                    ("2026-01-02", {"Close": 101.5, "Volume": None}),
+                ]
+            )
+
+    _install_fake_yfinance(monkeypatch, FakeTicker)
+    provider = YFinanceMarketDataProvider(timeout_seconds=1.0)
+
+    bars = provider.get_historical_prices("aapl", days=5)
+
+    assert [bar.date for bar in bars] == ["2026-01-01", "2026-01-02"]
+    assert [bar.close for bar in bars] == [Decimal("100.5"), Decimal("101.5")]
+    assert [bar.volume for bar in bars] == [1000, None]
+    assert {bar.source for bar in bars} == {"yfinance"}
+
+
+def test_yfinance_historical_prices_empty_and_malformed_responses(
+    monkeypatch,
+) -> None:
+    class EmptyTicker:
+        def __init__(self, _symbol: str) -> None:
+            pass
+
+        def history(self, **_kwargs):
+            return _FakeHistory([], empty=True)
+
+    _install_fake_yfinance(monkeypatch, EmptyTicker)
+    provider = YFinanceMarketDataProvider(timeout_seconds=1.0)
+    assert provider.get_historical_prices("AAPL", days=5) == ()
+
+    class MalformedTicker:
+        def __init__(self, _symbol: str) -> None:
+            pass
+
+        def history(self, **_kwargs):
+            return object()
+
+    _install_fake_yfinance(monkeypatch, MalformedTicker)
+    assert provider.get_historical_prices("AAPL", days=5) == ()
+
+
+def test_yfinance_index_quote_uses_existing_index_symbol_mapping(
+    monkeypatch,
+) -> None:
+    requested_symbols: list[str] = []
+
+    class FakeTicker:
+        def __init__(self, symbol: str) -> None:
+            requested_symbols.append(symbol)
+            self.fast_info = {"last_price": 5100.5, "currency": "USD"}
+
+    _install_fake_yfinance(monkeypatch, FakeTicker)
+    provider = YFinanceMarketDataProvider(timeout_seconds=1.0)
+
+    quote = provider.get_index_quote("sp500")
+
+    assert requested_symbols == ["^GSPC"]
+    assert quote.symbol == "SP500"
+    assert quote.available is True
+    assert quote.price == Decimal("5100.5")
+    assert quote.source == "yfinance"
+
+
+def test_yfinance_historical_provider_exception_returns_empty(
+    monkeypatch,
+) -> None:
+    class FakeTicker:
+        def __init__(self, _symbol: str) -> None:
+            pass
+
+        def history(self, **_kwargs):
+            raise RuntimeError("raw provider details")
+
+    _install_fake_yfinance(monkeypatch, FakeTicker)
+    provider = YFinanceMarketDataProvider(timeout_seconds=1.0)
+
+    assert provider.get_historical_prices("AAPL", days=5) == ()
