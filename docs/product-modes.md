@@ -45,6 +45,7 @@ These are internal/self-managed tooling surfaces and are not public SaaS-grade p
 - Market-condition classification.
 - Fundamentals inputs/summaries.
 - News inputs/summaries.
+- Optional `yfinance` market-data adapter when explicitly installed and selected.
 
 These capabilities are decision-support inputs and may be provider-limited or incomplete. Deterministic report/risk/recommendation fields remain the authoritative structured outputs.
 
@@ -63,7 +64,6 @@ The following must not be implied as currently available:
 - Broker integration.
 - Automatic trading.
 - Order execution.
-- `yfinance` dependency support.
 - Public SaaS multi-tenant auth/RBAC product model.
 - Enterprise compliance/security certification guarantees.
 - Guaranteed predictions or investment returns.

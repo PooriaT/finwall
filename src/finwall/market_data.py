@@ -390,6 +390,10 @@ def build_market_data_provider(
     normalized_provider = provider_name.strip().lower()
     if normalized_provider == "yahoo":
         return YahooMarketDataProvider(timeout_seconds=timeout_seconds)
+    if normalized_provider == "yfinance":
+        from finwall.market_data_yfinance import YFinanceMarketDataProvider
+
+        return YFinanceMarketDataProvider(timeout_seconds=timeout_seconds)
     if normalized_provider == "static":
         return StaticMarketDataProvider()
     return StaticMarketDataProvider()
