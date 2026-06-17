@@ -66,9 +66,11 @@
   <h3 id="{{ series.key }}-title">{{ title }}</h3>
   <p class="chart-summary">Positive and negative unrealized gain/loss values are shown with labels; missing prices are listed safely.</p>
   {% if series.points %}
+  {% set scale = namespace(max_abs=0) %}
+  {% for point in series.points %}{% set raw_for_scale = point.value|float if point.value is not none else 0 %}{% if raw_for_scale|abs > scale.max_abs %}{% set scale.max_abs = raw_for_scale|abs %}{% endif %}{% endfor %}
   <div class="chart-visual diverging-chart" role="img" aria-label="{{ title }} diverging bar chart">
     {% for point in series.points %}
-    {% set raw = point.value|float if point.value is not none else 0 %}{% set width = ((raw|abs) if (raw|abs) < 100 else 100) %}
+    {% set raw = point.value|float if point.value is not none else 0 %}{% set width = (raw|abs / scale.max_abs * 100) if scale.max_abs else 0 %}
     <div class="chart-row{% if point.status != 'available' %} chart-missing{% endif %}">
       <div class="chart-row-label"><strong>{{ point.label }}</strong><span>{{ point.value if point.value is not none else point.metadata.missing_price_message or 'Missing price' }}</span></div>
       <div class="chart-bar chart-bar-split" aria-hidden="true"><span class="chart-bar-fill {% if raw < 0 %}chart-bar-negative{% elif raw > 0 %}chart-bar-positive{% endif %}" style="width: {{ width }}%"></span></div>

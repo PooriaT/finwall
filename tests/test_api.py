@@ -532,6 +532,53 @@ def test_admin_dashboard_handles_empty_portfolio(tmp_path):
     assert "Risk warnings by severity" in response.text
 
 
+def test_admin_dashboard_reuses_price_snapshot_for_charts(tmp_path, monkeypatch):
+    from decimal import Decimal
+
+    from finwall.market_data import MarketPrice, StaticMarketDataProvider
+
+    client = build_client(tmp_path)
+    h = auth_headers()
+    client.post(
+        "/api/v1/portfolio/holdings",
+        headers=h,
+        json={"ticker": "AAPL", "shares": "2", "average_price": "100"},
+    )
+
+    calls = {"count": 0}
+
+    def provider(_name, _timeout):
+        return StaticMarketDataProvider(
+            {"AAPL": MarketPrice("AAPL", Decimal("150"), "USD", "test", True)}
+        )
+
+    def fetch_once(portfolio, provider_instance):
+        calls["count"] += 1
+        from finwall.market_data import fetch_portfolio_latest_prices
+
+        return fetch_portfolio_latest_prices(portfolio, provider_instance)
+
+    def fail_if_chart_data_refetches(_portfolio, _provider):
+        raise AssertionError("chart data should reuse the dashboard price snapshot")
+
+    monkeypatch.setattr("finwall.admin_dashboard.build_market_data_provider", provider)
+    monkeypatch.setattr(
+        "finwall.admin_dashboard.fetch_portfolio_latest_prices", fetch_once
+    )
+    monkeypatch.setattr(
+        "finwall.chart_data.fetch_portfolio_latest_prices", fail_if_chart_data_refetches
+    )
+    client.post("/admin/login", data={"token": "secret"})
+    calls["count"] = 0
+
+    response = client.get("/admin")
+
+    assert response.status_code == 200
+    assert "AAPL" in response.text
+    assert "300.00" in response.text
+    assert calls["count"] == 1
+
+
 def test_admin_dashboard_charts_render_priced_missing_and_risk_data(
     tmp_path, monkeypatch
 ):
