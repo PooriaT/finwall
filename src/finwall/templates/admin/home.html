@@ -1,10 +1,8 @@
 {% extends "admin/base.html" %}
-{% from "admin/_components.html" import metric_card, empty_state, status_badge, section_header %}
+{% from "admin/_components.html" import metric_card, empty_state, status_badge, section_header, horizontal_bar_chart, stacked_bar_chart, diverging_bar_chart, count_bar_chart %}
 {% block content %}
 <h1>Dashboard</h1>
 <p class="lede">Read-only portfolio overview for {{ dashboard.portfolio_name }}. Decision-support only; live-data status depends on the configured provider.</p>
-
-<section class="panel chart-placeholder"><h2>Chart area</h2><p>Charts are intentionally not included in this PR. This space is reserved for future visual sections.</p></section>
 
 <section class="panel">
   {{ section_header('Portfolio Summary', '/admin/portfolio', 'View portfolio state') }}
@@ -17,6 +15,17 @@
     {{ metric_card('Price completeness status', dashboard.valuation.price_completeness_status) }}
     {{ metric_card('Unrealized gain/loss', dashboard.valuation.total_unrealized_gain_loss) }}
     {{ metric_card('Unrealized gain/loss percent', dashboard.valuation.total_unrealized_gain_loss_percent) }}
+  </div>
+</section>
+
+<section class="panel" aria-labelledby="dashboard-charts-title">
+  <div class="section-header"><h2 id="dashboard-charts-title">Charts</h2></div>
+  <p class="chart-summary">Read-only decision-support charts are rendered server-side from the portfolio analysis chart data. Missing market data may make charts partial.</p>
+  <div class="charts-grid">
+    {{ horizontal_bar_chart('Allocation by holding', dashboard.charts.allocation_by_holding, 'No holdings are available for allocation charts.') }}
+    {{ stacked_bar_chart('Cash vs invested', dashboard.charts.cash_vs_invested, 'No cash or invested values are available.') }}
+    {{ diverging_bar_chart('Unrealized gain/loss by holding', dashboard.charts.unrealized_gain_loss_by_holding, 'No holdings are available for unrealized gain/loss charts.') }}
+    {{ count_bar_chart('Risk warnings by severity', dashboard.charts.risk_warnings_by_severity, 'No risk warnings.') }}
   </div>
 </section>
 

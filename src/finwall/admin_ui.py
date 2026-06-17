@@ -71,6 +71,56 @@ def _form_page(title: str, body: str) -> str:
     return f"<h1>{escape(title)}</h1>{body}"
 
 
+def _fallback_chart_card(
+    title: str, series: Mapping[str, Any], empty_message: str
+) -> str:
+    points = series.get("points") or []
+    parts = [f'<section class="chart-card"><h3>{escape(title)}</h3>']
+    if not points:
+        parts.append(f'<p class="empty-state">{escape(empty_message)}</p>')
+    else:
+        parts.append('<div class="chart-visual" role="img">')
+        for point in points:
+            metadata = point.get("metadata") or {}
+            status = str(point.get("status") or "available")
+            label = escape(str(point.get("label") or point.get("key") or ""))
+            value = point.get("value")
+            message = metadata.get("missing_price_message") or "Missing price"
+            display_value = escape(str(value if value is not None else message))
+            percent = point.get("percent")
+            percent_text = f"{escape(str(percent))}%" if percent is not None else "N/A"
+            classes = "chart-row" + (" chart-missing" if status != "available" else "")
+            raw_value = 0
+            try:
+                raw_value = float(value or 0)
+            except (TypeError, ValueError):
+                raw_value = 0
+            value_class = (
+                " chart-bar-positive"
+                if raw_value > 0
+                else " chart-bar-negative"
+                if raw_value < 0
+                else ""
+            )
+            parts.append(
+                f'<div class="{classes}"><div class="chart-row-label"><strong>{label}</strong><span>{display_value}</span></div>'
+                f'<div class="chart-bar" aria-hidden="true"><span class="chart-bar-fill{value_class}"></span></div>'
+                f'<div class="chart-value">{percent_text} · {escape(status.replace("_", " "))}</div></div>'
+            )
+            for warning in metadata.get("warnings") or []:
+                parts.append(
+                    f'<p class="chart-warning-list">{escape(str(warning.get("severity", "")).title())} {escape(str(warning.get("code", "")))}: {escape(str(warning.get("message", "")))}</p>'
+                )
+        parts.append("</div>")
+    warnings = series.get("warnings") or []
+    if warnings:
+        parts.append('<ul class="chart-warning-list">')
+        parts.extend(f"<li>{escape(str(warning))}</li>" for warning in warnings)
+        parts.append("</ul>")
+    parts.append("</section>")
+    return "".join(parts)
+
+
 def _fallback_body(template_name: str, context: Mapping[str, Any]) -> str:
     if template_name == "login.html":
         return '<section class="panel narrow"><h1>Finwall Admin Login</h1><form method="post" action="/admin/login" class="stacked-form"><label>API token <input type="password" name="token" autocomplete="current-password" required></label><button class="button" type="submit">Login</button></form></section>'
@@ -92,6 +142,28 @@ def _fallback_body(template_name: str, context: Mapping[str, Any]) -> str:
                 "Price completeness status", valuation["price_completeness_status"]
             ),
             "</section></section>",
+            '<section class="panel" aria-labelledby="dashboard-charts-title"><h2 id="dashboard-charts-title">Charts</h2><p class="chart-summary">Read-only decision-support charts are rendered server-side from the portfolio analysis chart data. Missing market data may make charts partial.</p><div class="charts-grid">',
+            _fallback_chart_card(
+                "Allocation by holding",
+                dashboard.charts["allocation_by_holding"],
+                "No holdings are available for allocation charts.",
+            ),
+            _fallback_chart_card(
+                "Cash vs invested",
+                dashboard.charts["cash_vs_invested"],
+                "No cash or invested values are available.",
+            ),
+            _fallback_chart_card(
+                "Unrealized gain/loss by holding",
+                dashboard.charts["unrealized_gain_loss_by_holding"],
+                "No holdings are available for unrealized gain/loss charts.",
+            ),
+            _fallback_chart_card(
+                "Risk warnings by severity",
+                dashboard.charts["risk_warnings_by_severity"],
+                "No risk warnings.",
+            ),
+            "</div></section>",
             '<section class="panel"><h2>Cash</h2>',
         ]
         if dashboard.cash_balances:

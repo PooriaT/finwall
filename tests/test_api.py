@@ -472,6 +472,13 @@ def test_admin_dashboard_renders_read_only_overview(tmp_path):
     for text in (
         "Dashboard",
         "Portfolio Summary",
+        "Charts",
+        "Allocation by holding",
+        "Cash vs invested",
+        "Unrealized gain/loss by holding",
+        "Risk warnings by severity",
+        "Price unavailable",
+        "chart-card",
         "Cash",
         "Holdings",
         "Active Orders",
@@ -493,9 +500,15 @@ def test_admin_dashboard_renders_read_only_overview(tmp_path):
     ):
         assert text in response.text
     assert "No report has been saved yet." in response.text
+    assert "Chart area" not in response.text
+    assert "Charts are intentionally not included" not in response.text
     assert 'form method="post" action="/admin/cash' not in response.text
     assert 'form method="post" action="/admin/holdings' not in response.text
     assert 'form method="post" action="/admin/orders' not in response.text
+    chart_section = response.text.split(
+        '<h2 id="dashboard-charts-title">Charts</h2>', 1
+    )[1].split('<section class="panel table-wrap">', 1)[0]
+    assert "<form" not in chart_section
     assert "secret" not in response.text
 
 
@@ -513,6 +526,62 @@ def test_admin_dashboard_handles_empty_portfolio(tmp_path):
     assert "Current goal has not been configured." in response.text
     assert "Risk profile has not been configured." in response.text
     assert "complete" in response.text
+    assert "Charts" in response.text
+    assert "No holdings are available for allocation charts." in response.text
+    assert "No holdings are available for unrealized gain/loss charts." in response.text
+    assert "Risk warnings by severity" in response.text
+
+
+def test_admin_dashboard_charts_render_priced_missing_and_risk_data(
+    tmp_path, monkeypatch
+):
+    from decimal import Decimal
+
+    from finwall.market_data import MarketPrice, StaticMarketDataProvider
+
+    client = build_client(tmp_path)
+    h = auth_headers()
+    client.post(
+        "/api/v1/portfolio/cash/add",
+        headers=h,
+        json={"currency": "USD", "amount": "1000"},
+    )
+    client.post(
+        "/api/v1/portfolio/holdings",
+        headers=h,
+        json={"ticker": "AAPL", "shares": "2", "average_price": "100"},
+    )
+    client.post(
+        "/api/v1/portfolio/holdings",
+        headers=h,
+        json={"ticker": "MSFT", "shares": "1", "average_price": "300"},
+    )
+
+    def provider(_name, _timeout):
+        return StaticMarketDataProvider(
+            {"AAPL": MarketPrice("AAPL", Decimal("150"), "USD", "test", True)}
+        )
+
+    monkeypatch.setattr("finwall.chart_data.build_market_data_provider", provider)
+    monkeypatch.setattr("finwall.admin_dashboard.build_market_data_provider", provider)
+    client.post("/admin/login", data={"token": "secret"})
+
+    response = client.get("/admin")
+
+    assert response.status_code == 200
+    assert "Allocation by holding" in response.text
+    assert "AAPL" in response.text
+    assert "300.00" in response.text
+    assert "MSFT" in response.text
+    assert "Price unavailable for MSFT" in response.text
+    assert "Cash vs invested" in response.text
+    assert "partial" in response.text
+    assert "Unrealized gain/loss by holding" in response.text
+    assert "100.00" in response.text
+    assert "Risk warnings by severity" in response.text
+    assert "Medium" in response.text or "medium" in response.text
+    assert "chart-bar-positive" in response.text
+    assert "secret" not in response.text
 
 
 def test_admin_dashboard_shows_latest_report_metadata(tmp_path):
