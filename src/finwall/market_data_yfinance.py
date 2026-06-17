@@ -134,9 +134,7 @@ def _unavailable_price(ticker: str, source: str, error: str | None) -> MarketPri
     )
 
 
-def _extract_latest_quote(
-    ticker_data: object, timeout_seconds: float
-) -> _LatestQuote:
+def _extract_latest_quote(ticker_data: object, timeout_seconds: float) -> _LatestQuote:
     history = ticker_data.history(
         period="5d",
         interval="1d",
