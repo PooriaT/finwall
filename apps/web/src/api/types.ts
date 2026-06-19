@@ -39,3 +39,7 @@ export type AnalysisChartsQuery = QueryParams<
 export type PortfolioAuditQuery = QueryParams<
   operations["read_portfolio_audit_api_v1_portfolio_audit_get"]
 >;
+
+export type AuthSession = JsonResponse<
+  operations["auth_session_api_v1_auth_session_get"]
+>;

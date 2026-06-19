@@ -18,14 +18,29 @@ If launching through CLI/API-enabled paths, also ensure `FINWALL_API_ENABLED=tru
 ## Authentication
 
 - API endpoints use `Authorization: Bearer <FINWALL_API_TOKEN>`.
-- Admin web login uses the same token and stores an HTTP-only cookie.
+- Admin web login uses the same token and stores an HTTP-only
+  `finwall_admin_token` cookie for server-rendered `/admin` pages.
+- The React frontend uses `POST /api/v1/auth/login` to exchange the local token
+  for a separate HTTP-only `finwall_web_session` cookie. Browser requests must
+  use `credentials: include`; the token is not returned in JSON and must not be
+  stored in browser-accessible storage.
+
+Both cookie flows are local/self-managed convenience flows around the configured
+app token. They do not add OAuth, registration, password reset, RBAC, or
+multi-user accounts.
 
 ## Key routes
 
 - Health: `GET /health`
 - Admin login/home: `/admin/login`, `/admin`
+- Frontend session auth: `/api/v1/auth/login`, `/api/v1/auth/logout`,
+  `/api/v1/auth/session`
 - Portfolio read: `GET /api/v1/portfolio`
 - Portfolio audit list: `GET /api/v1/portfolio/audit`
+
+`GET /api/v1/auth/session` returns `401` when the frontend session cookie is
+missing or invalid. Successful login/logout responses only return
+`authenticated` state and do not include the configured token.
 
 ## What API/admin can update
 
@@ -73,6 +88,10 @@ The following read-only endpoints return authenticated, deterministic JSON paylo
 Use the optional `report_history_limit` query parameter to bound report history in chart payloads. The API defaults to `10` and caps requests at `50`.
 
 These endpoints reuse the existing portfolio snapshot, risk assessment, market-data provider selection, latest-price fetching, and report-history storage services. Values are decision-support data only. Payloads can be partial when prices are missing or a market data provider fails; missing prices are represented with status fields, `null` values where appropriate, warnings, and metadata instead of raw tracebacks.
+
+Read-only portfolio and chart endpoints accept bearer auth, the admin cookie, or
+the frontend session cookie. Portfolio mutation endpoints remain bearer-token
+authenticated and do not accept the frontend session cookie.
 
 
 ## Admin dashboard charts

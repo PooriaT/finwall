@@ -1,6 +1,7 @@
 import type {
   AnalysisCharts,
   AnalysisChartsQuery,
+  AuthSession,
   Portfolio,
   PortfolioAudit,
   PortfolioAuditQuery,
@@ -56,13 +57,28 @@ async function parseJson(response: Response): Promise<unknown> {
 async function requestJson<T>(
   path: string,
   query?: Record<string, QueryValue>,
+  init?: {
+    method?: string;
+    body?: unknown;
+  },
 ): Promise<T> {
-  const response = await fetch(buildUrl(path, query), {
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+  };
+  const requestInit: RequestInit = {
     credentials: "include",
-    headers: {
-      Accept: "application/json",
-    },
-  });
+    headers,
+  };
+
+  if (init?.method) {
+    requestInit.method = init.method;
+  }
+  if (init && "body" in init) {
+    headers["Content-Type"] = "application/json";
+    requestInit.body = JSON.stringify(init.body);
+  }
+
+  const response = await fetch(buildUrl(path, query), requestInit);
   const body = await parseJson(response);
 
   if (!response.ok) {
@@ -86,4 +102,21 @@ export function getPortfolioAudit(
   query: PortfolioAuditQuery = {},
 ): Promise<PortfolioAudit> {
   return requestJson<PortfolioAudit>("/v1/portfolio/audit", query);
+}
+
+export function login(token: string): Promise<AuthSession> {
+  return requestJson<AuthSession>("/v1/auth/login", undefined, {
+    method: "POST",
+    body: { token },
+  });
+}
+
+export function logout(): Promise<AuthSession> {
+  return requestJson<AuthSession>("/v1/auth/logout", undefined, {
+    method: "POST",
+  });
+}
+
+export function getSession(): Promise<AuthSession> {
+  return requestJson<AuthSession>("/v1/auth/session");
 }

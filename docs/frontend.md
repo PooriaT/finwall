@@ -69,26 +69,40 @@ Generated files live in:
 The small hand-written wrapper lives in `apps/web/src/api/client.ts`, with
 operation-derived aliases in `apps/web/src/api/types.ts`.
 
-The initial wrappers call read-only API endpoints and rely on the HTTP-only
-`finwall_admin_token` cookie set by the existing admin login flow. Bearer token
-auth remains available for non-browser API clients, and API mutation endpoints
-remain bearer-only.
+Browser authentication uses the frontend session endpoints:
+
+- `POST /api/v1/auth/login`
+- `POST /api/v1/auth/logout`
+- `GET /api/v1/auth/session`
+
+The login page submits the local app token directly to the backend. On success,
+the backend sets an HTTP-only `finwall_web_session` cookie with `SameSite=Lax`,
+`Path=/`, and `Secure` when `FINWALL_ENV=production`. The token is not returned
+in JSON and must not be stored in `localStorage`, `sessionStorage`, URLs, logs,
+or generated client configuration.
+
+Frontend API requests must use `credentials: "include"` so the browser sends the
+session cookie. Bearer token auth remains available for non-browser API clients,
+and API mutation endpoints remain bearer-only. The frontend session cookie is
+accepted only for session checks and read-only frontend-needed API endpoints.
+`GET /api/v1/auth/session` returns `401` for missing or invalid sessions; the
+frontend treats that as unauthenticated state and shows the login route.
 
 ## Current status
 
 The scaffold currently includes:
 
 - a layout shell with Finwall branding
-- dashboard, login, and not-found placeholder routes
+- protected dashboard, login, and not-found routes
 - a visible safety note
 - generated OpenAPI TypeScript schema workflow
 - typed wrappers for portfolio, analysis chart, and audit reads
+- typed wrappers for session login, logout, and session checks
 - local CSS
 - frontend typecheck, test, build, and preview scripts
 
 Not implemented yet:
 
-- real browser session auth
 - live dashboard data
 - charts
 - portfolio mutation forms
@@ -101,4 +115,6 @@ own deterministic finance logic, expose API tokens to browser JavaScript, connec
 to brokers, execute orders, or perform automatic trading.
 
 Browser API calls must use session-cookie-friendly requests for read endpoints.
-Do not store or send raw API tokens from frontend code.
+Do not store raw API tokens in frontend code or browser-accessible storage. OAuth,
+user registration, password reset, RBAC, and multi-user account management are
+out of scope.
