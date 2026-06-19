@@ -6,7 +6,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 from urllib.parse import parse_qs
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import Cookie, Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -92,6 +92,75 @@ class RiskProfileRequest(BaseModel):
     notes: str | None = None
 
 
+class CashBalanceResponse(BaseModel):
+    currency: str
+    amount: float
+
+
+class HoldingResponse(BaseModel):
+    ticker: str
+    share_count: float
+    average_purchase_price: float
+    sector: str | None = None
+
+
+class TradeTransactionResponse(BaseModel):
+    ticker: str
+    side: str
+    share_count: float
+    price: float
+    traded_on: date
+    fees: float = 0
+
+
+class ActiveOrderResponse(BaseModel):
+    ticker: str
+    side: OrderSide
+    order_type: OrderType
+    share_count: float
+    limit_price: float | None = None
+    stop_price: float | None = None
+
+
+class WatchlistItemResponse(BaseModel):
+    ticker: str
+    note: str | None = None
+
+
+class TimelineResponse(BaseModel):
+    start_date: date
+    target_date: date | None = None
+
+
+class InvestmentGoalResponse(BaseModel):
+    name: str
+    target_amount: float | None = None
+    timeline: TimelineResponse | None = None
+
+
+class RiskProfileResponse(BaseModel):
+    level: RiskLevel
+    notes: str | None = None
+
+
+class RecommendationRecordResponse(BaseModel):
+    title: str
+    summary: str
+    created_on: date
+
+
+class PortfolioResponse(BaseModel):
+    name: str
+    cash_balances: list[CashBalanceResponse] = Field(default_factory=list)
+    holdings: list[HoldingResponse] = Field(default_factory=list)
+    transactions: list[TradeTransactionResponse] = Field(default_factory=list)
+    active_orders: list[ActiveOrderResponse] = Field(default_factory=list)
+    watchlist: list[WatchlistItemResponse] = Field(default_factory=list)
+    goals: list[InvestmentGoalResponse] = Field(default_factory=list)
+    risk_profile: RiskProfileResponse | None = None
+    recommendations: list[RecommendationRecordResponse] = Field(default_factory=list)
+
+
 class ChartPointResponse(BaseModel):
     key: str
     label: str
@@ -161,15 +230,32 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
         token = app.state.settings.api_token
         return bool(token) and raw_token == token
 
+    def _bearer_token_is_valid(authorization: str | None) -> bool:
+        if authorization is None or not authorization.startswith("Bearer "):
+            return False
+        return _token_is_valid(authorization.removeprefix("Bearer ").strip())
+
     def auth(request: Request, authorization: str | None = Header(default=None)) -> str:
         token = request.app.state.settings.api_token
         if not token:
             raise HTTPException(401, detail="authentication is not configured")
-        if authorization is None or not authorization.startswith("Bearer "):
-            raise HTTPException(401, detail="invalid authentication credentials")
-        if authorization.removeprefix("Bearer ").strip() != token:
+        if not _bearer_token_is_valid(authorization):
             raise HTTPException(401, detail="invalid authentication credentials")
         return "api-admin"
+
+    def read_auth(
+        request: Request,
+        authorization: str | None = Header(default=None),
+        admin_token: str | None = Cookie(default=None, alias=ADMIN_COOKIE_NAME),
+    ) -> str:
+        token = request.app.state.settings.api_token
+        if not token:
+            raise HTTPException(401, detail="authentication is not configured")
+        if _bearer_token_is_valid(authorization):
+            return "api-admin"
+        if _token_is_valid(admin_token):
+            return "web-admin"
+        raise HTTPException(401, detail="invalid authentication credentials")
 
     def admin_auth(request: Request) -> str:
         token = app.state.settings.api_token
@@ -342,8 +428,8 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
             dashboard=dashboard,
         )
 
-    @app.get("/api/v1/portfolio", response_model=Portfolio)
-    def read_portfolio(_: str = Depends(auth)):
+    @app.get("/api/v1/portfolio", response_model=PortfolioResponse)
+    def read_portfolio(_: str = Depends(read_auth)):
         return asdict(get_portfolio())
 
     def _analysis_charts(report_history_limit: int = 10):
@@ -360,7 +446,7 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
         response_model=PortfolioAnalysisChartsResponse,
     )
     def portfolio_analysis_charts(
-        report_history_limit: int = 10, _: str = Depends(auth)
+        report_history_limit: int = 10, _: str = Depends(read_auth)
     ):
         return _analysis_charts(report_history_limit).as_dict()
 
@@ -369,7 +455,7 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
         response_model=ChartSeriesResponse,
     )
     def portfolio_allocation_holdings(
-        report_history_limit: int = 10, _: str = Depends(auth)
+        report_history_limit: int = 10, _: str = Depends(read_auth)
     ):
         return _analysis_charts(report_history_limit).allocation_by_holding.as_dict()
 
@@ -378,7 +464,7 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
         response_model=ChartSeriesResponse,
     )
     def portfolio_allocation_sectors(
-        report_history_limit: int = 10, _: str = Depends(auth)
+        report_history_limit: int = 10, _: str = Depends(read_auth)
     ):
         return _analysis_charts(report_history_limit).allocation_by_sector.as_dict()
 
@@ -387,7 +473,7 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
         response_model=ChartSeriesResponse,
     )
     def portfolio_cash_vs_invested(
-        report_history_limit: int = 10, _: str = Depends(auth)
+        report_history_limit: int = 10, _: str = Depends(read_auth)
     ):
         return _analysis_charts(report_history_limit).cash_vs_invested.as_dict()
 
@@ -396,7 +482,7 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
         response_model=ChartSeriesResponse,
     )
     def portfolio_unrealized_gain_loss(
-        report_history_limit: int = 10, _: str = Depends(auth)
+        report_history_limit: int = 10, _: str = Depends(read_auth)
     ):
         return _analysis_charts(
             report_history_limit
@@ -406,7 +492,9 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
         "/api/v1/portfolio/analysis/risk-warnings",
         response_model=ChartSeriesResponse,
     )
-    def portfolio_risk_warnings(report_history_limit: int = 10, _: str = Depends(auth)):
+    def portfolio_risk_warnings(
+        report_history_limit: int = 10, _: str = Depends(read_auth)
+    ):
         return _analysis_charts(
             report_history_limit
         ).risk_warnings_by_severity.as_dict()
@@ -416,12 +504,12 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
         response_model=ChartSeriesResponse,
     )
     def portfolio_report_history(
-        report_history_limit: int = 10, _: str = Depends(auth)
+        report_history_limit: int = 10, _: str = Depends(read_auth)
     ):
         return _analysis_charts(report_history_limit).report_history_summary.as_dict()
 
     @app.get("/api/v1/portfolio/audit", response_model=PortfolioAuditResponse)
-    def read_portfolio_audit(limit: int = 50, _: str = Depends(auth)):
+    def read_portfolio_audit(limit: int = 50, _: str = Depends(read_auth)):
         try:
             events = app.state.store.list_portfolio_audit_events(
                 DEFAULT_PORTFOLIO, limit

@@ -69,6 +69,11 @@ Generated files live in:
 The small hand-written wrapper lives in `apps/web/src/api/client.ts`, with
 operation-derived aliases in `apps/web/src/api/types.ts`.
 
+The initial wrappers call read-only API endpoints and rely on the HTTP-only
+`finwall_admin_token` cookie set by the existing admin login flow. Bearer token
+auth remains available for non-browser API clients, and API mutation endpoints
+remain bearer-only.
+
 ## Current status
 
 The scaffold currently includes:
@@ -95,5 +100,5 @@ Finwall remains a local/self-managed decision-support tool. The frontend must no
 own deterministic finance logic, expose API tokens to browser JavaScript, connect
 to brokers, execute orders, or perform automatic trading.
 
-Browser API calls must use session-cookie-friendly requests. Do not store or
-send raw API tokens from frontend code.
+Browser API calls must use session-cookie-friendly requests for read endpoints.
+Do not store or send raw API tokens from frontend code.

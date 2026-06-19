@@ -165,6 +165,9 @@ def test_portfolio_updates_flow(tmp_path):
     assert state.status_code == 200
     body = state.json()
     assert body["cash_balances"]
+    assert isinstance(body["cash_balances"][0]["amount"], int | float)
+    assert isinstance(body["holdings"][0]["share_count"], int | float)
+    assert isinstance(body["holdings"][0]["average_purchase_price"], int | float)
     assert body["risk_profile"]["level"] == "moderate"
 
 
@@ -235,6 +238,27 @@ def test_admin_login_logout_and_cookie_auth(tmp_path):
     assert "secret" not in home.text
     out = client.post("/admin/logout", follow_redirects=False)
     assert out.status_code == 303
+
+
+def test_admin_cookie_authorizes_api_reads_only(tmp_path):
+    client = build_client(tmp_path)
+    client.post("/admin/login", data={"token": "secret"})
+
+    portfolio = client.get("/api/v1/portfolio")
+    charts = client.get("/api/v1/portfolio/analysis/charts")
+    audit = client.get("/api/v1/portfolio/audit")
+    mutation = client.post(
+        "/api/v1/portfolio/cash/add",
+        json={"currency": "USD", "amount": "10"},
+    )
+
+    assert portfolio.status_code == 200
+    assert portfolio.json()["name"] == "Primary"
+    assert charts.status_code == 200
+    assert charts.json()["portfolio_name"] == "Primary"
+    assert audit.status_code == 200
+    assert "events" in audit.json()
+    assert mutation.status_code == 401
 
 
 def test_admin_css_static_asset_served(tmp_path):

@@ -1,13 +1,12 @@
 {
   "components": {
     "schemas": {
-      "ActiveOrder": {
+      "ActiveOrderResponse": {
         "properties": {
           "limit_price": {
             "anyOf": [
               {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
+                "type": "number"
               },
               {
                 "type": "null"
@@ -19,9 +18,8 @@
             "$ref": "#/components/schemas/OrderType"
           },
           "share_count": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Share Count",
-            "type": "string"
+            "type": "number"
           },
           "side": {
             "$ref": "#/components/schemas/OrderSide"
@@ -29,8 +27,7 @@
           "stop_price": {
             "anyOf": [
               {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
+                "type": "number"
               },
               {
                 "type": "null"
@@ -49,15 +46,14 @@
           "order_type",
           "share_count"
         ],
-        "title": "ActiveOrder",
+        "title": "ActiveOrderResponse",
         "type": "object"
       },
-      "CashBalance": {
+      "CashBalanceResponse": {
         "properties": {
           "amount": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Amount",
-            "type": "string"
+            "type": "number"
           },
           "currency": {
             "title": "Currency",
@@ -68,7 +64,7 @@
           "currency",
           "amount"
         ],
-        "title": "CashBalance",
+        "title": "CashBalanceResponse",
         "type": "object"
       },
       "CashRequest": {
@@ -210,42 +206,6 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
-      "Holding": {
-        "properties": {
-          "average_purchase_price": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Average Purchase Price",
-            "type": "string"
-          },
-          "sector": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sector"
-          },
-          "share_count": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Share Count",
-            "type": "string"
-          },
-          "ticker": {
-            "title": "Ticker",
-            "type": "string"
-          }
-        },
-        "required": [
-          "ticker",
-          "share_count",
-          "average_purchase_price"
-        ],
-        "title": "Holding",
-        "type": "object"
-      },
       "HoldingRequest": {
         "properties": {
           "average_price": {
@@ -280,7 +240,41 @@
         "title": "HoldingRequest",
         "type": "object"
       },
-      "InvestmentGoal": {
+      "HoldingResponse": {
+        "properties": {
+          "average_purchase_price": {
+            "title": "Average Purchase Price",
+            "type": "number"
+          },
+          "sector": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sector"
+          },
+          "share_count": {
+            "title": "Share Count",
+            "type": "number"
+          },
+          "ticker": {
+            "title": "Ticker",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticker",
+          "share_count",
+          "average_purchase_price"
+        ],
+        "title": "HoldingResponse",
+        "type": "object"
+      },
+      "InvestmentGoalResponse": {
         "properties": {
           "name": {
             "title": "Name",
@@ -289,8 +283,7 @@
           "target_amount": {
             "anyOf": [
               {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
+                "type": "number"
               },
               {
                 "type": "null"
@@ -301,7 +294,7 @@
           "timeline": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Timeline"
+                "$ref": "#/components/schemas/TimelineResponse"
               },
               {
                 "type": "null"
@@ -312,7 +305,7 @@
         "required": [
           "name"
         ],
-        "title": "InvestmentGoal",
+        "title": "InvestmentGoalResponse",
         "type": "object"
       },
       "OrderRequest": {
@@ -379,78 +372,6 @@
         ],
         "title": "OrderType",
         "type": "string"
-      },
-      "Portfolio": {
-        "properties": {
-          "active_orders": {
-            "items": {
-              "$ref": "#/components/schemas/ActiveOrder"
-            },
-            "title": "Active Orders",
-            "type": "array"
-          },
-          "cash_balances": {
-            "items": {
-              "$ref": "#/components/schemas/CashBalance"
-            },
-            "title": "Cash Balances",
-            "type": "array"
-          },
-          "goals": {
-            "items": {
-              "$ref": "#/components/schemas/InvestmentGoal"
-            },
-            "title": "Goals",
-            "type": "array"
-          },
-          "holdings": {
-            "items": {
-              "$ref": "#/components/schemas/Holding"
-            },
-            "title": "Holdings",
-            "type": "array"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "recommendations": {
-            "items": {
-              "$ref": "#/components/schemas/RecommendationRecord"
-            },
-            "title": "Recommendations",
-            "type": "array"
-          },
-          "risk_profile": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/RiskProfile"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "transactions": {
-            "items": {
-              "$ref": "#/components/schemas/TradeTransaction"
-            },
-            "title": "Transactions",
-            "type": "array"
-          },
-          "watchlist": {
-            "items": {
-              "$ref": "#/components/schemas/WatchlistItem"
-            },
-            "title": "Watchlist",
-            "type": "array"
-          }
-        },
-        "required": [
-          "name"
-        ],
-        "title": "Portfolio",
-        "type": "object"
       },
       "PortfolioAnalysisChartsResponse": {
         "properties": {
@@ -636,7 +557,79 @@
         "title": "PortfolioChartsResponse",
         "type": "object"
       },
-      "RecommendationRecord": {
+      "PortfolioResponse": {
+        "properties": {
+          "active_orders": {
+            "items": {
+              "$ref": "#/components/schemas/ActiveOrderResponse"
+            },
+            "title": "Active Orders",
+            "type": "array"
+          },
+          "cash_balances": {
+            "items": {
+              "$ref": "#/components/schemas/CashBalanceResponse"
+            },
+            "title": "Cash Balances",
+            "type": "array"
+          },
+          "goals": {
+            "items": {
+              "$ref": "#/components/schemas/InvestmentGoalResponse"
+            },
+            "title": "Goals",
+            "type": "array"
+          },
+          "holdings": {
+            "items": {
+              "$ref": "#/components/schemas/HoldingResponse"
+            },
+            "title": "Holdings",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "recommendations": {
+            "items": {
+              "$ref": "#/components/schemas/RecommendationRecordResponse"
+            },
+            "title": "Recommendations",
+            "type": "array"
+          },
+          "risk_profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RiskProfileResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "transactions": {
+            "items": {
+              "$ref": "#/components/schemas/TradeTransactionResponse"
+            },
+            "title": "Transactions",
+            "type": "array"
+          },
+          "watchlist": {
+            "items": {
+              "$ref": "#/components/schemas/WatchlistItemResponse"
+            },
+            "title": "Watchlist",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "PortfolioResponse",
+        "type": "object"
+      },
+      "RecommendationRecordResponse": {
         "properties": {
           "created_on": {
             "format": "date",
@@ -657,7 +650,7 @@
           "summary",
           "created_on"
         ],
-        "title": "RecommendationRecord",
+        "title": "RecommendationRecordResponse",
         "type": "object"
       },
       "RiskLevel": {
@@ -668,29 +661,6 @@
         ],
         "title": "RiskLevel",
         "type": "string"
-      },
-      "RiskProfile": {
-        "properties": {
-          "level": {
-            "$ref": "#/components/schemas/RiskLevel"
-          },
-          "notes": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Notes"
-          }
-        },
-        "required": [
-          "level"
-        ],
-        "title": "RiskProfile",
-        "type": "object"
       },
       "RiskProfileRequest": {
         "properties": {
@@ -715,30 +685,27 @@
         "title": "RiskProfileRequest",
         "type": "object"
       },
-      "Timeline": {
+      "RiskProfileResponse": {
         "properties": {
-          "start_date": {
-            "format": "date",
-            "title": "Start Date",
-            "type": "string"
+          "level": {
+            "$ref": "#/components/schemas/RiskLevel"
           },
-          "target_date": {
+          "notes": {
             "anyOf": [
               {
-                "format": "date",
                 "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Target Date"
+            "title": "Notes"
           }
         },
         "required": [
-          "start_date"
+          "level"
         ],
-        "title": "Timeline",
+        "title": "RiskProfileResponse",
         "type": "object"
       },
       "TimelineRequest": {
@@ -765,6 +732,32 @@
           "start_date"
         ],
         "title": "TimelineRequest",
+        "type": "object"
+      },
+      "TimelineResponse": {
+        "properties": {
+          "start_date": {
+            "format": "date",
+            "title": "Start Date",
+            "type": "string"
+          },
+          "target_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Date"
+          }
+        },
+        "required": [
+          "start_date"
+        ],
+        "title": "TimelineResponse",
         "type": "object"
       },
       "TradeRequest": {
@@ -807,34 +800,24 @@
         "title": "TradeRequest",
         "type": "object"
       },
-      "TradeSide": {
-        "enum": [
-          "buy",
-          "sell"
-        ],
-        "title": "TradeSide",
-        "type": "string"
-      },
-      "TradeTransaction": {
+      "TradeTransactionResponse": {
         "properties": {
           "fees": {
-            "default": "0",
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "default": 0,
             "title": "Fees",
-            "type": "string"
+            "type": "number"
           },
           "price": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Price",
-            "type": "string"
+            "type": "number"
           },
           "share_count": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Share Count",
-            "type": "string"
+            "type": "number"
           },
           "side": {
-            "$ref": "#/components/schemas/TradeSide"
+            "title": "Side",
+            "type": "string"
           },
           "ticker": {
             "title": "Ticker",
@@ -853,7 +836,7 @@
           "price",
           "traded_on"
         ],
-        "title": "TradeTransaction",
+        "title": "TradeTransactionResponse",
         "type": "object"
       },
       "ValidationError": {
@@ -889,7 +872,7 @@
         "title": "ValidationError",
         "type": "object"
       },
-      "WatchlistItem": {
+      "WatchlistItemResponse": {
         "properties": {
           "note": {
             "anyOf": [
@@ -910,7 +893,7 @@
         "required": [
           "ticker"
         ],
-        "title": "WatchlistItem",
+        "title": "WatchlistItemResponse",
         "type": "object"
       },
       "WatchlistRequest": {
@@ -1356,6 +1339,22 @@
               ],
               "title": "Authorization"
             }
+          },
+          {
+            "in": "cookie",
+            "name": "finwall_admin_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Finwall Admin Token"
+            }
           }
         ],
         "responses": {
@@ -1363,7 +1362,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Portfolio"
+                  "$ref": "#/components/schemas/PortfolioResponse"
                 }
               }
             },
@@ -1411,6 +1410,22 @@
                 }
               ],
               "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "finwall_admin_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Finwall Admin Token"
             }
           }
         ],
@@ -1468,6 +1483,22 @@
               ],
               "title": "Authorization"
             }
+          },
+          {
+            "in": "cookie",
+            "name": "finwall_admin_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Finwall Admin Token"
+            }
           }
         ],
         "responses": {
@@ -1523,6 +1554,22 @@
                 }
               ],
               "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "finwall_admin_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Finwall Admin Token"
             }
           }
         ],
@@ -1580,6 +1627,22 @@
               ],
               "title": "Authorization"
             }
+          },
+          {
+            "in": "cookie",
+            "name": "finwall_admin_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Finwall Admin Token"
+            }
           }
         ],
         "responses": {
@@ -1635,6 +1698,22 @@
                 }
               ],
               "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "finwall_admin_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Finwall Admin Token"
             }
           }
         ],
@@ -1692,6 +1771,22 @@
               ],
               "title": "Authorization"
             }
+          },
+          {
+            "in": "cookie",
+            "name": "finwall_admin_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Finwall Admin Token"
+            }
           }
         ],
         "responses": {
@@ -1748,6 +1843,22 @@
               ],
               "title": "Authorization"
             }
+          },
+          {
+            "in": "cookie",
+            "name": "finwall_admin_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Finwall Admin Token"
+            }
           }
         ],
         "responses": {
@@ -1803,6 +1914,22 @@
                 }
               ],
               "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "finwall_admin_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Finwall Admin Token"
             }
           }
         ],

@@ -760,23 +760,23 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /** ActiveOrder */
-        ActiveOrder: {
+        /** ActiveOrderResponse */
+        ActiveOrderResponse: {
             /** Limit Price */
-            limit_price?: string | null;
+            limit_price?: number | null;
             order_type: components["schemas"]["OrderType"];
             /** Share Count */
-            share_count: string;
+            share_count: number;
             side: components["schemas"]["OrderSide"];
             /** Stop Price */
-            stop_price?: string | null;
+            stop_price?: number | null;
             /** Ticker */
             ticker: string;
         };
-        /** CashBalance */
-        CashBalance: {
+        /** CashBalanceResponse */
+        CashBalanceResponse: {
             /** Amount */
-            amount: string;
+            amount: number;
             /** Currency */
             currency: string;
         };
@@ -830,17 +830,6 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
-        /** Holding */
-        Holding: {
-            /** Average Purchase Price */
-            average_purchase_price: string;
-            /** Sector */
-            sector?: string | null;
-            /** Share Count */
-            share_count: string;
-            /** Ticker */
-            ticker: string;
-        };
         /** HoldingRequest */
         HoldingRequest: {
             /** Average Price */
@@ -852,13 +841,24 @@ export interface components {
             /** Ticker */
             ticker: string;
         };
-        /** InvestmentGoal */
-        InvestmentGoal: {
+        /** HoldingResponse */
+        HoldingResponse: {
+            /** Average Purchase Price */
+            average_purchase_price: number;
+            /** Sector */
+            sector?: string | null;
+            /** Share Count */
+            share_count: number;
+            /** Ticker */
+            ticker: string;
+        };
+        /** InvestmentGoalResponse */
+        InvestmentGoalResponse: {
             /** Name */
             name: string;
             /** Target Amount */
-            target_amount?: string | null;
-            timeline?: components["schemas"]["Timeline"] | null;
+            target_amount?: number | null;
+            timeline?: components["schemas"]["TimelineResponse"] | null;
         };
         /** OrderRequest */
         OrderRequest: {
@@ -883,26 +883,6 @@ export interface components {
          * @enum {string}
          */
         OrderType: "limit" | "stop_loss" | "stop_limit";
-        /** Portfolio */
-        Portfolio: {
-            /** Active Orders */
-            active_orders?: components["schemas"]["ActiveOrder"][];
-            /** Cash Balances */
-            cash_balances?: components["schemas"]["CashBalance"][];
-            /** Goals */
-            goals?: components["schemas"]["InvestmentGoal"][];
-            /** Holdings */
-            holdings?: components["schemas"]["Holding"][];
-            /** Name */
-            name: string;
-            /** Recommendations */
-            recommendations?: components["schemas"]["RecommendationRecord"][];
-            risk_profile?: components["schemas"]["RiskProfile"] | null;
-            /** Transactions */
-            transactions?: components["schemas"]["TradeTransaction"][];
-            /** Watchlist */
-            watchlist?: components["schemas"]["WatchlistItem"][];
-        };
         /** PortfolioAnalysisChartsResponse */
         PortfolioAnalysisChartsResponse: {
             charts: components["schemas"]["PortfolioChartsResponse"];
@@ -958,8 +938,28 @@ export interface components {
             risk_warnings_by_severity: components["schemas"]["ChartSeriesResponse"];
             unrealized_gain_loss_by_holding: components["schemas"]["ChartSeriesResponse"];
         };
-        /** RecommendationRecord */
-        RecommendationRecord: {
+        /** PortfolioResponse */
+        PortfolioResponse: {
+            /** Active Orders */
+            active_orders?: components["schemas"]["ActiveOrderResponse"][];
+            /** Cash Balances */
+            cash_balances?: components["schemas"]["CashBalanceResponse"][];
+            /** Goals */
+            goals?: components["schemas"]["InvestmentGoalResponse"][];
+            /** Holdings */
+            holdings?: components["schemas"]["HoldingResponse"][];
+            /** Name */
+            name: string;
+            /** Recommendations */
+            recommendations?: components["schemas"]["RecommendationRecordResponse"][];
+            risk_profile?: components["schemas"]["RiskProfileResponse"] | null;
+            /** Transactions */
+            transactions?: components["schemas"]["TradeTransactionResponse"][];
+            /** Watchlist */
+            watchlist?: components["schemas"]["WatchlistItemResponse"][];
+        };
+        /** RecommendationRecordResponse */
+        RecommendationRecordResponse: {
             /**
              * Created On
              * Format: date
@@ -975,20 +975,20 @@ export interface components {
          * @enum {string}
          */
         RiskLevel: "conservative" | "moderate" | "aggressive";
-        /** RiskProfile */
-        RiskProfile: {
-            level: components["schemas"]["RiskLevel"];
-            /** Notes */
-            notes?: string | null;
-        };
         /** RiskProfileRequest */
         RiskProfileRequest: {
             level: components["schemas"]["RiskLevel"];
             /** Notes */
             notes?: string | null;
         };
-        /** Timeline */
-        Timeline: {
+        /** RiskProfileResponse */
+        RiskProfileResponse: {
+            level: components["schemas"]["RiskLevel"];
+            /** Notes */
+            notes?: string | null;
+        };
+        /** TimelineRequest */
+        TimelineRequest: {
             /**
              * Start Date
              * Format: date
@@ -997,8 +997,8 @@ export interface components {
             /** Target Date */
             target_date?: string | null;
         };
-        /** TimelineRequest */
-        TimelineRequest: {
+        /** TimelineResponse */
+        TimelineResponse: {
             /**
              * Start Date
              * Format: date
@@ -1020,23 +1020,19 @@ export interface components {
             /** Trade Date */
             trade_date?: string | null;
         };
-        /**
-         * TradeSide
-         * @enum {string}
-         */
-        TradeSide: "buy" | "sell";
-        /** TradeTransaction */
-        TradeTransaction: {
+        /** TradeTransactionResponse */
+        TradeTransactionResponse: {
             /**
              * Fees
              * @default 0
              */
-            fees: string;
+            fees: number;
             /** Price */
-            price: string;
+            price: number;
             /** Share Count */
-            share_count: string;
-            side: components["schemas"]["TradeSide"];
+            share_count: number;
+            /** Side */
+            side: string;
             /** Ticker */
             ticker: string;
             /**
@@ -1054,8 +1050,8 @@ export interface components {
             /** Error Type */
             type: string;
         };
-        /** WatchlistItem */
-        WatchlistItem: {
+        /** WatchlistItemResponse */
+        WatchlistItemResponse: {
             /** Note */
             note?: string | null;
             /** Ticker */
@@ -1584,7 +1580,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                finwall_admin_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -1594,7 +1592,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Portfolio"];
+                    "application/json": components["schemas"]["PortfolioResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1617,7 +1615,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                finwall_admin_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -1650,7 +1650,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                finwall_admin_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -1683,7 +1685,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                finwall_admin_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -1716,7 +1720,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                finwall_admin_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -1749,7 +1755,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                finwall_admin_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -1782,7 +1790,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                finwall_admin_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -1815,7 +1825,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                finwall_admin_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -1848,7 +1860,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                finwall_admin_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
