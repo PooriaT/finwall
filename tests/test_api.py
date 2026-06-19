@@ -818,3 +818,227 @@ def test_analysis_report_history_metadata_and_limit_cap(tmp_path):
     assert len(points) == 50
     assert points[0]["metadata"]["command_context"] == "ctx-54"
     assert points[0]["metadata"]["recommendation_summary"] == "recommend-54"
+
+
+def _audit_events(client, headers):
+    response = client.get("/api/v1/portfolio/audit", headers=headers)
+    assert response.status_code == 200
+    return response.json()["events"]
+
+
+def test_api_mutation_audit_coverage(tmp_path):
+    client = build_client(tmp_path)
+    h = auth_headers()
+    client.post(
+        "/api/v1/portfolio/cash/add",
+        headers=h,
+        json={"currency": "USD", "amount": "1000"},
+    )
+    client.post(
+        "/api/v1/portfolio/cash/withdraw",
+        headers=h,
+        json={"currency": "USD", "amount": "10"},
+    )
+    client.post(
+        "/api/v1/portfolio/holdings",
+        headers=h,
+        json={"ticker": "MSFT", "shares": "5", "average_price": "20"},
+    )
+    client.delete("/api/v1/portfolio/holdings/MSFT", headers=h)
+    client.post(
+        "/api/v1/portfolio/trades/buy",
+        headers=h,
+        json={"ticker": "AAPL", "shares": "2", "price": "100", "currency": "USD"},
+    )
+    client.post(
+        "/api/v1/portfolio/trades/sell",
+        headers=h,
+        json={"ticker": "AAPL", "shares": "1", "price": "110", "currency": "USD"},
+    )
+    client.post(
+        "/api/v1/portfolio/orders",
+        headers=h,
+        json={
+            "ticker": "AAPL",
+            "side": "sell",
+            "order_type": "limit",
+            "shares": "1",
+            "limit_price": "150",
+        },
+    )
+    client.delete("/api/v1/portfolio/orders/AAPL", headers=h)
+    client.post(
+        "/api/v1/portfolio/watchlist",
+        headers=h,
+        json={"ticker": "TSLA", "note": "watch"},
+    )
+    client.delete("/api/v1/portfolio/watchlist/TSLA", headers=h)
+    client.put(
+        "/api/v1/portfolio/goal",
+        headers=h,
+        json={"name": "Grow", "target_amount": "10000"},
+    )
+    client.put(
+        "/api/v1/portfolio/timeline",
+        headers=h,
+        json={"start_date": "2026-01-01", "target_date": "2027-01-01"},
+    )
+    client.put(
+        "/api/v1/portfolio/risk-profile",
+        headers=h,
+        json={"level": "moderate", "notes": "ok"},
+    )
+
+    events = _audit_events(client, h)
+    actions = {event["action"] for event in events if event["status"] == "succeeded"}
+    assert {
+        "cash_add",
+        "cash_withdraw",
+        "holding_upsert",
+        "holding_delete",
+        "trade_buy",
+        "trade_sell",
+        "order_upsert",
+        "order_delete",
+        "watchlist_upsert",
+        "watchlist_delete",
+        "goal_set",
+        "timeline_set",
+        "risk_profile_set",
+    } <= actions
+    assert all(event["actor"] == "api-admin" for event in events)
+    assert all(event["source"] == "api" for event in events)
+    assert "secret" not in str(events)
+    assert any(
+        event["before_json"] is not None or event["after_json"] is not None
+        for event in events
+    )
+
+
+def test_failed_validation_audit_events_are_safe(tmp_path):
+    client = build_client(tmp_path)
+    h = auth_headers()
+    client.post(
+        "/api/v1/portfolio/cash/add",
+        headers=h,
+        json={"currency": "USD", "amount": "100"},
+    )
+    client.post(
+        "/api/v1/portfolio/cash/withdraw",
+        headers=h,
+        json={"currency": "USD", "amount": "1000"},
+    )
+    client.post(
+        "/api/v1/portfolio/trades/sell",
+        headers=h,
+        json={"ticker": "AAPL", "shares": "10", "price": "1", "currency": "USD"},
+    )
+    client.post(
+        "/api/v1/portfolio/cash/withdraw",
+        headers=h,
+        json={"currency": "USD", "amount": "bad\nTraceback"},
+    )
+    client.post(
+        "/api/v1/portfolio/orders",
+        headers=h,
+        json={
+            "ticker": "AAPL",
+            "side": "buy",
+            "order_type": "limit",
+            "shares": "1",
+            "limit_price": "bad",
+        },
+    )
+
+    client.post("/admin/login", data={"token": "secret"})
+    client.post(
+        "/admin/trades/sell",
+        data={"ticker": "AAPL", "shares": "10", "price": "1", "currency": "USD"},
+    )
+    client.post(
+        "/admin/orders",
+        data={"ticker": "AAPL", "side": "buy", "order_type": "limit", "shares": "1"},
+    )
+    client.post("/admin/risk-profile", data={"level": "invalid", "notes": "bad"})
+
+    events = _audit_events(client, h)
+    failed = [event for event in events if event["status"] == "failed"]
+    actions = {event["action"] for event in failed}
+    assert {
+        "cash_withdraw",
+        "trade_sell",
+        "order_upsert",
+        "risk_profile_set",
+    } <= actions
+    assert any(
+        event["action"] == "order_upsert" and event["source"] == "api"
+        for event in failed
+    )
+    assert any(
+        event["action"] == "trade_sell" and event["source"] == "web" for event in failed
+    )
+    assert all(event["safe_error_message"] for event in failed)
+    assert "secret" not in str(failed)
+    assert "Traceback" not in str(failed)
+
+
+def test_admin_mutation_audit_coverage(tmp_path):
+    client = build_client(tmp_path)
+    h = auth_headers()
+    client.post("/admin/login", data={"token": "secret"})
+    client.post("/admin/cash/add", data={"currency": "USD", "amount": "1000"})
+    client.post("/admin/cash/withdraw", data={"currency": "USD", "amount": "10"})
+    client.post(
+        "/admin/holdings", data={"ticker": "MSFT", "shares": "5", "average_price": "20"}
+    )
+    client.post("/admin/holdings/delete", data={"ticker": "MSFT"})
+    client.post(
+        "/admin/trades/buy",
+        data={"ticker": "AAPL", "shares": "2", "price": "100", "currency": "USD"},
+    )
+    client.post(
+        "/admin/trades/sell",
+        data={"ticker": "AAPL", "shares": "1", "price": "110", "currency": "USD"},
+    )
+    client.post(
+        "/admin/orders",
+        data={
+            "ticker": "AAPL",
+            "side": "sell",
+            "order_type": "limit",
+            "shares": "1",
+            "limit_price": "150",
+        },
+    )
+    client.post("/admin/orders/delete", data={"ticker": "AAPL"})
+    client.post("/admin/watchlist", data={"ticker": "TSLA", "note": "watch"})
+    client.post("/admin/watchlist/delete", data={"ticker": "TSLA"})
+    client.post("/admin/goal", data={"name": "Grow", "target_amount": "10000"})
+    client.post(
+        "/admin/timeline",
+        data={"start_date": "2026-01-01", "target_date": "2027-01-01"},
+    )
+    client.post("/admin/risk-profile", data={"level": "moderate", "notes": "ok"})
+
+    events = _audit_events(client, h)
+    actions = {event["action"] for event in events if event["status"] == "succeeded"}
+    assert {
+        "cash_add",
+        "cash_withdraw",
+        "holding_upsert",
+        "holding_delete",
+        "trade_buy",
+        "trade_sell",
+        "order_upsert",
+        "order_delete",
+        "watchlist_upsert",
+        "watchlist_delete",
+        "goal_set",
+        "timeline_set",
+        "risk_profile_set",
+    } <= actions
+    assert all(event["actor"] == "web-admin" for event in events)
+    assert all(event["source"] == "web" for event in events)
+    page = client.get("/admin/audit")
+    assert page.status_code == 200
+    assert "secret" not in page.text
