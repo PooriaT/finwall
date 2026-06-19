@@ -5,13 +5,14 @@ pytest.importorskip("httpx")
 
 from fastapi.testclient import TestClient
 
-from finwall.api import create_app
+from finwall.api import WEB_SESSION_COOKIE_NAME, create_app
 from finwall.config import Settings
 
 
-def build_client(tmp_path, token="secret"):
+def build_client(tmp_path, token="secret", app_env="development"):
     app = create_app(
         Settings(
+            app_env=app_env,
             storage_backend="sqlite",
             database_url="",
             database_path=str(tmp_path / "api.db"),
@@ -181,6 +182,84 @@ def test_api_token_missing_rejects(tmp_path):
     assert response.status_code == 401
 
 
+def test_web_login_fails_when_api_token_missing(tmp_path):
+    client = build_client(tmp_path, token="")
+
+    response = client.post("/api/v1/auth/login", json={"token": "anything"})
+
+    assert response.status_code == 401
+    assert "anything" not in response.text
+    assert WEB_SESSION_COOKIE_NAME not in response.headers.get("set-cookie", "")
+
+
+def test_web_login_fails_with_invalid_token(tmp_path):
+    client = build_client(tmp_path)
+
+    response = client.post("/api/v1/auth/login", json={"token": "bad"})
+
+    assert response.status_code == 401
+    assert "secret" not in response.text
+    assert "bad" not in response.text
+    assert WEB_SESSION_COOKIE_NAME not in response.headers.get("set-cookie", "")
+
+
+def test_web_login_sets_http_only_session_cookie_without_returning_token(tmp_path):
+    client = build_client(tmp_path)
+
+    response = client.post("/api/v1/auth/login", json={"token": "secret"})
+
+    assert response.status_code == 200
+    assert response.json() == {"authenticated": True}
+    assert "secret" not in response.text
+    set_cookie = response.headers.get("set-cookie", "")
+    assert WEB_SESSION_COOKIE_NAME in set_cookie
+    assert "HttpOnly" in set_cookie
+    assert "SameSite=lax" in set_cookie
+    assert "Path=/" in set_cookie
+
+
+def test_web_login_sets_secure_cookie_in_production(tmp_path):
+    client = build_client(tmp_path, app_env="production")
+
+    response = client.post("/api/v1/auth/login", json={"token": "secret"})
+
+    assert response.status_code == 200
+    assert "Secure" in response.headers.get("set-cookie", "")
+
+
+def test_web_session_endpoint_requires_valid_cookie(tmp_path):
+    client = build_client(tmp_path)
+
+    missing = client.get("/api/v1/auth/session")
+    invalid = client.get(
+        "/api/v1/auth/session", cookies={WEB_SESSION_COOKIE_NAME: "bad"}
+    )
+    login = client.post("/api/v1/auth/login", json={"token": "secret"})
+    valid = client.get("/api/v1/auth/session")
+
+    assert missing.status_code == 401
+    assert invalid.status_code == 401
+    assert login.status_code == 200
+    assert valid.status_code == 200
+    assert valid.json() == {"authenticated": True}
+    assert "secret" not in valid.text
+
+
+def test_web_logout_clears_session_cookie(tmp_path):
+    client = build_client(tmp_path)
+    client.post("/api/v1/auth/login", json={"token": "secret"})
+
+    response = client.post("/api/v1/auth/logout")
+    session = client.get("/api/v1/auth/session")
+
+    assert response.status_code == 200
+    assert response.json() == {"authenticated": False}
+    set_cookie = response.headers.get("set-cookie", "")
+    assert WEB_SESSION_COOKIE_NAME in set_cookie
+    assert "Max-Age=0" in set_cookie
+    assert session.status_code == 401
+
+
 def test_cash_withdraw_invalid_returns_400(tmp_path):
     client = build_client(tmp_path)
     h = auth_headers()
@@ -252,6 +331,28 @@ def test_admin_cookie_authorizes_api_reads_only(tmp_path):
         json={"currency": "USD", "amount": "10"},
     )
 
+    assert portfolio.status_code == 200
+    assert portfolio.json()["name"] == "Primary"
+    assert charts.status_code == 200
+    assert charts.json()["portfolio_name"] == "Primary"
+    assert audit.status_code == 200
+    assert "events" in audit.json()
+    assert mutation.status_code == 401
+
+
+def test_web_session_cookie_authorizes_api_reads_only(tmp_path):
+    client = build_client(tmp_path)
+    login = client.post("/api/v1/auth/login", json={"token": "secret"})
+
+    portfolio = client.get("/api/v1/portfolio")
+    charts = client.get("/api/v1/portfolio/analysis/charts")
+    audit = client.get("/api/v1/portfolio/audit")
+    mutation = client.post(
+        "/api/v1/portfolio/cash/add",
+        json={"currency": "USD", "amount": "10"},
+    )
+
+    assert login.status_code == 200
     assert portfolio.status_code == 200
     assert portfolio.json()["name"] == "Primary"
     assert charts.status_code == 200

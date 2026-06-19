@@ -49,6 +49,32 @@
         "title": "ActiveOrderResponse",
         "type": "object"
       },
+      "AuthLoginRequest": {
+        "properties": {
+          "token": {
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "AuthLoginRequest",
+        "type": "object"
+      },
+      "AuthSessionResponse": {
+        "properties": {
+          "authenticated": {
+            "title": "Authenticated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "authenticated"
+        ],
+        "title": "AuthSessionResponse",
+        "type": "object"
+      },
       "CashBalanceResponse": {
         "properties": {
           "amount": {
@@ -1320,6 +1346,108 @@
         "summary": "Admin Watchlist Delete"
       }
     },
+    "/api/v1/auth/login": {
+      "post": {
+        "operationId": "auth_login_api_v1_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthLoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthSessionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Auth Login"
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "operationId": "auth_logout_api_v1_auth_logout_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthSessionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Auth Logout"
+      }
+    },
+    "/api/v1/auth/session": {
+      "get": {
+        "operationId": "auth_session_api_v1_auth_session_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "finwall_web_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Finwall Web Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthSessionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Auth Session"
+      }
+    },
     "/api/v1/portfolio": {
       "get": {
         "operationId": "read_portfolio_api_v1_portfolio_get",
@@ -1354,6 +1482,22 @@
                 }
               ],
               "title": "Finwall Admin Token"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "finwall_web_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Finwall Web Session"
             }
           }
         ],
@@ -1427,6 +1571,22 @@
               ],
               "title": "Finwall Admin Token"
             }
+          },
+          {
+            "in": "cookie",
+            "name": "finwall_web_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Finwall Web Session"
+            }
           }
         ],
         "responses": {
@@ -1498,6 +1658,22 @@
                 }
               ],
               "title": "Finwall Admin Token"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "finwall_web_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Finwall Web Session"
             }
           }
         ],
@@ -1571,6 +1747,22 @@
               ],
               "title": "Finwall Admin Token"
             }
+          },
+          {
+            "in": "cookie",
+            "name": "finwall_web_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Finwall Web Session"
+            }
           }
         ],
         "responses": {
@@ -1642,6 +1834,22 @@
                 }
               ],
               "title": "Finwall Admin Token"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "finwall_web_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Finwall Web Session"
             }
           }
         ],
@@ -1715,6 +1923,22 @@
               ],
               "title": "Finwall Admin Token"
             }
+          },
+          {
+            "in": "cookie",
+            "name": "finwall_web_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Finwall Web Session"
+            }
           }
         ],
         "responses": {
@@ -1786,6 +2010,22 @@
                 }
               ],
               "title": "Finwall Admin Token"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "finwall_web_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Finwall Web Session"
             }
           }
         ],
@@ -1859,6 +2099,22 @@
               ],
               "title": "Finwall Admin Token"
             }
+          },
+          {
+            "in": "cookie",
+            "name": "finwall_web_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Finwall Web Session"
+            }
           }
         ],
         "responses": {
@@ -1930,6 +2186,22 @@
                 }
               ],
               "title": "Finwall Admin Token"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "finwall_web_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Finwall Web Session"
             }
           }
         ],

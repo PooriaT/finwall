@@ -103,6 +103,13 @@ a {
   line-height: 1.05;
 }
 
+.panel-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
 .panel p {
   max-width: 720px;
   color: #4b5b6b;
@@ -161,18 +168,52 @@ a {
   border: 1px solid #b7c5bf;
   border-radius: 8px;
   padding: 0.7rem 0.75rem;
-  color: #596879;
-  background: #edf2f0;
+  color: #172436;
+  background: #ffffff;
 }
 
 .login-form button {
-  border: 0;
+  border: 1px solid #275d4d;
   border-radius: 8px;
   padding: 0.75rem 1rem;
+  color: #ffffff;
+  background: #275d4d;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.login-form button:disabled {
+  border-color: #b7c5bf;
   color: #5f6c78;
   background: #d8e0dc;
-  font-weight: 800;
   cursor: not-allowed;
+}
+
+.form-error {
+  margin: 0;
+  border: 1px solid #d89c8d;
+  border-radius: 8px;
+  padding: 0.7rem 0.75rem;
+  color: #743424;
+  background: #fff6f3;
+  font-weight: 700;
+}
+
+.secondary-button {
+  flex: 0 0 auto;
+  border: 1px solid #b7c5bf;
+  border-radius: 8px;
+  padding: 0.55rem 0.8rem;
+  color: #263449;
+  background: #ffffff;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.secondary-button:hover,
+.secondary-button:focus-visible {
+  border-color: #275d4d;
+  outline: none;
 }
 
 .button-link {
@@ -209,5 +250,14 @@ a {
 
   .placeholder-grid {
     grid-template-columns: 1fr;
+  }
+
+  .panel-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .secondary-button {
+    align-self: flex-start;
   }
 }

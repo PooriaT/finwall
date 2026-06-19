@@ -7,7 +7,7 @@ from typing import Any
 from urllib.parse import parse_qs
 
 from fastapi import Cookie, Depends, FastAPI, Header, HTTPException, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -41,6 +41,7 @@ from finwall.storage_factory import build_portfolio_store
 
 DEFAULT_PORTFOLIO = "Primary"
 ADMIN_COOKIE_NAME = "finwall_admin_token"
+WEB_SESSION_COOKIE_NAME = "finwall_web_session"
 
 
 class CashRequest(BaseModel):
@@ -90,6 +91,14 @@ class TimelineRequest(BaseModel):
 class RiskProfileRequest(BaseModel):
     level: RiskLevel
     notes: str | None = None
+
+
+class AuthLoginRequest(BaseModel):
+    token: str
+
+
+class AuthSessionResponse(BaseModel):
+    authenticated: bool
 
 
 class CashBalanceResponse(BaseModel):
@@ -235,6 +244,22 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
             return False
         return _token_is_valid(authorization.removeprefix("Bearer ").strip())
 
+    def _secure_cookie() -> bool:
+        return app.state.settings.app_env.lower() == "production"
+
+    def _set_web_session_cookie(response: Response, token: str) -> None:
+        response.set_cookie(
+            WEB_SESSION_COOKIE_NAME,
+            token,
+            httponly=True,
+            samesite="lax",
+            secure=_secure_cookie(),
+            path="/",
+        )
+
+    def _delete_web_session_cookie(response: Response) -> None:
+        response.delete_cookie(WEB_SESSION_COOKIE_NAME, path="/", samesite="lax")
+
     def auth(request: Request, authorization: str | None = Header(default=None)) -> str:
         token = request.app.state.settings.api_token
         if not token:
@@ -247,6 +272,7 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
         request: Request,
         authorization: str | None = Header(default=None),
         admin_token: str | None = Cookie(default=None, alias=ADMIN_COOKIE_NAME),
+        web_session: str | None = Cookie(default=None, alias=WEB_SESSION_COOKIE_NAME),
     ) -> str:
         token = request.app.state.settings.api_token
         if not token:
@@ -255,7 +281,20 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
             return "api-admin"
         if _token_is_valid(admin_token):
             return "web-admin"
+        if _token_is_valid(web_session):
+            return "web-session"
         raise HTTPException(401, detail="invalid authentication credentials")
+
+    def web_session_auth(
+        request: Request,
+        web_session: str | None = Cookie(default=None, alias=WEB_SESSION_COOKIE_NAME),
+    ) -> str:
+        token = request.app.state.settings.api_token
+        if not token:
+            raise HTTPException(401, detail="authentication is not configured")
+        if not _token_is_valid(web_session):
+            raise HTTPException(401, detail="invalid authentication credentials")
+        return "web-session"
 
     def admin_auth(request: Request) -> str:
         token = app.state.settings.api_token
@@ -415,6 +454,28 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
         response = _redirect("/admin/login", "Logged out")
         response.delete_cookie(ADMIN_COOKIE_NAME)
         return response
+
+    @app.post("/api/v1/auth/login", response_model=AuthSessionResponse)
+    def auth_login(payload: AuthLoginRequest):
+        token = app.state.settings.api_token
+        if not token:
+            raise HTTPException(401, detail="authentication is not configured")
+        submitted_token = payload.token.strip()
+        if not _token_is_valid(submitted_token):
+            raise HTTPException(401, detail="invalid authentication credentials")
+        response = JSONResponse({"authenticated": True})
+        _set_web_session_cookie(response, submitted_token)
+        return response
+
+    @app.post("/api/v1/auth/logout", response_model=AuthSessionResponse)
+    def auth_logout():
+        response = JSONResponse({"authenticated": False})
+        _delete_web_session_cookie(response)
+        return response
+
+    @app.get("/api/v1/auth/session", response_model=AuthSessionResponse)
+    def auth_session(_: str = Depends(web_session_auth)):
+        return {"authenticated": True}
 
     @app.get("/admin")
     def admin_home(request: Request, _: str = Depends(admin_auth)):

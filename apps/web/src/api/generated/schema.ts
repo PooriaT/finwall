@@ -365,6 +365,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Auth Login */
+        post: operations["auth_login_api_v1_auth_login_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Auth Logout */
+        post: operations["auth_logout_api_v1_auth_logout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Auth Session */
+        get: operations["auth_session_api_v1_auth_session_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/portfolio": {
         parameters: {
             query?: never;
@@ -772,6 +823,16 @@ export interface components {
             stop_price?: number | null;
             /** Ticker */
             ticker: string;
+        };
+        /** AuthLoginRequest */
+        AuthLoginRequest: {
+            /** Token */
+            token: string;
+        };
+        /** AuthSessionResponse */
+        AuthSessionResponse: {
+            /** Authenticated */
+            authenticated: boolean;
         };
         /** CashBalanceResponse */
         CashBalanceResponse: {
@@ -1573,6 +1634,90 @@ export interface operations {
             };
         };
     };
+    auth_login_api_v1_auth_login_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthLoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthSessionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    auth_logout_api_v1_auth_logout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthSessionResponse"];
+                };
+            };
+        };
+    };
+    auth_session_api_v1_auth_session_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                finwall_web_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthSessionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     read_portfolio_api_v1_portfolio_get: {
         parameters: {
             query?: never;
@@ -1582,6 +1727,7 @@ export interface operations {
             path?: never;
             cookie?: {
                 finwall_admin_token?: string | null;
+                finwall_web_session?: string | null;
             };
         };
         requestBody?: never;
@@ -1617,6 +1763,7 @@ export interface operations {
             path?: never;
             cookie?: {
                 finwall_admin_token?: string | null;
+                finwall_web_session?: string | null;
             };
         };
         requestBody?: never;
@@ -1652,6 +1799,7 @@ export interface operations {
             path?: never;
             cookie?: {
                 finwall_admin_token?: string | null;
+                finwall_web_session?: string | null;
             };
         };
         requestBody?: never;
@@ -1687,6 +1835,7 @@ export interface operations {
             path?: never;
             cookie?: {
                 finwall_admin_token?: string | null;
+                finwall_web_session?: string | null;
             };
         };
         requestBody?: never;
@@ -1722,6 +1871,7 @@ export interface operations {
             path?: never;
             cookie?: {
                 finwall_admin_token?: string | null;
+                finwall_web_session?: string | null;
             };
         };
         requestBody?: never;
@@ -1757,6 +1907,7 @@ export interface operations {
             path?: never;
             cookie?: {
                 finwall_admin_token?: string | null;
+                finwall_web_session?: string | null;
             };
         };
         requestBody?: never;
@@ -1792,6 +1943,7 @@ export interface operations {
             path?: never;
             cookie?: {
                 finwall_admin_token?: string | null;
+                finwall_web_session?: string | null;
             };
         };
         requestBody?: never;
@@ -1827,6 +1979,7 @@ export interface operations {
             path?: never;
             cookie?: {
                 finwall_admin_token?: string | null;
+                finwall_web_session?: string | null;
             };
         };
         requestBody?: never;
@@ -1862,6 +2015,7 @@ export interface operations {
             path?: never;
             cookie?: {
                 finwall_admin_token?: string | null;
+                finwall_web_session?: string | null;
             };
         };
         requestBody?: never;
