@@ -106,9 +106,11 @@ Tradeoffs:
 - Requires a later auth implementation for browser sessions.
 - Keeps two UI surfaces during migration.
 
-## Out of Scope
+## Out of Scope for This ADR
 
-- Creating `apps/web`.
+This ADR accepts the frontend direction, but it does not implement it. The following work is deferred to later implementation PRs unless explicitly excluded elsewhere:
+
+- Creating the `apps/web` scaffold.
 - Adding Vite, React, TypeScript, Node dependencies, or package files.
 - Adding OpenAPI generation scripts.
 - Adding auth/session endpoints.
