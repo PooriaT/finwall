@@ -31,14 +31,17 @@ function ProtectedDashboard({ navigateTo }: { navigateTo: (path: string) => void
   }
 
   if (!session.authenticated) {
-    return <LoginPage onAuthenticated={() => navigateTo("/dashboard")} />;
+    return <LoginPage onAuthenticated={session.refresh} />;
   }
 
   return (
     <DashboardPage
+      authError={session.error}
       onLogout={async () => {
-        await session.logout();
-        navigateTo("/login");
+        const loggedOut = await session.logout();
+        if (loggedOut) {
+          navigateTo("/login");
+        }
       }}
     />
   );

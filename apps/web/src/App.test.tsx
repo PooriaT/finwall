@@ -82,6 +82,31 @@ describe("App", () => {
     expect(await screen.findByRole("heading", { name: "Sign in to Finwall" })).toBeInTheDocument();
   });
 
+  it("refreshes session after login from the protected dashboard fallback", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ detail: "invalid" }, { status: 401 }))
+      .mockResolvedValueOnce(jsonResponse({ authenticated: true }))
+      .mockResolvedValueOnce(jsonResponse({ authenticated: true }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderAt("/dashboard");
+    fireEvent.change(await screen.findByLabelText("App token"), {
+      target: { value: "secret" },
+    });
+    fireEvent.submit(screen.getByRole("form", { name: "Login form" }));
+
+    expect(
+      await screen.findByRole("heading", { name: "Portfolio overview placeholder" })
+    ).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/dashboard");
+    expect(fetchMock.mock.calls.map((call) => call[0])).toEqual([
+      "/api/v1/auth/session",
+      "/api/v1/auth/login",
+      "/api/v1/auth/session",
+    ]);
+  });
+
   it("submits login, clears token state, and navigates to the dashboard", async () => {
     const fetchMock = vi
       .fn()
@@ -137,6 +162,25 @@ describe("App", () => {
     await waitFor(() => expect(window.location.pathname).toBe("/login"));
     expect(screen.getByRole("heading", { name: "Sign in to Finwall" })).toBeInTheDocument();
     expect(fetchMock.mock.calls[1][0]).toBe("/api/v1/auth/logout");
+  });
+
+  it("keeps the dashboard authenticated when logout fails", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ authenticated: true }))
+      .mockResolvedValueOnce(jsonResponse({ detail: "error" }, { status: 500 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderAt("/dashboard");
+    fireEvent.click(await screen.findByRole("button", { name: "Log out" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Logout failed. Try again."
+    );
+    expect(
+      screen.getByRole("heading", { name: "Portfolio overview placeholder" })
+    ).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/dashboard");
   });
 
   it("renders the not-found page for unknown paths", () => {

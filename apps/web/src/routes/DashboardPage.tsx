@@ -1,8 +1,9 @@
 type DashboardPageProps = {
+  authError?: string | null;
   onLogout?: () => void | Promise<void>;
 };
 
-export default function DashboardPage({ onLogout }: DashboardPageProps) {
+export default function DashboardPage({ authError, onLogout }: DashboardPageProps) {
   return (
     <section className="panel" aria-labelledby="dashboard-title">
       <p className="eyebrow">Dashboard</p>
@@ -18,6 +19,11 @@ export default function DashboardPage({ onLogout }: DashboardPageProps) {
         This page will present backend-provided portfolio summaries, risk signals, and
         chart-ready analysis in later issues.
       </p>
+      {authError ? (
+        <p className="form-error" role="alert">
+          {authError}
+        </p>
+      ) : null}
       <div className="placeholder-grid" aria-label="Planned dashboard sections">
         <div>
           <h2>Allocation</h2>

@@ -2,7 +2,7 @@ import { FormEvent, useState } from "react";
 import { login } from "../api/client";
 
 type LoginPageProps = {
-  onAuthenticated?: () => void;
+  onAuthenticated?: () => void | Promise<void>;
 };
 
 export default function LoginPage({ onAuthenticated }: LoginPageProps) {
@@ -20,7 +20,7 @@ export default function LoginPage({ onAuthenticated }: LoginPageProps) {
     try {
       const session = await login(submittedToken);
       if (session.authenticated) {
-        onAuthenticated?.();
+        await onAuthenticated?.();
         return;
       }
       setError("Login failed. Check the token and try again.");

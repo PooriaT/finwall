@@ -41,12 +41,14 @@ export function useSession() {
         loading: false,
         error: null,
       });
+      return true;
     } catch {
-      setState({
-        authenticated: false,
+      setState((current) => ({
+        ...current,
         loading: false,
         error: "Logout failed. Try again.",
-      });
+      }));
+      return false;
     }
   }, []);
 
