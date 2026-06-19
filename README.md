@@ -72,6 +72,8 @@ poetry run finwall --database finwall.db report --price NVDA=120
 
 For fuller local setup and command walkthroughs, see [docs/local-setup.md](docs/local-setup.md) and [docs/cli-workflows.md](docs/cli-workflows.md).
 
+For the modern frontend scaffold, see [docs/frontend.md](docs/frontend.md).
+
 ## Common workflows
 
 ### Portfolio maintenance
@@ -146,6 +148,7 @@ See [docs/api-admin.md](docs/api-admin.md) and [docs/deployment/minimal-admin-in
 
 - Local setup: `docs/local-setup.md`
 - Configuration: `docs/configuration.md`
+- Frontend development: `docs/frontend.md`
 
 ### Usage workflows
 
