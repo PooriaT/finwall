@@ -3,12 +3,13 @@ import logging
 from dataclasses import asdict, replace
 from datetime import date
 from decimal import Decimal, InvalidOperation
+from typing import Any
 from urllib.parse import parse_qs
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from finwall.admin_dashboard import build_dashboard_view
 from finwall.admin_ui import ADMIN_STATIC_DIR, render_admin_template
@@ -17,6 +18,7 @@ from finwall.config import Settings, settings
 from finwall.models import ActiveOrder, OrderSide, OrderType, Portfolio, RiskLevel
 from finwall.portfolio_audit import (
     PortfolioAuditEntityType,
+    PortfolioAuditEvent,
     PortfolioAuditSource,
     PortfolioAuditStatus,
 )
@@ -88,6 +90,43 @@ class TimelineRequest(BaseModel):
 class RiskProfileRequest(BaseModel):
     level: RiskLevel
     notes: str | None = None
+
+
+class ChartPointResponse(BaseModel):
+    key: str
+    label: str
+    value: str | None
+    percent: str | None = None
+    status: str = "available"
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ChartSeriesResponse(BaseModel):
+    key: str
+    title: str
+    points: list[ChartPointResponse]
+    warnings: list[str] = Field(default_factory=list)
+
+
+class PortfolioChartsResponse(BaseModel):
+    allocation_by_holding: ChartSeriesResponse
+    allocation_by_sector: ChartSeriesResponse
+    cash_vs_invested: ChartSeriesResponse
+    unrealized_gain_loss_by_holding: ChartSeriesResponse
+    risk_warnings_by_severity: ChartSeriesResponse
+    report_history_summary: ChartSeriesResponse
+
+
+class PortfolioAnalysisChartsResponse(BaseModel):
+    portfolio_name: str
+    valuation_status: str
+    price_completeness_status: str
+    data_warnings: list[str]
+    charts: PortfolioChartsResponse
+
+
+class PortfolioAuditResponse(BaseModel):
+    events: list[PortfolioAuditEvent]
 
 
 def _to_decimal(value: str, field_name: str) -> Decimal:
@@ -303,7 +342,7 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
             dashboard=dashboard,
         )
 
-    @app.get("/api/v1/portfolio")
+    @app.get("/api/v1/portfolio", response_model=Portfolio)
     def read_portfolio(_: str = Depends(auth)):
         return asdict(get_portfolio())
 
@@ -316,31 +355,46 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
             report_history_limit=bounded_limit,
         )
 
-    @app.get("/api/v1/portfolio/analysis/charts")
+    @app.get(
+        "/api/v1/portfolio/analysis/charts",
+        response_model=PortfolioAnalysisChartsResponse,
+    )
     def portfolio_analysis_charts(
         report_history_limit: int = 10, _: str = Depends(auth)
     ):
         return _analysis_charts(report_history_limit).as_dict()
 
-    @app.get("/api/v1/portfolio/analysis/allocation/holdings")
+    @app.get(
+        "/api/v1/portfolio/analysis/allocation/holdings",
+        response_model=ChartSeriesResponse,
+    )
     def portfolio_allocation_holdings(
         report_history_limit: int = 10, _: str = Depends(auth)
     ):
         return _analysis_charts(report_history_limit).allocation_by_holding.as_dict()
 
-    @app.get("/api/v1/portfolio/analysis/allocation/sectors")
+    @app.get(
+        "/api/v1/portfolio/analysis/allocation/sectors",
+        response_model=ChartSeriesResponse,
+    )
     def portfolio_allocation_sectors(
         report_history_limit: int = 10, _: str = Depends(auth)
     ):
         return _analysis_charts(report_history_limit).allocation_by_sector.as_dict()
 
-    @app.get("/api/v1/portfolio/analysis/cash-vs-invested")
+    @app.get(
+        "/api/v1/portfolio/analysis/cash-vs-invested",
+        response_model=ChartSeriesResponse,
+    )
     def portfolio_cash_vs_invested(
         report_history_limit: int = 10, _: str = Depends(auth)
     ):
         return _analysis_charts(report_history_limit).cash_vs_invested.as_dict()
 
-    @app.get("/api/v1/portfolio/analysis/unrealized-gain-loss")
+    @app.get(
+        "/api/v1/portfolio/analysis/unrealized-gain-loss",
+        response_model=ChartSeriesResponse,
+    )
     def portfolio_unrealized_gain_loss(
         report_history_limit: int = 10, _: str = Depends(auth)
     ):
@@ -348,19 +402,25 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
             report_history_limit
         ).unrealized_gain_loss_by_holding.as_dict()
 
-    @app.get("/api/v1/portfolio/analysis/risk-warnings")
+    @app.get(
+        "/api/v1/portfolio/analysis/risk-warnings",
+        response_model=ChartSeriesResponse,
+    )
     def portfolio_risk_warnings(report_history_limit: int = 10, _: str = Depends(auth)):
         return _analysis_charts(
             report_history_limit
         ).risk_warnings_by_severity.as_dict()
 
-    @app.get("/api/v1/portfolio/analysis/report-history")
+    @app.get(
+        "/api/v1/portfolio/analysis/report-history",
+        response_model=ChartSeriesResponse,
+    )
     def portfolio_report_history(
         report_history_limit: int = 10, _: str = Depends(auth)
     ):
         return _analysis_charts(report_history_limit).report_history_summary.as_dict()
 
-    @app.get("/api/v1/portfolio/audit")
+    @app.get("/api/v1/portfolio/audit", response_model=PortfolioAuditResponse)
     def read_portfolio_audit(limit: int = 50, _: str = Depends(auth)):
         try:
             events = app.state.store.list_portfolio_audit_events(

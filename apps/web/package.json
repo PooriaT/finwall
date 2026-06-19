@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "openapi:check": "npm run openapi:export && npm run openapi:generate && git diff --exit-code openapi/finwall-openapi.json src/api/generated/schema.ts",
+    "openapi:export": "cd ../.. && poetry run python scripts/export_openapi.py --output apps/web/openapi/finwall-openapi.json",
+    "openapi:generate": "openapi-typescript openapi/finwall-openapi.json -o src/api/generated/schema.ts",
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc -b"
@@ -21,6 +24,7 @@
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^5.0.0",
     "jsdom": "^25.0.1",
+    "openapi-typescript": "^7.13.0",
     "typescript": "^5.7.2",
     "vite": "^7.0.0",
     "vitest": "^3.0.0"
