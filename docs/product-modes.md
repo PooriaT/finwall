@@ -47,7 +47,7 @@ These are internal/self-managed tooling surfaces and are not public SaaS-grade p
 - News inputs/summaries.
 - Optional `yfinance` market-data adapter when explicitly installed and selected.
 
-These capabilities are decision-support inputs and may be provider-limited or incomplete. Deterministic report/risk/recommendation fields remain the authoritative structured outputs.
+These capabilities are decision-support inputs and may be provider-limited or incomplete. Deterministic report/risk/recommendation fields remain the authoritative structured outputs, and deterministic recommendations remain conservative and primarily snapshot/risk driven unless a rule set explicitly consumes additional inputs.
 
 ## Incomplete / constrained
 
