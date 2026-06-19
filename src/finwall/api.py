@@ -427,7 +427,7 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
             raise
         try:
             updated = upsert_cash(portfolio, payload.currency, -amount)
-        except ValueError as exc:
+        except (HTTPException, ValueError) as exc:
             _audit_failure(
                 actor,
                 PortfolioAuditSource.API,
@@ -602,7 +602,7 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
                 if payload.stop_price
                 else None,
             )
-        except ValueError as exc:
+        except (HTTPException, ValueError) as exc:
             _audit_failure(
                 actor,
                 PortfolioAuditSource.API,
@@ -951,20 +951,33 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
         form = await _read_form(request)
         p = get_portfolio()
         before = _trade_snapshot(p, p, str(form["ticker"]), str(form["currency"]))
-        trade_date = (
-            date.fromisoformat(str(form["trade_date"]))
-            if form.get("trade_date")
-            else date.today()
-        )
-        fn = record_buy if side == "buy" else record_sell
-        updated = fn(
-            p,
-            str(form["ticker"]),
-            _to_decimal(str(form["shares"]), "shares"),
-            _to_decimal(str(form["price"]), "price"),
-            str(form["currency"]),
-            trade_date,
-        )
+        try:
+            trade_date = (
+                date.fromisoformat(str(form["trade_date"]))
+                if form.get("trade_date")
+                else date.today()
+            )
+            fn = record_buy if side == "buy" else record_sell
+            updated = fn(
+                p,
+                str(form["ticker"]),
+                _to_decimal(str(form["shares"]), "shares"),
+                _to_decimal(str(form["price"]), "price"),
+                str(form["currency"]),
+                trade_date,
+            )
+        except Exception as exc:
+            _audit_failure(
+                actor,
+                PortfolioAuditSource.WEB,
+                f"trade_{side}",
+                PortfolioAuditEntityType.TRADE,
+                str(form["ticker"]),
+                f"Failed {side} trade for {str(form['ticker'])}",
+                exc,
+                before,
+            )
+            raise
         persist(updated, p)
         record_update_audit(
             DEFAULT_PORTFOLIO,

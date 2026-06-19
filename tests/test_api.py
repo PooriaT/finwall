@@ -938,8 +938,23 @@ def test_failed_validation_audit_events_are_safe(tmp_path):
         headers=h,
         json={"currency": "USD", "amount": "bad\nTraceback"},
     )
+    client.post(
+        "/api/v1/portfolio/orders",
+        headers=h,
+        json={
+            "ticker": "AAPL",
+            "side": "buy",
+            "order_type": "limit",
+            "shares": "1",
+            "limit_price": "bad",
+        },
+    )
 
     client.post("/admin/login", data={"token": "secret"})
+    client.post(
+        "/admin/trades/sell",
+        data={"ticker": "AAPL", "shares": "10", "price": "1", "currency": "USD"},
+    )
     client.post(
         "/admin/orders",
         data={"ticker": "AAPL", "side": "buy", "order_type": "limit", "shares": "1"},
@@ -955,6 +970,13 @@ def test_failed_validation_audit_events_are_safe(tmp_path):
         "order_upsert",
         "risk_profile_set",
     } <= actions
+    assert any(
+        event["action"] == "order_upsert" and event["source"] == "api"
+        for event in failed
+    )
+    assert any(
+        event["action"] == "trade_sell" and event["source"] == "web" for event in failed
+    )
     assert all(event["safe_error_message"] for event in failed)
     assert "secret" not in str(failed)
     assert "Traceback" not in str(failed)
