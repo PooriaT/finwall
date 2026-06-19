@@ -106,8 +106,15 @@ def _recommend_holding(
             "Deterministic status derived from valuation, allocation, "
             "unrealized P/L, and risk warnings."
         ),
-        "Technical analysis is not implemented; confidence is capped.",
-        "Fundamental analysis is not implemented; confidence is capped.",
+        (
+            "Optional technical/fundamental/news inputs exist elsewhere in "
+            "Finwall but are not yet authoritative drivers in this "
+            "recommendation rule set."
+        ),
+        (
+            "Confidence is capped when optional analysis inputs are missing, "
+            "incomplete, static, or not included in this run."
+        ),
     ]
     warnings: list[str] = []
     invalidation: list[str] = []
@@ -215,8 +222,9 @@ def _recommend_cash_deployment(
     reasoning = [
         "Deterministic status uses valuation completeness, cash allocation, and risk warnings.",
         (
-            "Technical/fundamental engines are unavailable, so no "
-            "ticker-level buy candidates are provided."
+            "Cash deployment is based on valuation completeness, cash allocation, "
+            "and risk warnings; optional technical/fundamental/news inputs are not "
+            "used to generate ticker-level buy candidates in this rule set."
         ),
     ]
     warnings: list[str] = []
@@ -302,14 +310,31 @@ def _warnings_by_ticker(
     return by_ticker
 
 
+def _analysis_input_limitations() -> tuple[str, ...]:
+    return (
+        (
+            "Recommendations are primarily based on snapshot valuation, "
+            "allocation, and deterministic risk rules."
+        ),
+        (
+            "Technical analysis, market condition, fundamentals, and news "
+            "summaries are available as separate optional/experimental "
+            "decision-support inputs."
+        ),
+        (
+            "Optional analysis inputs may be missing, incomplete, static, "
+            "provider-dependent, or not included as authoritative drivers in "
+            "this recommendation rule set."
+        ),
+    )
+
+
 def _build_limitations(
     portfolio: Portfolio, snapshot: PortfolioSnapshot, risk_assessment: RiskAssessment
 ) -> list[str]:
     limitations = [
         "Decision support only; not financial advice.",
-        "Technical analysis is not implemented in this release.",
-        "Fundamental analysis is not implemented in this release.",
-        "News/sentiment inputs are not implemented in this release.",
+        *_analysis_input_limitations(),
     ]
     if snapshot.price_completeness_status != "complete":
         limitations.append(

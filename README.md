@@ -88,7 +88,7 @@ See: [docs/local-setup.md](docs/local-setup.md), [docs/cli-workflows.md](docs/cl
 
 ### Deterministic analysis and reports
 
-> Status: **Supported primary** for snapshots/risk/recommendations/report structure. Technical/fundamental/news/market-condition outputs are **experimental/optional decision-support inputs** and may be incomplete or provider-limited.
+> Status: **Supported primary** for snapshots/risk/recommendations/report structure. Technical/fundamental/news/market-condition outputs are **experimental/optional decision-support inputs** and may be incomplete or provider-limited. Deterministic recommendations remain conservative and primarily snapshot/risk driven unless a rule set explicitly consumes additional inputs.
 
 
 Use deterministic commands for snapshots and decision-support analysis, including:

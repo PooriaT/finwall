@@ -16,8 +16,9 @@ Finwall is a decision-support tool, not an execution platform.
 ## Data and analysis limitations
 
 - Market data can be missing, delayed, stale, or unavailable.
-- Fundamentals and news coverage can be incomplete.
+- Technical indicators, market-condition analysis, fundamentals, and news coverage can be optional, experimental, provider-dependent, or incomplete.
 - Deterministic checks are guardrails, not predictions.
+- Deterministic recommendations remain conservative and primarily snapshot/risk driven unless a rule set explicitly consumes additional inputs.
 - Narrative/LLM-style outputs (if enabled) are optional context and must not override deterministic evidence.
 
 ## Operational limitations

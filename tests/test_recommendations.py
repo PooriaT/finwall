@@ -150,3 +150,56 @@ def test_invalid_stop_protection_order_blocks_by_risk() -> None:
     assert item.status == RecommendationStatus.REDUCE
     assert item.blocked_by_risk is True
     assert any("invalid" in warning.lower() for warning in item.warnings)
+
+
+def test_recommendation_wording_reflects_optional_analysis_inputs() -> None:
+    portfolio = Portfolio(
+        name="Primary",
+        cash_balances=(CashBalance("USD", Decimal("1000")),),
+        holdings=(Holding("NVDA", Decimal("1"), Decimal("100")),),
+    )
+    snapshot = generate_snapshot(portfolio, {"NVDA": Decimal("110")})
+    risk = assess_portfolio_risk(portfolio, snapshot)
+    report = build_recommendation_report(portfolio, snapshot, risk)
+
+    output_text = "\n".join(
+        (
+            *report.limitations,
+            *report.holdings[0].reasoning_inputs,
+            *report.cash_deployment.reasoning_inputs,
+        )
+    )
+
+    stale_phrases = (
+        "Technical analysis" + " is not implemented",
+        "Fundamental analysis" + " is not implemented",
+        "News/sentiment inputs" + " are not implemented",
+        "Technical/fundamental engines" + " are unavailable",
+    )
+    for phrase in stale_phrases:
+        assert phrase not in output_text
+
+    assert "Decision support only; not financial advice." in report.limitations
+    assert "optional technical/fundamental/news inputs" in output_text
+    assert "not yet authoritative drivers" in output_text
+    assert "optional/experimental decision-support inputs" in output_text
+    assert "not used to generate ticker-level buy candidates" in output_text
+
+
+def test_recommendation_limitations_preserve_data_quality_warnings() -> None:
+    portfolio = Portfolio(
+        name="Primary",
+        holdings=(Holding("NVDA", Decimal("1"), Decimal("100")),),
+    )
+    snapshot = generate_snapshot(portfolio)
+    risk = assess_portfolio_risk(portfolio, snapshot)
+    report = build_recommendation_report(portfolio, snapshot, risk)
+
+    assert "Decision support only; not financial advice." in report.limitations
+    assert "Price coverage is incomplete, reducing recommendation confidence." in (
+        report.limitations
+    )
+    assert "Portfolio valuation is incomplete or unavailable." in report.limitations
+    assert "Goal/timeline data is missing." in report.limitations
+    assert "Risk profile defaulted to moderate assumptions." in report.limitations
+    assert "Risk profile default warning is active." in report.limitations

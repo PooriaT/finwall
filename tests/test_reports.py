@@ -100,3 +100,21 @@ def test_report_builds_with_empty_portfolio() -> None:
     rec = build_recommendation_report(portfolio, snapshot, risk)
     report = build_decision_support_report(portfolio, snapshot, risk, rec)
     assert report.portfolio_snapshot["holdings_summary"] == 0
+
+
+def test_report_output_omits_stale_recommendation_limitation_wording() -> None:
+    report = _build_base_report()
+    markdown = report.to_markdown()
+    payload_text = str(report.as_dict())
+    output_text = f"{markdown}\n{payload_text}"
+
+    stale_phrases = (
+        "Technical analysis" + " is not implemented",
+        "Fundamental analysis" + " is not implemented",
+        "News/sentiment inputs" + " are not implemented",
+        "Technical/fundamental engines" + " are unavailable",
+    )
+    for phrase in stale_phrases:
+        assert phrase not in output_text
+
+    assert "optional/experimental decision-support inputs" in output_text
