@@ -190,6 +190,59 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
         except Exception:
             logger.warning("failed to record portfolio audit event")
 
+    def _one(items, attr: str, value: str):
+        return next(
+            (asdict(item) for item in items if getattr(item, attr) == value), None
+        )
+
+    def _goal_snapshot(portfolio: Portfolio):
+        return asdict(portfolio.goals[0]) if portfolio.goals else None
+
+    def _timeline_snapshot(portfolio: Portfolio):
+        return (
+            asdict(portfolio.goals[0].timeline)
+            if portfolio.goals and portfolio.goals[0].timeline
+            else None
+        )
+
+    def _risk_snapshot(portfolio: Portfolio):
+        return asdict(portfolio.risk_profile) if portfolio.risk_profile else None
+
+    def _trade_snapshot(
+        before: Portfolio, after: Portfolio, ticker: str, currency: str
+    ):
+        return {
+            "cash": _one(after.cash_balances, "currency", currency),
+            "holding": _one(after.holdings, "ticker", ticker),
+            "trade": asdict(after.transactions[-1])
+            if len(after.transactions) > len(before.transactions)
+            else None,
+        }
+
+    def _audit_failure(
+        actor: str,
+        source: str,
+        action: str,
+        entity_type: str,
+        entity_id: str | None,
+        summary: str,
+        exc: Exception,
+        before: object | None = None,
+    ) -> None:
+        record_update_audit(
+            DEFAULT_PORTFOLIO,
+            actor=actor,
+            source=source,
+            action=action,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            before=before,
+            after=None,
+            status=PortfolioAuditStatus.FAILED,
+            summary=summary,
+            safe_error_message=safe_error_message(exc),
+        )
+
     def persist(updated: Portfolio, existing: Portfolio) -> dict:
         save_portfolio_update(
             app.state.store,
@@ -355,14 +408,51 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
         return result
 
     @app.post("/api/v1/portfolio/cash/withdraw")
-    def cash_withdraw(payload: CashRequest, _: str = Depends(auth)):
+    def cash_withdraw(payload: CashRequest, actor: str = Depends(auth)):
         portfolio = get_portfolio()
-        amount = _to_decimal(payload.amount, "amount")
+        before = _one(portfolio.cash_balances, "currency", payload.currency)
+        try:
+            amount = _to_decimal(payload.amount, "amount")
+        except HTTPException as exc:
+            _audit_failure(
+                actor,
+                PortfolioAuditSource.API,
+                "cash_withdraw",
+                PortfolioAuditEntityType.CASH,
+                payload.currency,
+                f"Failed cash withdrawal for {payload.currency}",
+                exc,
+                before,
+            )
+            raise
         try:
             updated = upsert_cash(portfolio, payload.currency, -amount)
         except ValueError as exc:
+            _audit_failure(
+                actor,
+                PortfolioAuditSource.API,
+                "cash_withdraw",
+                PortfolioAuditEntityType.CASH,
+                payload.currency,
+                f"Failed cash withdrawal for {payload.currency}",
+                exc,
+                before,
+            )
             raise HTTPException(400, detail=safe_error_message(exc)) from exc
-        return persist(updated, portfolio)
+        result = persist(updated, portfolio)
+        record_update_audit(
+            DEFAULT_PORTFOLIO,
+            actor=actor,
+            source=PortfolioAuditSource.API,
+            action="cash_withdraw",
+            entity_type=PortfolioAuditEntityType.CASH,
+            entity_id=payload.currency,
+            before=before,
+            after=_one(updated.cash_balances, "currency", payload.currency),
+            status=PortfolioAuditStatus.SUCCEEDED,
+            summary=f"Withdrew cash for {payload.currency}",
+        )
+        return result
 
     @app.post("/api/v1/portfolio/holdings")
     def holdings_upsert(payload: HoldingRequest, actor: str = Depends(auth)):
@@ -396,14 +486,29 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
         return result
 
     @app.delete("/api/v1/portfolio/holdings/{ticker}")
-    def holdings_remove(ticker: str, _: str = Depends(auth)):
+    def holdings_remove(ticker: str, actor: str = Depends(auth)):
         portfolio = get_portfolio()
+        before = _one(portfolio.holdings, "ticker", ticker)
         filtered = tuple(item for item in portfolio.holdings if item.ticker != ticker)
-        return persist(replace(portfolio, holdings=filtered), portfolio)
+        result = persist(replace(portfolio, holdings=filtered), portfolio)
+        record_update_audit(
+            DEFAULT_PORTFOLIO,
+            actor=actor,
+            source=PortfolioAuditSource.API,
+            action="holding_delete",
+            entity_type=PortfolioAuditEntityType.HOLDING,
+            entity_id=ticker,
+            before=before,
+            after=None,
+            status=PortfolioAuditStatus.SUCCEEDED,
+            summary=f"Deleted holding {ticker}",
+        )
+        return result
 
     @app.post("/api/v1/portfolio/trades/buy")
-    def trade_buy(payload: TradeRequest, _: str = Depends(auth)):
+    def trade_buy(payload: TradeRequest, actor: str = Depends(auth)):
         portfolio = get_portfolio()
+        before = _trade_snapshot(portfolio, portfolio, payload.ticker, payload.currency)
         try:
             updated = record_buy(
                 portfolio,
@@ -414,12 +519,36 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
                 payload.trade_date or date.today(),
             )
         except ValueError as exc:
+            _audit_failure(
+                actor,
+                PortfolioAuditSource.API,
+                "trade_buy",
+                PortfolioAuditEntityType.TRADE,
+                payload.ticker,
+                f"Failed buy trade for {payload.ticker}",
+                exc,
+                before,
+            )
             raise HTTPException(400, detail=safe_error_message(exc)) from exc
-        return persist(updated, portfolio)
+        result = persist(updated, portfolio)
+        record_update_audit(
+            DEFAULT_PORTFOLIO,
+            actor=actor,
+            source=PortfolioAuditSource.API,
+            action="trade_buy",
+            entity_type=PortfolioAuditEntityType.TRADE,
+            entity_id=payload.ticker,
+            before=before,
+            after=_trade_snapshot(portfolio, updated, payload.ticker, payload.currency),
+            status=PortfolioAuditStatus.SUCCEEDED,
+            summary=f"Recorded buy trade for {payload.ticker}",
+        )
+        return result
 
     @app.post("/api/v1/portfolio/trades/sell")
-    def trade_sell(payload: TradeRequest, _: str = Depends(auth)):
+    def trade_sell(payload: TradeRequest, actor: str = Depends(auth)):
         portfolio = get_portfolio()
+        before = _trade_snapshot(portfolio, portfolio, payload.ticker, payload.currency)
         try:
             updated = record_sell(
                 portfolio,
@@ -430,11 +559,36 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
                 payload.trade_date or date.today(),
             )
         except ValueError as exc:
+            _audit_failure(
+                actor,
+                PortfolioAuditSource.API,
+                "trade_sell",
+                PortfolioAuditEntityType.TRADE,
+                payload.ticker,
+                f"Failed sell trade for {payload.ticker}",
+                exc,
+                before,
+            )
             raise HTTPException(400, detail=safe_error_message(exc)) from exc
-        return persist(updated, portfolio)
+        result = persist(updated, portfolio)
+        record_update_audit(
+            DEFAULT_PORTFOLIO,
+            actor=actor,
+            source=PortfolioAuditSource.API,
+            action="trade_sell",
+            entity_type=PortfolioAuditEntityType.TRADE,
+            entity_id=payload.ticker,
+            before=before,
+            after=_trade_snapshot(portfolio, updated, payload.ticker, payload.currency),
+            status=PortfolioAuditStatus.SUCCEEDED,
+            summary=f"Recorded sell trade for {payload.ticker}",
+        )
+        return result
 
     @app.post("/api/v1/portfolio/orders")
-    def orders_upsert(payload: OrderRequest, _: str = Depends(auth)):
+    def orders_upsert(payload: OrderRequest, actor: str = Depends(auth)):
+        portfolio = get_portfolio()
+        before = _one(portfolio.active_orders, "ticker", payload.ticker)
         try:
             order = ActiveOrder(
                 payload.ticker,
@@ -449,52 +603,168 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
                 else None,
             )
         except ValueError as exc:
+            _audit_failure(
+                actor,
+                PortfolioAuditSource.API,
+                "order_upsert",
+                PortfolioAuditEntityType.ACTIVE_ORDER,
+                payload.ticker,
+                f"Failed order save for {payload.ticker}",
+                exc,
+                before,
+            )
             raise HTTPException(422, detail=safe_error_message(exc)) from exc
-        portfolio = get_portfolio()
-        return persist(add_or_update_order(portfolio, order), portfolio)
+        updated = add_or_update_order(portfolio, order)
+        result = persist(updated, portfolio)
+        record_update_audit(
+            DEFAULT_PORTFOLIO,
+            actor=actor,
+            source=PortfolioAuditSource.API,
+            action="order_upsert",
+            entity_type=PortfolioAuditEntityType.ACTIVE_ORDER,
+            entity_id=payload.ticker,
+            before=before,
+            after=_one(updated.active_orders, "ticker", payload.ticker),
+            status=PortfolioAuditStatus.SUCCEEDED,
+            summary=f"Saved order {payload.ticker}",
+        )
+        return result
 
     @app.delete("/api/v1/portfolio/orders/{ticker}")
-    def orders_remove(ticker: str, _: str = Depends(auth)):
+    def orders_remove(ticker: str, actor: str = Depends(auth)):
         portfolio = get_portfolio()
-        return persist(remove_order(portfolio, ticker), portfolio)
+        before = _one(portfolio.active_orders, "ticker", ticker)
+        result = persist(remove_order(portfolio, ticker), portfolio)
+        record_update_audit(
+            DEFAULT_PORTFOLIO,
+            actor=actor,
+            source=PortfolioAuditSource.API,
+            action="order_delete",
+            entity_type=PortfolioAuditEntityType.ACTIVE_ORDER,
+            entity_id=ticker,
+            before=before,
+            after=None,
+            status=PortfolioAuditStatus.SUCCEEDED,
+            summary=f"Deleted order {ticker}",
+        )
+        return result
 
     @app.post("/api/v1/portfolio/watchlist")
-    def watchlist_upsert(payload: WatchlistRequest, _: str = Depends(auth)):
+    def watchlist_upsert(payload: WatchlistRequest, actor: str = Depends(auth)):
         portfolio = get_portfolio()
-        return persist(
-            add_watchlist_item(portfolio, payload.ticker, payload.note), portfolio
+        before = _one(portfolio.watchlist, "ticker", payload.ticker)
+        updated = add_watchlist_item(portfolio, payload.ticker, payload.note)
+        result = persist(updated, portfolio)
+        record_update_audit(
+            DEFAULT_PORTFOLIO,
+            actor=actor,
+            source=PortfolioAuditSource.API,
+            action="watchlist_upsert",
+            entity_type=PortfolioAuditEntityType.WATCHLIST,
+            entity_id=payload.ticker,
+            before=before,
+            after=_one(updated.watchlist, "ticker", payload.ticker),
+            status=PortfolioAuditStatus.SUCCEEDED,
+            summary=f"Saved watchlist item {payload.ticker}",
         )
+        return result
 
     @app.delete("/api/v1/portfolio/watchlist/{ticker}")
-    def watchlist_remove(ticker: str, _: str = Depends(auth)):
+    def watchlist_remove(ticker: str, actor: str = Depends(auth)):
         portfolio = get_portfolio()
-        return persist(remove_watchlist_item(portfolio, ticker), portfolio)
+        before = _one(portfolio.watchlist, "ticker", ticker)
+        result = persist(remove_watchlist_item(portfolio, ticker), portfolio)
+        record_update_audit(
+            DEFAULT_PORTFOLIO,
+            actor=actor,
+            source=PortfolioAuditSource.API,
+            action="watchlist_delete",
+            entity_type=PortfolioAuditEntityType.WATCHLIST,
+            entity_id=ticker,
+            before=before,
+            after=None,
+            status=PortfolioAuditStatus.SUCCEEDED,
+            summary=f"Deleted watchlist item {ticker}",
+        )
+        return result
 
     @app.put("/api/v1/portfolio/goal")
-    def goal_set(payload: GoalRequest, _: str = Depends(auth)):
+    def goal_set(payload: GoalRequest, actor: str = Depends(auth)):
         portfolio = get_portfolio()
+        before = _goal_snapshot(portfolio)
         target = (
             _to_decimal(payload.target_amount, "target_amount")
             if payload.target_amount
             else None
         )
-        return persist(set_goal(portfolio, payload.name, target), portfolio)
+        updated = set_goal(portfolio, payload.name, target)
+        result = persist(updated, portfolio)
+        record_update_audit(
+            DEFAULT_PORTFOLIO,
+            actor=actor,
+            source=PortfolioAuditSource.API,
+            action="goal_set",
+            entity_type=PortfolioAuditEntityType.GOAL,
+            entity_id=payload.name,
+            before=before,
+            after=_goal_snapshot(updated),
+            status=PortfolioAuditStatus.SUCCEEDED,
+            summary=f"Set goal {payload.name}",
+        )
+        return result
 
     @app.put("/api/v1/portfolio/timeline")
-    def timeline_set(payload: TimelineRequest, _: str = Depends(auth)):
+    def timeline_set(payload: TimelineRequest, actor: str = Depends(auth)):
         portfolio = get_portfolio()
+        before = _timeline_snapshot(portfolio)
         try:
             updated = set_timeline(portfolio, payload.start_date, payload.target_date)
         except ValueError as exc:
+            _audit_failure(
+                actor,
+                PortfolioAuditSource.API,
+                "timeline_set",
+                PortfolioAuditEntityType.TIMELINE,
+                None,
+                "Failed timeline update",
+                exc,
+                before,
+            )
             raise HTTPException(422, detail=safe_error_message(exc)) from exc
-        return persist(updated, portfolio)
+        result = persist(updated, portfolio)
+        record_update_audit(
+            DEFAULT_PORTFOLIO,
+            actor=actor,
+            source=PortfolioAuditSource.API,
+            action="timeline_set",
+            entity_type=PortfolioAuditEntityType.TIMELINE,
+            entity_id=None,
+            before=before,
+            after=_timeline_snapshot(updated),
+            status=PortfolioAuditStatus.SUCCEEDED,
+            summary="Set timeline",
+        )
+        return result
 
     @app.put("/api/v1/portfolio/risk-profile")
-    def risk_set(payload: RiskProfileRequest, _: str = Depends(auth)):
+    def risk_set(payload: RiskProfileRequest, actor: str = Depends(auth)):
         portfolio = get_portfolio()
-        return persist(
-            set_risk_profile(portfolio, payload.level, payload.notes), portfolio
+        before = _risk_snapshot(portfolio)
+        updated = set_risk_profile(portfolio, payload.level, payload.notes)
+        result = persist(updated, portfolio)
+        record_update_audit(
+            DEFAULT_PORTFOLIO,
+            actor=actor,
+            source=PortfolioAuditSource.API,
+            action="risk_profile_set",
+            entity_type=PortfolioAuditEntityType.RISK_PROFILE,
+            entity_id=str(payload.level),
+            before=before,
+            after=_risk_snapshot(updated),
+            status=PortfolioAuditStatus.SUCCEEDED,
+            summary=f"Set risk profile {payload.level}",
         )
+        return result
 
     @app.get("/admin/portfolio")
     def admin_portfolio(request: Request, _: str = Depends(admin_auth)):
@@ -523,10 +793,11 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
         )
 
     @app.post("/admin/cash/add")
-    async def admin_cash_add(request: Request, _: str = Depends(admin_auth)):
+    async def admin_cash_add(request: Request, actor: str = Depends(admin_auth)):
         form = await _read_form(request)
         try:
             portfolio = get_portfolio()
+            before = _one(portfolio.cash_balances, "currency", str(form["currency"]))
             updated = upsert_cash(
                 portfolio,
                 str(form["currency"]),
@@ -535,13 +806,13 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
             persist(updated, portfolio)
             record_update_audit(
                 DEFAULT_PORTFOLIO,
-                actor="web-admin",
+                actor=actor,
                 source=PortfolioAuditSource.WEB,
                 action="cash_add",
                 entity_type=PortfolioAuditEntityType.CASH,
                 entity_id=str(form["currency"]),
-                before=None,
-                after=None,
+                before=before,
+                after=_one(updated.cash_balances, "currency", str(form["currency"])),
                 status=PortfolioAuditStatus.SUCCEEDED,
                 summary=f"Added cash for {str(form['currency'])}",
             )
@@ -557,18 +828,41 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
             )
 
     @app.post("/admin/cash/withdraw")
-    async def admin_cash_withdraw(request: Request, _: str = Depends(admin_auth)):
+    async def admin_cash_withdraw(request: Request, actor: str = Depends(admin_auth)):
         form = await _read_form(request)
         try:
             portfolio = get_portfolio()
+            before = _one(portfolio.cash_balances, "currency", str(form["currency"]))
             updated = upsert_cash(
                 portfolio,
                 str(form["currency"]),
                 -_to_decimal(str(form["amount"]), "amount"),
             )
             persist(updated, portfolio)
+            record_update_audit(
+                DEFAULT_PORTFOLIO,
+                actor=actor,
+                source=PortfolioAuditSource.WEB,
+                action="cash_withdraw",
+                entity_type=PortfolioAuditEntityType.CASH,
+                entity_id=str(form["currency"]),
+                before=before,
+                after=_one(updated.cash_balances, "currency", str(form["currency"])),
+                status=PortfolioAuditStatus.SUCCEEDED,
+                summary=f"Withdrew cash for {str(form['currency'])}",
+            )
             return _redirect("/admin/cash", "Cash withdrawn")
         except Exception as exc:
+            if "currency" in form:
+                _audit_failure(
+                    actor,
+                    PortfolioAuditSource.WEB,
+                    "cash_withdraw",
+                    PortfolioAuditEntityType.CASH,
+                    str(form["currency"]),
+                    f"Failed cash withdrawal for {str(form['currency'])}",
+                    exc,
+                )
             return render_admin_template(
                 request,
                 "cash.html",
@@ -585,10 +879,11 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
         )
 
     @app.post("/admin/holdings")
-    async def admin_holdings_upsert(request: Request, _: str = Depends(admin_auth)):
+    async def admin_holdings_upsert(request: Request, actor: str = Depends(admin_auth)):
         form = await _read_form(request)
         try:
             p = get_portfolio()
+            before = _one(p.holdings, "ticker", str(form["ticker"]))
             updated = add_holding(
                 p,
                 str(form["ticker"]),
@@ -597,6 +892,18 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
                 str(form.get("sector") or "") or None,
             )
             persist(updated, p)
+            record_update_audit(
+                DEFAULT_PORTFOLIO,
+                actor=actor,
+                source=PortfolioAuditSource.WEB,
+                action="holding_upsert",
+                entity_type=PortfolioAuditEntityType.HOLDING,
+                entity_id=str(form["ticker"]),
+                before=before,
+                after=_one(updated.holdings, "ticker", str(form["ticker"])),
+                status=PortfolioAuditStatus.SUCCEEDED,
+                summary=f"Saved holding {str(form['ticker'])}",
+            )
             return _redirect("/admin/holdings", "Holding saved")
         except Exception as exc:
             return render_admin_template(
@@ -609,17 +916,28 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
             )
 
     @app.post("/admin/holdings/delete")
-    async def admin_holdings_delete(request: Request, _: str = Depends(admin_auth)):
+    async def admin_holdings_delete(request: Request, actor: str = Depends(admin_auth)):
         form = await _read_form(request)
         p = get_portfolio()
-        persist(
-            replace(
-                p,
-                holdings=tuple(
-                    item for item in p.holdings if item.ticker != str(form["ticker"])
-                ),
-            ),
+        before = _one(p.holdings, "ticker", str(form["ticker"]))
+        updated = replace(
             p,
+            holdings=tuple(
+                item for item in p.holdings if item.ticker != str(form["ticker"])
+            ),
+        )
+        persist(updated, p)
+        record_update_audit(
+            DEFAULT_PORTFOLIO,
+            actor=actor,
+            source=PortfolioAuditSource.WEB,
+            action="holding_delete",
+            entity_type=PortfolioAuditEntityType.HOLDING,
+            entity_id=str(form["ticker"]),
+            before=before,
+            after=None,
+            status=PortfolioAuditStatus.SUCCEEDED,
+            summary=f"Deleted holding {str(form['ticker'])}",
         )
         return _redirect("/admin/holdings", "Holding deleted")
 
@@ -629,9 +947,10 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
             request, "trades.html", title="Trades", active_nav="trades"
         )
 
-    async def _trade(request: Request, side: str):
+    async def _trade(request: Request, side: str, actor: str):
         form = await _read_form(request)
         p = get_portfolio()
+        before = _trade_snapshot(p, p, str(form["ticker"]), str(form["currency"]))
         trade_date = (
             date.fromisoformat(str(form["trade_date"]))
             if form.get("trade_date")
@@ -647,12 +966,26 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
             trade_date,
         )
         persist(updated, p)
+        record_update_audit(
+            DEFAULT_PORTFOLIO,
+            actor=actor,
+            source=PortfolioAuditSource.WEB,
+            action=f"trade_{side}",
+            entity_type=PortfolioAuditEntityType.TRADE,
+            entity_id=str(form["ticker"]),
+            before=before,
+            after=_trade_snapshot(
+                p, updated, str(form["ticker"]), str(form["currency"])
+            ),
+            status=PortfolioAuditStatus.SUCCEEDED,
+            summary=f"Recorded {side} trade for {str(form['ticker'])}",
+        )
         return _redirect("/admin/trades", f"Trade {side} recorded")
 
     @app.post("/admin/trades/buy")
-    async def admin_trade_buy(request: Request, _: str = Depends(admin_auth)):
+    async def admin_trade_buy(request: Request, actor: str = Depends(admin_auth)):
         try:
-            return await _trade(request, "buy")
+            return await _trade(request, "buy", actor)
         except Exception as exc:
             return render_admin_template(
                 request,
@@ -664,9 +997,9 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
             )
 
     @app.post("/admin/trades/sell")
-    async def admin_trade_sell(request: Request, _: str = Depends(admin_auth)):
+    async def admin_trade_sell(request: Request, actor: str = Depends(admin_auth)):
         try:
-            return await _trade(request, "sell")
+            return await _trade(request, "sell", actor)
         except Exception as exc:
             return render_admin_template(
                 request,
@@ -684,9 +1017,11 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
         )
 
     @app.post("/admin/orders")
-    async def admin_orders_upsert(request: Request, _: str = Depends(admin_auth)):
+    async def admin_orders_upsert(request: Request, actor: str = Depends(admin_auth)):
         form = await _read_form(request)
         try:
+            p = get_portfolio()
+            before = _one(p.active_orders, "ticker", str(form["ticker"]))
             order = ActiveOrder(
                 str(form["ticker"]),
                 OrderSide(str(form["side"])),
@@ -699,10 +1034,32 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
                 if form.get("stop_price")
                 else None,
             )
-            p = get_portfolio()
-            persist(add_or_update_order(p, order), p)
+            updated = add_or_update_order(p, order)
+            persist(updated, p)
+            record_update_audit(
+                DEFAULT_PORTFOLIO,
+                actor=actor,
+                source=PortfolioAuditSource.WEB,
+                action="order_upsert",
+                entity_type=PortfolioAuditEntityType.ACTIVE_ORDER,
+                entity_id=str(form["ticker"]),
+                before=before,
+                after=_one(updated.active_orders, "ticker", str(form["ticker"])),
+                status=PortfolioAuditStatus.SUCCEEDED,
+                summary=f"Saved order {str(form['ticker'])}",
+            )
             return _redirect("/admin/orders", "Order saved")
         except Exception as exc:
+            if "ticker" in form:
+                _audit_failure(
+                    actor,
+                    PortfolioAuditSource.WEB,
+                    "order_upsert",
+                    PortfolioAuditEntityType.ACTIVE_ORDER,
+                    str(form["ticker"]),
+                    f"Failed order save for {str(form['ticker'])}",
+                    exc,
+                )
             return render_admin_template(
                 request,
                 "orders.html",
@@ -713,10 +1070,23 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
             )
 
     @app.post("/admin/orders/delete")
-    async def admin_orders_delete(request: Request, _: str = Depends(admin_auth)):
+    async def admin_orders_delete(request: Request, actor: str = Depends(admin_auth)):
         form = await _read_form(request)
         p = get_portfolio()
+        before = _one(p.active_orders, "ticker", str(form["ticker"]))
         persist(remove_order(p, str(form["ticker"])), p)
+        record_update_audit(
+            DEFAULT_PORTFOLIO,
+            actor=actor,
+            source=PortfolioAuditSource.WEB,
+            action="order_delete",
+            entity_type=PortfolioAuditEntityType.ACTIVE_ORDER,
+            entity_id=str(form["ticker"]),
+            before=before,
+            after=None,
+            status=PortfolioAuditStatus.SUCCEEDED,
+            summary=f"Deleted order {str(form['ticker'])}",
+        )
         return _redirect("/admin/orders", "Order deleted")
 
     @app.get("/admin/watchlist")
@@ -726,22 +1096,50 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
         )
 
     @app.post("/admin/watchlist")
-    async def admin_watchlist_upsert(request: Request, _: str = Depends(admin_auth)):
+    async def admin_watchlist_upsert(
+        request: Request, actor: str = Depends(admin_auth)
+    ):
         form = await _read_form(request)
         p = get_portfolio()
-        persist(
-            add_watchlist_item(
-                p, str(form["ticker"]), str(form.get("note") or "") or None
-            ),
-            p,
+        before = _one(p.watchlist, "ticker", str(form["ticker"]))
+        updated = add_watchlist_item(
+            p, str(form["ticker"]), str(form.get("note") or "") or None
+        )
+        persist(updated, p)
+        record_update_audit(
+            DEFAULT_PORTFOLIO,
+            actor=actor,
+            source=PortfolioAuditSource.WEB,
+            action="watchlist_upsert",
+            entity_type=PortfolioAuditEntityType.WATCHLIST,
+            entity_id=str(form["ticker"]),
+            before=before,
+            after=_one(updated.watchlist, "ticker", str(form["ticker"])),
+            status=PortfolioAuditStatus.SUCCEEDED,
+            summary=f"Saved watchlist item {str(form['ticker'])}",
         )
         return _redirect("/admin/watchlist", "Watchlist updated")
 
     @app.post("/admin/watchlist/delete")
-    async def admin_watchlist_delete(request: Request, _: str = Depends(admin_auth)):
+    async def admin_watchlist_delete(
+        request: Request, actor: str = Depends(admin_auth)
+    ):
         form = await _read_form(request)
         p = get_portfolio()
+        before = _one(p.watchlist, "ticker", str(form["ticker"]))
         persist(remove_watchlist_item(p, str(form["ticker"])), p)
+        record_update_audit(
+            DEFAULT_PORTFOLIO,
+            actor=actor,
+            source=PortfolioAuditSource.WEB,
+            action="watchlist_delete",
+            entity_type=PortfolioAuditEntityType.WATCHLIST,
+            entity_id=str(form["ticker"]),
+            before=before,
+            after=None,
+            status=PortfolioAuditStatus.SUCCEEDED,
+            summary=f"Deleted watchlist item {str(form['ticker'])}",
+        )
         return _redirect("/admin/watchlist", "Watchlist item removed")
 
     @app.get("/admin/settings")
@@ -751,38 +1149,69 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
         )
 
     @app.post("/admin/goal")
-    async def admin_goal(request: Request, _: str = Depends(admin_auth)):
+    async def admin_goal(request: Request, actor: str = Depends(admin_auth)):
         form = await _read_form(request)
         p = get_portfolio()
-        persist(
-            set_goal(
-                p,
-                str(form["name"]),
-                _to_decimal(str(form["target_amount"]), "target_amount")
-                if form.get("target_amount")
-                else None,
-            ),
+        before = _goal_snapshot(p)
+        updated = set_goal(
             p,
+            str(form["name"]),
+            _to_decimal(str(form["target_amount"]), "target_amount")
+            if form.get("target_amount")
+            else None,
+        )
+        persist(updated, p)
+        record_update_audit(
+            DEFAULT_PORTFOLIO,
+            actor=actor,
+            source=PortfolioAuditSource.WEB,
+            action="goal_set",
+            entity_type=PortfolioAuditEntityType.GOAL,
+            entity_id=str(form["name"]),
+            before=before,
+            after=_goal_snapshot(updated),
+            status=PortfolioAuditStatus.SUCCEEDED,
+            summary=f"Set goal {str(form['name'])}",
         )
         return _redirect("/admin/settings", "Goal set")
 
     @app.post("/admin/timeline")
-    async def admin_timeline(request: Request, _: str = Depends(admin_auth)):
+    async def admin_timeline(request: Request, actor: str = Depends(admin_auth)):
         form = await _read_form(request)
         try:
             p = get_portfolio()
-            persist(
-                set_timeline(
-                    p,
-                    date.fromisoformat(str(form["start_date"])),
-                    date.fromisoformat(str(form["target_date"]))
-                    if form.get("target_date")
-                    else None,
-                ),
+            before = _timeline_snapshot(p)
+            updated = set_timeline(
                 p,
+                date.fromisoformat(str(form["start_date"])),
+                date.fromisoformat(str(form["target_date"]))
+                if form.get("target_date")
+                else None,
+            )
+            persist(updated, p)
+            record_update_audit(
+                DEFAULT_PORTFOLIO,
+                actor=actor,
+                source=PortfolioAuditSource.WEB,
+                action="timeline_set",
+                entity_type=PortfolioAuditEntityType.TIMELINE,
+                entity_id=None,
+                before=before,
+                after=_timeline_snapshot(updated),
+                status=PortfolioAuditStatus.SUCCEEDED,
+                summary="Set timeline",
             )
             return _redirect("/admin/settings", "Timeline set")
         except Exception as exc:
+            _audit_failure(
+                actor,
+                PortfolioAuditSource.WEB,
+                "timeline_set",
+                PortfolioAuditEntityType.TIMELINE,
+                None,
+                "Failed timeline update",
+                exc,
+            )
             return render_admin_template(
                 request,
                 "settings.html",
@@ -793,16 +1222,46 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
             )
 
     @app.post("/admin/risk-profile")
-    async def admin_risk(request: Request, _: str = Depends(admin_auth)):
+    async def admin_risk(request: Request, actor: str = Depends(admin_auth)):
         form = await _read_form(request)
-        p = get_portfolio()
-        persist(
-            set_risk_profile(
+        try:
+            p = get_portfolio()
+            before = _risk_snapshot(p)
+            updated = set_risk_profile(
                 p, RiskLevel(str(form["level"])), str(form.get("notes") or "") or None
-            ),
-            p,
-        )
-        return _redirect("/admin/settings", "Risk profile set")
+            )
+            persist(updated, p)
+            record_update_audit(
+                DEFAULT_PORTFOLIO,
+                actor=actor,
+                source=PortfolioAuditSource.WEB,
+                action="risk_profile_set",
+                entity_type=PortfolioAuditEntityType.RISK_PROFILE,
+                entity_id=str(form["level"]),
+                before=before,
+                after=_risk_snapshot(updated),
+                status=PortfolioAuditStatus.SUCCEEDED,
+                summary=f"Set risk profile {str(form['level'])}",
+            )
+            return _redirect("/admin/settings", "Risk profile set")
+        except Exception as exc:
+            _audit_failure(
+                actor,
+                PortfolioAuditSource.WEB,
+                "risk_profile_set",
+                PortfolioAuditEntityType.RISK_PROFILE,
+                str(form.get("level") or ""),
+                "Failed risk profile update",
+                exc,
+            )
+            return render_admin_template(
+                request,
+                "settings.html",
+                title="Settings",
+                active_nav="settings",
+                flash=safe_error_message(exc),
+                status_code=422,
+            )
 
     return app
 
