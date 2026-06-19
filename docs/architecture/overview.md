@@ -6,6 +6,8 @@ This document describes the **current** Finwall architecture boundaries and requ
 
 Finwall is a **decision-support tool**, not a broker integration and not an execution engine.
 
+ADR 0002 accepts a future separate Vite + React + TypeScript frontend app as the primary product UI direction. That frontend must consume backend APIs and must not own deterministic finance logic. See [ADR 0002: Modern Frontend Scaffold and App Boundary](../adr/0002-modern-frontend-scaffold.md).
+
 ## Layered architecture
 
 ### 1) Domain model layer
@@ -85,6 +87,7 @@ Primary modules/entry points:
 - `src/finwall/api.py`
 - scheduled execution path via CLI command `run-scheduled-report`
 - email output via notification helpers used by scheduled reports
+- future frontend app boundary described in [ADR 0002](../adr/0002-modern-frontend-scaffold.md)
 
 Owns user/system interaction surfaces (CLI args, HTTP/admin requests, scheduler integration, output transport such as terminal/JSON/email).
 
