@@ -136,6 +136,7 @@ API/admin mode is a minimal, token-authenticated, internal/self-managed maintena
 - Not a public SaaS dashboard.
 - Not a broker interface.
 - Intended for controlled internal use.
+- A separate modern frontend is planned as the primary product UI; see [ADR 0002](docs/adr/0002-modern-frontend-scaffold.md).
 
 See [docs/api-admin.md](docs/api-admin.md) and [docs/deployment/minimal-admin-interface.md](docs/deployment/minimal-admin-interface.md).
 
@@ -167,6 +168,7 @@ See [docs/api-admin.md](docs/api-admin.md) and [docs/deployment/minimal-admin-in
 - Safety limits: `docs/safety-limits.md`
 - Security and privacy: `docs/security.md`
 - Architecture overview: `docs/architecture/overview.md`
+- Frontend architecture ADR: `docs/adr/0002-modern-frontend-scaffold.md`
 
 ## Development
 
