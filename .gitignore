@@ -6,6 +6,13 @@ __pycache__/
 .env
 poetry.lock
 
+# Frontend build and dependency artifacts.
+apps/web/node_modules/
+apps/web/dist/
+apps/web/coverage/
+apps/web/.vite/
+apps/web/*.tsbuildinfo
+
 # Local SQLite databases and sidecar files.
 *.db
 *.sqlite
