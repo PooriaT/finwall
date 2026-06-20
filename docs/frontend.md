@@ -32,12 +32,19 @@ In another terminal, run the existing FastAPI app with Poetry:
 poetry run uvicorn finwall.api:app --reload
 ```
 
-The frontend API client defaults to calling the backend at relative `/api`. For
-local development against a separately hosted API, configure:
+The frontend API client defaults to calling the backend at relative `/api`. In
+local development, Vite proxies `/api` to the FastAPI backend at
+`http://127.0.0.1:8000`, so browser requests stay same-origin and do not require
+CORS middleware.
+
+For development against a different backend origin, configure:
 
 ```bash
 VITE_FINWALL_API_BASE_URL=http://127.0.0.1:8000/api
 ```
+
+Only use a full URL when that backend origin is configured to allow browser CORS
+requests.
 
 ## Generate API types
 
