@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { queryClient, queryKeys } from "./api/queryClient";
 import App from "./App";
@@ -66,10 +66,33 @@ const populatedPortfolio = {
   },
 };
 
-function chartSeries(points: unknown[] = [], warnings: string[] = []) {
+function chartPoint(
+  key: string,
+  label: string,
+  value: string | null,
+  percent: string | null = null,
+  status = "available",
+  metadata: Record<string, unknown> = {},
+) {
   return {
-    key: "series",
-    title: "Series",
+    key,
+    label,
+    value,
+    percent,
+    status,
+    metadata,
+  };
+}
+
+function chartSeries(
+  key = "series",
+  title = "Series",
+  points: unknown[] = [],
+  warnings: string[] = [],
+) {
+  return {
+    key,
+    title,
     points,
     warnings,
   };
@@ -81,12 +104,38 @@ const analysisCharts = {
   price_completeness_status: "complete",
   data_warnings: [],
   charts: {
-    allocation_by_holding: chartSeries(),
-    allocation_by_sector: chartSeries(),
-    cash_vs_invested: chartSeries(),
-    unrealized_gain_loss_by_holding: chartSeries(),
-    risk_warnings_by_severity: chartSeries(),
-    report_history_summary: chartSeries([
+    allocation_by_holding: chartSeries("allocation_by_holding", "Allocation by holding", [
+      chartPoint("AAPL", "AAPL", "1750.00", "58.33"),
+      chartPoint("MSFT", "MSFT", "1250.00", "41.67"),
+    ]),
+    allocation_by_sector: chartSeries("allocation_by_sector", "Allocation by sector"),
+    cash_vs_invested: chartSeries("cash_vs_invested", "Cash vs invested", [
+      chartPoint("cash", "Cash", "1250.50", "29.42"),
+      chartPoint("invested", "Invested", "3000.00", "70.58"),
+    ]),
+    unrealized_gain_loss_by_holding: chartSeries(
+      "unrealized_gain_loss_by_holding",
+      "Unrealized gain/loss by holding",
+      [
+        chartPoint("AAPL", "AAPL", "250.00", "16.67"),
+        chartPoint("MSFT", "MSFT", "-125.50", "-9.12"),
+      ],
+    ),
+    risk_warnings_by_severity: chartSeries(
+      "risk_warnings_by_severity",
+      "Risk warnings by severity",
+      [
+        chartPoint("high", "high", "1", null, "available", {
+          warning_codes: ["missing_price"],
+          messages: ["MSFT price data is missing."],
+        }),
+        chartPoint("medium", "medium", "2", null, "available", {
+          warning_codes: ["concentration", "stop_protection"],
+          messages: ["AAPL is concentrated.", "Stop protection is missing."],
+        }),
+      ],
+    ),
+    report_history_summary: chartSeries("report_history_summary", "Report history summary", [
       {
         key: "1",
         label: "2026-06-19T15:30:00Z",
@@ -319,6 +368,139 @@ describe("App", () => {
     expect(screen.getByRole("heading", { name: "Market data readiness" })).toBeInTheDocument();
     expect(screen.getByText("Portfolio remains balanced.")).toBeInTheDocument();
     expect(screen.getByText("Updated AAPL holding.")).toBeInTheDocument();
+  });
+
+  it("renders the dashboard chart section", async () => {
+    mockFetch();
+
+    renderAt("/dashboard");
+
+    expect(
+      await screen.findByRole("heading", { name: "Allocation by holding" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Cash vs invested" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Unrealized gain/loss by holding" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Risk warnings by severity" }),
+    ).toBeInTheDocument();
+  });
+
+  it("renders allocation chart labels, values, and fallback table", async () => {
+    mockFetch();
+
+    renderAt("/dashboard");
+
+    const table = await screen.findByRole("table", {
+      name: "Allocation by holding fallback table",
+    });
+    expect(within(table).getByText("AAPL")).toBeInTheDocument();
+    expect(within(table).getByText("58.33%")).toBeInTheDocument();
+    expect(within(table).getByText("1750.00")).toBeInTheDocument();
+  });
+
+  it("renders cash vs invested labels, values, and fallback table", async () => {
+    mockFetch();
+
+    renderAt("/dashboard");
+
+    const table = await screen.findByRole("table", {
+      name: "Cash vs invested fallback table",
+    });
+    expect(within(table).getByText("Cash")).toBeInTheDocument();
+    expect(within(table).getByText("1250.50")).toBeInTheDocument();
+    expect(within(table).getByText("Invested")).toBeInTheDocument();
+    expect(within(table).getByText("3000.00")).toBeInTheDocument();
+  });
+
+  it("renders unrealized gain/loss positive and negative values", async () => {
+    mockFetch();
+
+    renderAt("/dashboard");
+
+    const table = await screen.findByRole("table", {
+      name: "Unrealized gain/loss fallback table",
+    });
+    expect(within(table).getByText("250.00")).toBeInTheDocument();
+    expect(within(table).getByText("-125.50")).toBeInTheDocument();
+  });
+
+  it("renders risk warning severity counts and summaries", async () => {
+    mockFetch();
+
+    renderAt("/dashboard");
+
+    const table = await screen.findByRole("table", {
+      name: "Risk warnings by severity fallback table",
+    });
+    expect(within(table).getByText("High")).toBeInTheDocument();
+    expect(within(table).getByText("Medium")).toBeInTheDocument();
+    expect(within(table).getByText("1")).toBeInTheDocument();
+    expect(within(table).getByText("2")).toBeInTheDocument();
+    expect(within(table).getByText(/MSFT price data is missing/)).toBeInTheDocument();
+  });
+
+  it("renders an empty chart series state", async () => {
+    const analysis = structuredClone(analysisCharts);
+    analysis.charts.allocation_by_holding = chartSeries(
+      "allocation_by_holding",
+      "Allocation by holding",
+    );
+    mockFetch({ analysis });
+
+    renderAt("/dashboard");
+
+    await screen.findByRole("heading", { name: "Allocation by holding" });
+    expect(screen.getByText("No chart data available.")).toBeInTheDocument();
+  });
+
+  it("renders missing-price chart points as unavailable", async () => {
+    const analysis = structuredClone(analysisCharts);
+    analysis.charts.allocation_by_holding = chartSeries(
+      "allocation_by_holding",
+      "Allocation by holding",
+      [
+        chartPoint("AAPL", "AAPL", "1750.00", "58.33"),
+        chartPoint("MSFT", "MSFT", null, null, "missing_price", {
+          missing_price_message: "Price unavailable for MSFT.",
+        }),
+        chartPoint("TSLA", "TSLA", "not-a-number", "not-a-percent"),
+      ],
+    );
+    mockFetch({ analysis });
+
+    renderAt("/dashboard");
+
+    const table = await screen.findByRole("table", {
+      name: "Allocation by holding fallback table",
+    });
+    expect(within(table).getAllByText("Unavailable").length).toBeGreaterThan(0);
+    expect(within(table).getByText("Price unavailable for MSFT.")).toBeInTheDocument();
+    expect(within(table).getByText("Value unavailable")).toBeInTheDocument();
+  });
+
+  it("renders chart warnings and partial valuation status visibly", async () => {
+    const analysis = structuredClone(analysisCharts);
+    analysis.valuation_status = "missing_prices";
+    analysis.price_completeness_status = "partial";
+    analysis.charts.cash_vs_invested = chartSeries(
+      "cash_vs_invested",
+      "Cash vs invested",
+      [
+        chartPoint("cash", "Cash", "1250.50", "100.00"),
+        chartPoint("invested", "Invested", null, null),
+      ],
+      ["MSFT: price missing"],
+    );
+    mockFetch({ analysis });
+
+    renderAt("/dashboard");
+
+    expect(await screen.findAllByText("Partial data visible")).not.toHaveLength(0);
+    expect(screen.getAllByText("MSFT: price missing").length).toBeGreaterThan(0);
+    expect(screen.getByText("Valuation status: Missing Prices.")).toBeInTheDocument();
+    expect(screen.getByText("Price completeness status: Partial.")).toBeInTheDocument();
   });
 
   it("renders the holdings table", async () => {
