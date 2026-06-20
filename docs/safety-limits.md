@@ -1,6 +1,6 @@
 # Safety limits and known limitations
 
-> Status: Safety boundaries are **supported primary** product constraints and apply across CLI, scheduled runs, API/admin, and optional narrative features.
+> Status: Safety boundaries are **supported primary** product constraints and apply across CLI, scheduled runs, API/frontend, and optional narrative features.
 
 Finwall is a decision-support tool, not an execution platform.
 
@@ -25,7 +25,7 @@ Finwall is a decision-support tool, not an execution platform.
 
 - Multi-currency cash valuation has FX-conversion limitations; full cross-currency aggregation is constrained.
 - Production security and deployment hardening remain the deployer's responsibility.
-- API/admin mode is minimal internal tooling and should not be exposed as a public service without additional controls.
+- API/frontend mode is internal self-managed tooling and should not be exposed as a public service without additional controls.
 
 For security and secret-handling practices, see [docs/security.md](security.md).
 

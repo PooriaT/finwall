@@ -40,7 +40,7 @@ See [docs/product-modes.md](docs/product-modes.md) for the canonical capability-
 | Deterministic reports | Supported primary | Generate snapshot/risk/recommendation/report outputs |
 | Scheduled reports | Supported secondary | Run reports on a schedule with app-level guardrails |
 | Email notifications | Supported secondary | Receive scheduled-run success/failure summaries |
-| API/admin mode | Internal/admin | Update portfolio state through authenticated internal endpoints/forms |
+| API + modern frontend | Internal/self-managed | Use the React browser UI for dashboard reads and authenticated API endpoints for internal automation |
 | Narrative provider | Experimental / optional explanation | Rewrite deterministic evidence into plain-language explanation |
 
 ## Primary workflow
@@ -72,7 +72,7 @@ poetry run finwall --database finwall.db report --price NVDA=120
 
 For fuller local setup and command walkthroughs, see [docs/local-setup.md](docs/local-setup.md) and [docs/cli-workflows.md](docs/cli-workflows.md).
 
-For the modern frontend scaffold, see [docs/frontend.md](docs/frontend.md).
+For the React frontend, see [docs/frontend.md](docs/frontend.md).
 
 ## Common workflows
 
@@ -128,19 +128,20 @@ Automation is an optional layer, not the default usage path.
 - GitHub Actions scheduled runs: [docs/deployment/github-actions-scheduled-report.md](docs/deployment/github-actions-scheduled-report.md)
 - SMTP email notifications: [docs/email-notifications.md](docs/email-notifications.md)
 
-## Optional API/admin maintenance surface
+## Optional API and frontend surface
 
-> Status: **Internal/admin**. Self-managed maintenance tooling only; not a public SaaS dashboard.
+> Status: **Internal/self-managed**. Local browser UI and authenticated API only; not a public SaaS dashboard.
 
-
-API/admin mode is a minimal, token-authenticated, internal/self-managed maintenance surface.
+Finwall includes a Vite + React + TypeScript frontend under `apps/web` and a FastAPI backend API.
 
 - Not a public SaaS dashboard.
 - Not a broker interface.
 - Intended for controlled internal use.
-- A separate modern frontend is planned as the primary product UI; see [ADR 0002](docs/adr/0002-modern-frontend-scaffold.md).
+- Browser login uses HTTP-only session-cookie endpoints for read-only dashboard data.
+- Programmatic/internal clients can use bearer-token API auth.
+- The old server-rendered Jinja `/admin` UI has been removed; see [ADR 0002](docs/adr/0002-modern-frontend-scaffold.md).
 
-See [docs/api-admin.md](docs/api-admin.md) and [docs/deployment/minimal-admin-interface.md](docs/deployment/minimal-admin-interface.md).
+See [docs/frontend.md](docs/frontend.md) and [docs/api-admin.md](docs/api-admin.md).
 
 ## Documentation map
 
@@ -161,10 +162,10 @@ See [docs/api-admin.md](docs/api-admin.md) and [docs/deployment/minimal-admin-in
 - Email notifications: `docs/email-notifications.md`
 - Deployment ADR: `docs/adr/0001-finwall-scheduled-report-deployment.md`
 
-### API/admin
+### API and frontend
 
-- API/admin mode: `docs/api-admin.md`
-- Minimal admin interface details: `docs/deployment/minimal-admin-interface.md`
+- Frontend development: `docs/frontend.md`
+- API and browser session mode: `docs/api-admin.md`
 
 ### Safety, security, architecture
 

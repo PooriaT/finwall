@@ -8,7 +8,7 @@ Finwall is a self-managed decision-support tool. It is not a broker, not an exec
 
 - **Supported primary**: Core workflows Finwall presents as the main usage path.
 - **Supported secondary**: Implemented and usable automation/supporting workflows, but not the primary local path.
-- **Internal/admin**: Implemented self-managed maintenance surfaces, not a public SaaS product.
+- **Internal/self-managed**: Implemented local API/frontend surfaces, not a public SaaS product.
 - **Experimental / optional**: Optional or constrained analysis/explanation inputs that support decisions but are not deterministic ground truth.
 - **Incomplete / constrained**: Known limits that affect deployment, data quality, scope, or hardening.
 - **Future / planned / out of scope**: Explicit non-goals and not-currently-implemented capabilities.
@@ -29,11 +29,11 @@ Finwall is a self-managed decision-support tool. It is not a broker, not an exec
 - GitHub Actions scheduled-report workflow as a repo automation option.
 - Yahoo public-endpoint market data via `FINWALL_MARKET_DATA_PROVIDER=yahoo` for local/self-managed live-price, index, technical, and market-condition workflows.
 
-## Internal/admin
+## Internal/self-managed
 
 - FastAPI API endpoints for authenticated portfolio maintenance.
-- Minimal server-rendered admin forms.
-- Portfolio audit history surfaces.
+- React frontend dashboard for browser users.
+- Portfolio audit history API/frontend surfaces.
 
 These are internal/self-managed tooling surfaces and are not public SaaS-grade product interfaces.
 
@@ -54,7 +54,7 @@ These capabilities are decision-support inputs and may be provider-limited or in
 - Postgres backend selection is not implemented at runtime; SQLite is the usable backend today.
 - Multi-currency aggregation has FX-conversion limitations.
 - Market/fundamentals/news freshness and coverage depend on provider constraints. Yahoo public market data may be unavailable, delayed, stale, partial, or rate-limited and is not broker-grade or guaranteed institutional market data.
-- API/admin mode is token-authenticated internal tooling, not public SaaS-grade multi-user RBAC.
+- API/frontend mode is token-authenticated internal tooling, not public SaaS-grade multi-user RBAC.
 - Security posture is application-level/self-managed and not enterprise compliance certification.
 
 ## Future / planned / out of scope

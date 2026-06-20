@@ -954,398 +954,6 @@
   },
   "openapi": "3.1.0",
   "paths": {
-    "/admin": {
-      "get": {
-        "operationId": "admin_home_admin_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Admin Home"
-      }
-    },
-    "/admin/audit": {
-      "get": {
-        "operationId": "admin_audit_admin_audit_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Admin Audit"
-      }
-    },
-    "/admin/cash": {
-      "get": {
-        "operationId": "admin_cash_admin_cash_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Admin Cash"
-      }
-    },
-    "/admin/cash/add": {
-      "post": {
-        "operationId": "admin_cash_add_admin_cash_add_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Admin Cash Add"
-      }
-    },
-    "/admin/cash/withdraw": {
-      "post": {
-        "operationId": "admin_cash_withdraw_admin_cash_withdraw_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Admin Cash Withdraw"
-      }
-    },
-    "/admin/goal": {
-      "post": {
-        "operationId": "admin_goal_admin_goal_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Admin Goal"
-      }
-    },
-    "/admin/holdings": {
-      "get": {
-        "operationId": "admin_holdings_admin_holdings_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Admin Holdings"
-      },
-      "post": {
-        "operationId": "admin_holdings_upsert_admin_holdings_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Admin Holdings Upsert"
-      }
-    },
-    "/admin/holdings/delete": {
-      "post": {
-        "operationId": "admin_holdings_delete_admin_holdings_delete_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Admin Holdings Delete"
-      }
-    },
-    "/admin/login": {
-      "get": {
-        "operationId": "admin_login_get_admin_login_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Admin Login Get"
-      },
-      "post": {
-        "operationId": "admin_login_post_admin_login_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Admin Login Post"
-      }
-    },
-    "/admin/logout": {
-      "post": {
-        "operationId": "admin_logout_admin_logout_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Admin Logout"
-      }
-    },
-    "/admin/orders": {
-      "get": {
-        "operationId": "admin_orders_admin_orders_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Admin Orders"
-      },
-      "post": {
-        "operationId": "admin_orders_upsert_admin_orders_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Admin Orders Upsert"
-      }
-    },
-    "/admin/orders/delete": {
-      "post": {
-        "operationId": "admin_orders_delete_admin_orders_delete_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Admin Orders Delete"
-      }
-    },
-    "/admin/portfolio": {
-      "get": {
-        "operationId": "admin_portfolio_admin_portfolio_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Admin Portfolio"
-      }
-    },
-    "/admin/risk-profile": {
-      "post": {
-        "operationId": "admin_risk_admin_risk_profile_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Admin Risk"
-      }
-    },
-    "/admin/settings": {
-      "get": {
-        "operationId": "admin_settings_admin_settings_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Admin Settings"
-      }
-    },
-    "/admin/timeline": {
-      "post": {
-        "operationId": "admin_timeline_admin_timeline_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Admin Timeline"
-      }
-    },
-    "/admin/trades": {
-      "get": {
-        "operationId": "admin_trades_admin_trades_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Admin Trades"
-      }
-    },
-    "/admin/trades/buy": {
-      "post": {
-        "operationId": "admin_trade_buy_admin_trades_buy_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Admin Trade Buy"
-      }
-    },
-    "/admin/trades/sell": {
-      "post": {
-        "operationId": "admin_trade_sell_admin_trades_sell_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Admin Trade Sell"
-      }
-    },
-    "/admin/watchlist": {
-      "get": {
-        "operationId": "admin_watchlist_admin_watchlist_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Admin Watchlist"
-      },
-      "post": {
-        "operationId": "admin_watchlist_upsert_admin_watchlist_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Admin Watchlist Upsert"
-      }
-    },
-    "/admin/watchlist/delete": {
-      "post": {
-        "operationId": "admin_watchlist_delete_admin_watchlist_delete_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Admin Watchlist Delete"
-      }
-    },
     "/api/v1/auth/login": {
       "post": {
         "operationId": "auth_login_api_v1_auth_login_post",
@@ -1470,22 +1078,6 @@
           },
           {
             "in": "cookie",
-            "name": "finwall_admin_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Finwall Admin Token"
-            }
-          },
-          {
-            "in": "cookie",
             "name": "finwall_web_session",
             "required": false,
             "schema": {
@@ -1554,22 +1146,6 @@
                 }
               ],
               "title": "Authorization"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "finwall_admin_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Finwall Admin Token"
             }
           },
           {
@@ -1646,22 +1222,6 @@
           },
           {
             "in": "cookie",
-            "name": "finwall_admin_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Finwall Admin Token"
-            }
-          },
-          {
-            "in": "cookie",
             "name": "finwall_web_session",
             "required": false,
             "schema": {
@@ -1730,22 +1290,6 @@
                 }
               ],
               "title": "Authorization"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "finwall_admin_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Finwall Admin Token"
             }
           },
           {
@@ -1822,22 +1366,6 @@
           },
           {
             "in": "cookie",
-            "name": "finwall_admin_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Finwall Admin Token"
-            }
-          },
-          {
-            "in": "cookie",
             "name": "finwall_web_session",
             "required": false,
             "schema": {
@@ -1906,22 +1434,6 @@
                 }
               ],
               "title": "Authorization"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "finwall_admin_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Finwall Admin Token"
             }
           },
           {
@@ -1998,22 +1510,6 @@
           },
           {
             "in": "cookie",
-            "name": "finwall_admin_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Finwall Admin Token"
-            }
-          },
-          {
-            "in": "cookie",
             "name": "finwall_web_session",
             "required": false,
             "schema": {
@@ -2086,22 +1582,6 @@
           },
           {
             "in": "cookie",
-            "name": "finwall_admin_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Finwall Admin Token"
-            }
-          },
-          {
-            "in": "cookie",
             "name": "finwall_web_session",
             "required": false,
             "schema": {
@@ -2170,22 +1650,6 @@
                 }
               ],
               "title": "Authorization"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "finwall_admin_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Finwall Admin Token"
             }
           },
           {

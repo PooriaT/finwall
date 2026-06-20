@@ -50,4 +50,4 @@ poetry run pytest
 
 - Keep `.env` local and never commit it.
 - Use fake/test portfolio data while validating setup.
-- For advanced workflows (scheduled reports, email, API/admin), continue with the docs map in `README.md`.
+- For advanced workflows (scheduled reports, email, API, frontend), continue with the docs map in `README.md`.

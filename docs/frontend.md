@@ -4,6 +4,10 @@ Finwall's modern frontend scaffold lives in `apps/web`. It is a Vite + React +
 TypeScript app that runs separately from the FastAPI backend during local
 development.
 
+The React frontend is the browser UI direction for Finwall. The old
+server-rendered Jinja `/admin` pages have been removed; browser users should use
+the React app against the FastAPI API.
+
 ## Install dependencies
 
 ```bash

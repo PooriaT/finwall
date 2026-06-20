@@ -68,4 +68,4 @@ poetry run finwall --database finwall.db run-scheduled-report --run-context morn
 poetry run finwall --database finwall.db scheduled-runs --limit 10 --json
 ```
 
-If API/admin mode is enabled, audit events are available via API (`/api/v1/portfolio/audit`) and admin UI (`/admin/audit`).
+If API mode is enabled, audit events are available via API (`/api/v1/portfolio/audit`) and through the React frontend dashboard.

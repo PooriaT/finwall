@@ -6,24 +6,30 @@ Accepted
 
 ## Context
 
-Finwall currently exposes its interactive maintenance UI through the FastAPI/Jinja admin surface. That surface is useful for internal, self-managed administration, but it is not the right long-term product UI for richer portfolio review workflows, interactive loading/error states, client-side charting, or a clearer separation between presentation code and deterministic finance logic.
+Finwall now has a separate modern frontend scaffold under `apps/web` and no longer keeps the old FastAPI/Jinja `/admin` pages as a parallel browser UI.
 
 Finwall's core safety posture does not change: it is a local/self-managed decision-support tool, not a broker integration, automatic trading system, or financial advice engine. The backend remains the source of truth for portfolio state, deterministic analysis, provider orchestration, reports, and audit semantics.
 
 ## Decision
 
-Build the next primary product UI as a separate **Vite + React + TypeScript** app under `apps/web`.
+Use the **Vite + React + TypeScript** app under `apps/web` as the primary product UI direction.
 
-The frontend will run separately from the FastAPI backend during local development. Later implementation PRs may add a Vite development proxy to FastAPI, but this ADR does not add frontend tooling, scripts, dependencies, or scaffold files.
+FastAPI remains the authoritative backend/API surface. The frontend consumes explicit API contracts and generated TypeScript types from the FastAPI OpenAPI schema. Browser login uses session-cookie endpoints:
 
-The frontend/backend contract direction is:
+- `POST /api/v1/auth/login`
+- `POST /api/v1/auth/logout`
+- `GET /api/v1/auth/session`
 
-- Generate a TypeScript API client from the FastAPI OpenAPI schema.
-- Use TanStack Query for server-state loading, caching, invalidation, and loading/error/empty states.
-- Use Recharts for the first dashboard charts.
-- Start with plain CSS, CSS modules, or a small component utility layer; do not commit to a large design system yet.
+The frontend/backend contract includes:
 
-The existing Jinja admin remains a legacy/internal maintenance surface during migration and should continue to work until intentionally replaced.
+- OpenAPI-generated TypeScript schema/client workflow.
+- TanStack Query for server-state loading, caching, and loading/error states.
+- Recharts for the first dashboard charts.
+- Plain CSS and local components until a larger design system is justified.
+
+Bearer-token API auth remains available for programmatic/internal API usage. Browser session-cookie auth is accepted for frontend-needed read endpoints only. Portfolio mutation endpoints remain bearer-token protected unless intentionally changed by a later decision.
+
+The old Jinja admin UI has been removed. Future portfolio mutation UI should be built in React against explicit backend API contracts.
 
 ## Frontend Boundary
 
@@ -34,7 +40,7 @@ The frontend may own:
 - loading, error, and empty states
 - chart rendering
 - presentation components
-- calls to the generated API client
+- calls to generated or typed API wrappers
 
 The frontend must not own:
 
@@ -64,12 +70,12 @@ Backend modules remain the source of deterministic decision-support truth. Front
 
 Finwall remains local/self-managed.
 
-The intended web auth direction is:
+The web auth shape is:
 
-- Add session-based web login in a later issue.
 - Use HttpOnly cookies for the frontend web session.
 - Do not expose the API token to browser JavaScript.
-- Keep bearer-token API auth available for programmatic/internal API usage unless intentionally changed later.
+- Keep bearer-token API auth available for programmatic/internal API usage.
+- Keep browser session auth read-only unless a later ADR or issue intentionally changes that boundary.
 
 OAuth, user registration, password reset, RBAC, multi-user accounts, and public SaaS auth are out of scope.
 
@@ -77,15 +83,13 @@ OAuth, user registration, password reset, RBAC, multi-user accounts, and public 
 
 Backend development remains Python/Poetry based.
 
-Frontend development will use Node package tooling isolated under `apps/web`. Local development can run the backend and frontend separately. A later PR may add a Vite-to-FastAPI dev proxy.
-
-Production/deployment shape is not fully decided in this ADR. The intended direction is to keep FastAPI as the authoritative backend API and serve/build the frontend as a separate web app artifact or deployment concern, without moving deterministic finance logic into browser code.
+Frontend development uses Node package tooling isolated under `apps/web`. Local development can run the backend and frontend separately. Production/deployment shape remains a deployment concern, but deterministic finance logic must stay in backend Python modules rather than moving into browser code.
 
 ## Alternatives Considered
 
 | Option | Pros | Cons | Recommendation |
 |---|---|---|---|
-| Continue Jinja-admin-first | Simple; no frontend toolchain | Poor fit for rich product UI, client-side charts, and modern interaction states | Keep only as legacy/internal during migration |
+| Continue Jinja-admin-first | Simple backend-only UI | Poor fit for rich product UI, client-side charts, generated API typing, and modern interaction states | Removed as a parallel product surface |
 | Vite + React + TypeScript | Lightweight SPA tooling; strong typing; clear app boundary | Adds Node tooling and generated-client workflow | Chosen direction |
 | Next.js/SSR | Full-stack framework and SSR options | More framework surface than needed; blurs backend ownership for this app | Exclude for now |
 | Large design system | Faster visual consistency if already needed | Premature commitment and dependency weight | Defer |
@@ -94,30 +98,24 @@ Production/deployment shape is not fully decided in this ADR. The intended direc
 
 Positive outcomes:
 
-- Clear path from internal Jinja admin toward a proper product UI.
+- Clear primary browser UI direction in React.
 - Stronger frontend/backend boundary around deterministic finance logic.
-- Typed API access through the generated OpenAPI client.
-- Client-side state and charting choices are explicit before scaffold work begins.
+- Typed API access through the generated OpenAPI workflow.
+- Client-side state and charting choices are explicit.
+- The backend no longer carries a competing server-rendered UI surface.
 
 Tradeoffs:
 
-- Adds a future Node toolchain under `apps/web`.
-- Requires OpenAPI client generation workflow in a later issue.
-- Requires a later auth implementation for browser sessions.
-- Keeps two UI surfaces during migration.
+- Adds a Node toolchain under `apps/web`.
+- Requires generated OpenAPI artifacts to stay current with backend API changes.
+- Portfolio mutation UI must be implemented deliberately in React when needed.
+- Local/self-managed browser auth remains token-derived and intentionally limited.
 
-## Out of Scope for This ADR
+## Out of Scope
 
-This ADR accepts the frontend direction, but it does not implement it. The following work is deferred to later implementation PRs unless explicitly excluded elsewhere:
-
-- Creating the `apps/web` scaffold.
-- Adding Vite, React, TypeScript, Node dependencies, or package files.
-- Adding OpenAPI generation scripts.
-- Adding auth/session endpoints.
-- Building dashboard pages or charts.
-- Changing FastAPI, CLI, Jinja templates, or deterministic finance logic.
 - Broker integration.
 - Automatic trading.
 - Next.js or SSR.
 - OAuth, RBAC, public SaaS auth, or multi-user account management.
 - Large design-system work.
+- Moving valuation, risk, recommendation, provider fallback, report generation, or audit semantics into frontend code.

@@ -1,12 +1,12 @@
 # Finwall architecture overview
 
-> Status: Architecture currently centers on deterministic decision-support flows (**supported primary**), with API/admin as **internal/admin** and narrative/provider enrichments as **experimental/optional**.
+> Status: Architecture currently centers on deterministic decision-support flows (**supported primary**), with API/frontend as **internal/self-managed** and narrative/provider enrichments as **experimental/optional**.
 
 This document describes the **current** Finwall architecture boundaries and request/data flows so contributors can add changes without moving decision logic into the wrong layer.
 
 Finwall is a **decision-support tool**, not a broker integration and not an execution engine.
 
-ADR 0002 accepts a future separate Vite + React + TypeScript frontend app as the primary product UI direction. That frontend must consume backend APIs and must not own deterministic finance logic. See [ADR 0002: Modern Frontend Scaffold and App Boundary](../adr/0002-modern-frontend-scaffold.md).
+ADR 0002 records the Vite + React + TypeScript frontend app under `apps/web` as the primary product UI direction. That frontend consumes backend APIs and must not own deterministic finance logic. See [ADR 0002: Modern Frontend Scaffold and App Boundary](../adr/0002-modern-frontend-scaffold.md).
 
 ## Layered architecture
 
@@ -85,11 +85,12 @@ Primary modules/entry points:
 
 - `src/finwall/cli.py`
 - `src/finwall/api.py`
+- `apps/web`
 - scheduled execution path via CLI command `run-scheduled-report`
 - email output via notification helpers used by scheduled reports
-- future frontend app boundary described in [ADR 0002](../adr/0002-modern-frontend-scaffold.md)
+- frontend app boundary described in [ADR 0002](../adr/0002-modern-frontend-scaffold.md)
 
-Owns user/system interaction surfaces (CLI args, HTTP/admin requests, scheduler integration, output transport such as terminal/JSON/email).
+Owns user/system interaction surfaces (CLI args, HTTP API requests, React browser views, scheduler integration, output transport such as terminal/JSON/email).
 
 This layer should orchestrate and present data, not own finance decision rules.
 
@@ -111,12 +112,12 @@ Notes:
 - CLI routes commands and delegates mutations to `portfolio_updates` helpers used as shared mutation paths.
 - Mutation helpers should avoid duplicating deeper deterministic decision logic unnecessarily.
 
-### API/admin portfolio update flow
+### API portfolio update flow
 
 ```mermaid
 flowchart LR
-    A[HTTP request] --> B[token or cookie auth]
-    B --> C[request validation/parsing]
+    A[HTTP API request] --> B[bearer token auth]
+    B --> C[request validation]
     C --> D[portfolio_updates helper]
     D --> E[save_portfolio_update]
     E --> F[PortfolioStore/SQLite]
@@ -125,8 +126,9 @@ flowchart LR
 
 Notes:
 
-- API/admin mode is an internal update surface, not a brokerage interface.
+- API mode is an internal update surface, not a brokerage interface.
 - It should validate/authenticate/transport updates and persist audit history, without becoming a finance-rule owner.
+- Browser session-cookie auth is limited to frontend-needed read endpoints; portfolio mutations remain bearer-token protected.
 
 ### Report generation flow
 
@@ -188,7 +190,8 @@ Notes:
 | Recommendation status generation | `recommendations.py` | deterministic only |
 | Report object composition and rendering | `reports.py` | structured output from deterministic results |
 | CLI command routing and printing | `cli.py` | input/output orchestration only |
-| API/admin HTML + HTTP handlers | `api.py` | internal input/presentation surface |
+| API HTTP handlers | `api.py` | internal input/API surface |
+| React frontend views | `apps/web` | browser presentation and interaction surface |
 | Narrative rewrite/explanation | `narrative.py` | optional explanation only |
 | Future LLM/Ollama provider usage | narrative provider boundary | cannot change deterministic outputs |
 
@@ -204,7 +207,8 @@ Notes:
 | `reports.py` | deterministic report composition/rendering | new recommendation/risk rules |
 | `narrative.py` | constrained optional narrative rewrite + validation/fallback | overriding calculations/statuses |
 | `cli.py` | command surface orchestration and output transport | owning deep finance decision policies |
-| `api.py` | HTTP/admin input surface, auth checks, persistence/audit routing | owning finance calculations or recommendation policy |
+| `api.py` | HTTP API surface, auth checks, persistence/audit routing | owning finance calculations or recommendation policy |
+| `apps/web` | React routes, dashboard presentation, query/loading states, generated API types | owning deterministic finance calculations or storing raw API tokens |
 
 ## Maintainer cleanup guidance
 
