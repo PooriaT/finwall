@@ -324,7 +324,9 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
             logger.warning("failed to record portfolio audit event")
 
     def _one(items, attr: str, value: str):
-        return next((asdict(item) for item in items if getattr(item, attr) == value), None)
+        return next(
+            (asdict(item) for item in items if getattr(item, attr) == value), None
+        )
 
     def _goal_snapshot(portfolio: Portfolio):
         return asdict(portfolio.goals[0]) if portfolio.goals else None
@@ -339,7 +341,9 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
     def _risk_snapshot(portfolio: Portfolio):
         return asdict(portfolio.risk_profile) if portfolio.risk_profile else None
 
-    def _trade_snapshot(before: Portfolio, after: Portfolio, ticker: str, currency: str):
+    def _trade_snapshot(
+        before: Portfolio, after: Portfolio, ticker: str, currency: str
+    ):
         return {
             "cash": _one(after.cash_balances, "currency", currency),
             "holding": _one(after.holdings, "ticker", ticker),
@@ -424,55 +428,75 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
         "/api/v1/portfolio/analysis/charts",
         response_model=PortfolioAnalysisChartsResponse,
     )
-    def portfolio_analysis_charts(report_history_limit: int = 10, _: str = Depends(read_auth)):
+    def portfolio_analysis_charts(
+        report_history_limit: int = 10, _: str = Depends(read_auth)
+    ):
         return _analysis_charts(report_history_limit).as_dict()
 
     @app.get(
         "/api/v1/portfolio/analysis/allocation/holdings",
         response_model=ChartSeriesResponse,
     )
-    def portfolio_allocation_holdings(report_history_limit: int = 10, _: str = Depends(read_auth)):
+    def portfolio_allocation_holdings(
+        report_history_limit: int = 10, _: str = Depends(read_auth)
+    ):
         return _analysis_charts(report_history_limit).allocation_by_holding.as_dict()
 
     @app.get(
         "/api/v1/portfolio/analysis/allocation/sectors",
         response_model=ChartSeriesResponse,
     )
-    def portfolio_allocation_sectors(report_history_limit: int = 10, _: str = Depends(read_auth)):
+    def portfolio_allocation_sectors(
+        report_history_limit: int = 10, _: str = Depends(read_auth)
+    ):
         return _analysis_charts(report_history_limit).allocation_by_sector.as_dict()
 
     @app.get(
         "/api/v1/portfolio/analysis/cash-vs-invested",
         response_model=ChartSeriesResponse,
     )
-    def portfolio_cash_vs_invested(report_history_limit: int = 10, _: str = Depends(read_auth)):
+    def portfolio_cash_vs_invested(
+        report_history_limit: int = 10, _: str = Depends(read_auth)
+    ):
         return _analysis_charts(report_history_limit).cash_vs_invested.as_dict()
 
     @app.get(
         "/api/v1/portfolio/analysis/unrealized-gain-loss",
         response_model=ChartSeriesResponse,
     )
-    def portfolio_unrealized_gain_loss(report_history_limit: int = 10, _: str = Depends(read_auth)):
-        return _analysis_charts(report_history_limit).unrealized_gain_loss_by_holding.as_dict()
+    def portfolio_unrealized_gain_loss(
+        report_history_limit: int = 10, _: str = Depends(read_auth)
+    ):
+        return _analysis_charts(
+            report_history_limit
+        ).unrealized_gain_loss_by_holding.as_dict()
 
     @app.get(
         "/api/v1/portfolio/analysis/risk-warnings",
         response_model=ChartSeriesResponse,
     )
-    def portfolio_risk_warnings(report_history_limit: int = 10, _: str = Depends(read_auth)):
-        return _analysis_charts(report_history_limit).risk_warnings_by_severity.as_dict()
+    def portfolio_risk_warnings(
+        report_history_limit: int = 10, _: str = Depends(read_auth)
+    ):
+        return _analysis_charts(
+            report_history_limit
+        ).risk_warnings_by_severity.as_dict()
 
     @app.get(
         "/api/v1/portfolio/analysis/report-history",
         response_model=ChartSeriesResponse,
     )
-    def portfolio_report_history(report_history_limit: int = 10, _: str = Depends(read_auth)):
+    def portfolio_report_history(
+        report_history_limit: int = 10, _: str = Depends(read_auth)
+    ):
         return _analysis_charts(report_history_limit).report_history_summary.as_dict()
 
     @app.get("/api/v1/portfolio/audit", response_model=PortfolioAuditResponse)
     def read_portfolio_audit(limit: int = 50, _: str = Depends(read_auth)):
         try:
-            events = app.state.store.list_portfolio_audit_events(DEFAULT_PORTFOLIO, limit)
+            events = app.state.store.list_portfolio_audit_events(
+                DEFAULT_PORTFOLIO, limit
+            )
         except ValueError:
             events = ()
         return {"events": [event.as_dict() for event in events]}
@@ -481,12 +505,22 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
     def cash_add(payload: CashRequest, actor: str = Depends(auth)):
         portfolio = get_portfolio()
         before = next(
-            (asdict(c) for c in portfolio.cash_balances if c.currency == payload.currency),
+            (
+                asdict(c)
+                for c in portfolio.cash_balances
+                if c.currency == payload.currency
+            ),
             None,
         )
-        updated = upsert_cash(portfolio, payload.currency, _to_decimal(payload.amount, "amount"))
+        updated = upsert_cash(
+            portfolio, payload.currency, _to_decimal(payload.amount, "amount")
+        )
         after = next(
-            (asdict(c) for c in updated.cash_balances if c.currency == payload.currency),
+            (
+                asdict(c)
+                for c in updated.cash_balances
+                if c.currency == payload.currency
+            ),
             None,
         )
         result = persist(updated, portfolio)
@@ -554,7 +588,9 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
     @app.post("/api/v1/portfolio/holdings")
     def holdings_upsert(payload: HoldingRequest, actor: str = Depends(auth)):
         portfolio = get_portfolio()
-        before = next((asdict(h) for h in portfolio.holdings if h.ticker == payload.ticker), None)
+        before = next(
+            (asdict(h) for h in portfolio.holdings if h.ticker == payload.ticker), None
+        )
         updated = add_holding(
             portfolio,
             payload.ticker,
@@ -562,7 +598,9 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
             _to_decimal(payload.average_price, "average_price"),
             payload.sector,
         )
-        after = next((asdict(h) for h in updated.holdings if h.ticker == payload.ticker), None)
+        after = next(
+            (asdict(h) for h in updated.holdings if h.ticker == payload.ticker), None
+        )
         result = persist(updated, portfolio)
         record_update_audit(
             DEFAULT_PORTFOLIO,
@@ -688,8 +726,12 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
                 payload.side,
                 payload.order_type,
                 _to_decimal(payload.shares, "shares"),
-                _to_decimal(payload.limit_price, "limit_price") if payload.limit_price else None,
-                _to_decimal(payload.stop_price, "stop_price") if payload.stop_price else None,
+                _to_decimal(payload.limit_price, "limit_price")
+                if payload.limit_price
+                else None,
+                _to_decimal(payload.stop_price, "stop_price")
+                if payload.stop_price
+                else None,
             )
         except (HTTPException, ValueError) as exc:
             _audit_failure(
@@ -782,7 +824,9 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
         portfolio = get_portfolio()
         before = _goal_snapshot(portfolio)
         target = (
-            _to_decimal(payload.target_amount, "target_amount") if payload.target_amount else None
+            _to_decimal(payload.target_amount, "target_amount")
+            if payload.target_amount
+            else None
         )
         updated = set_goal(portfolio, payload.name, target)
         result = persist(updated, portfolio)

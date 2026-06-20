@@ -34,7 +34,9 @@ def test_health_no_auth(tmp_path):
 
 def test_auth_missing_and_invalid(tmp_path):
     client = build_client(tmp_path)
-    missing = client.post("/api/v1/portfolio/cash/add", json={"currency": "USD", "amount": "10"})
+    missing = client.post(
+        "/api/v1/portfolio/cash/add", json={"currency": "USD", "amount": "10"}
+    )
     invalid = client.post(
         "/api/v1/portfolio/cash/add",
         headers=auth_headers("bad"),
@@ -229,7 +231,9 @@ def test_web_session_endpoint_requires_valid_cookie(tmp_path):
     client = build_client(tmp_path)
 
     missing = client.get("/api/v1/auth/session")
-    invalid = client.get("/api/v1/auth/session", cookies={WEB_SESSION_COOKIE_NAME: "bad"})
+    invalid = client.get(
+        "/api/v1/auth/session", cookies={WEB_SESSION_COOKIE_NAME: "bad"}
+    )
     login = client.post("/api/v1/auth/login", json={"token": "secret"})
     valid = client.get("/api/v1/auth/session")
 
@@ -424,7 +428,9 @@ def test_analysis_chart_endpoints_require_bearer_auth(tmp_path):
     client = build_client(tmp_path)
 
     missing = client.get("/api/v1/portfolio/analysis/charts")
-    invalid = client.get("/api/v1/portfolio/analysis/charts", headers=auth_headers("bad"))
+    invalid = client.get(
+        "/api/v1/portfolio/analysis/charts", headers=auth_headers("bad")
+    )
 
     assert missing.status_code == 401
     assert invalid.status_code == 401
@@ -496,7 +502,9 @@ def test_analysis_charts_include_prices_missing_sectors_and_risk(tmp_path, monke
     assert holdings[1]["value"] is None
     assert holdings[1]["status"] == "missing_price"
 
-    sectors = client.get("/api/v1/portfolio/analysis/allocation/sectors", headers=h).json()
+    sectors = client.get(
+        "/api/v1/portfolio/analysis/allocation/sectors", headers=h
+    ).json()
     assert sectors["points"][0]["key"] == "Technology"
     assert sectors["points"][0]["value"] is None
     assert sectors["points"][0]["status"] == "missing_price"
@@ -511,7 +519,9 @@ def test_analysis_charts_include_prices_missing_sectors_and_risk(tmp_path, monke
     assert cash["points"][0]["metadata"]["valuation_status"] == "missing_prices"
     assert cash["points"][0]["metadata"]["price_completeness_status"] == "partial"
 
-    unrealized = client.get("/api/v1/portfolio/analysis/unrealized-gain-loss", headers=h).json()
+    unrealized = client.get(
+        "/api/v1/portfolio/analysis/unrealized-gain-loss", headers=h
+    ).json()
     assert unrealized["points"][0]["value"] == "100.00"
     assert unrealized["points"][1]["value"] is None
     assert unrealized["points"][1]["status"] == "missing_price"
@@ -529,7 +539,9 @@ def test_analysis_report_history_metadata_and_limit_cap(tmp_path):
         json={"currency": "USD", "amount": "1000"},
     )
     with client.app.state.store._connect() as connection:
-        portfolio_id = client.app.state.store._require_portfolio_id(connection, "Primary")
+        portfolio_id = client.app.state.store._require_portfolio_id(
+            connection, "Primary"
+        )
         for index in range(55):
             connection.execute(
                 """
@@ -650,7 +662,8 @@ def test_api_mutation_audit_coverage(tmp_path):
     assert all(event["source"] == "api" for event in events)
     assert "secret" not in str(events)
     assert any(
-        event["before_json"] is not None or event["after_json"] is not None for event in events
+        event["before_json"] is not None or event["after_json"] is not None
+        for event in events
     )
 
 
@@ -697,7 +710,10 @@ def test_failed_validation_audit_events_are_safe(tmp_path):
         "trade_sell",
         "order_upsert",
     } <= actions
-    assert any(event["action"] == "order_upsert" and event["source"] == "api" for event in failed)
+    assert any(
+        event["action"] == "order_upsert" and event["source"] == "api"
+        for event in failed
+    )
     assert all(event["safe_error_message"] for event in failed)
     assert "secret" not in str(failed)
     assert "Traceback" not in str(failed)
