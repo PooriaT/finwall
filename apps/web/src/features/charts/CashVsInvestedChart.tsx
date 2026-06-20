@@ -31,7 +31,7 @@ export function CashVsInvestedChart({
   priceCompletenessStatus,
 }: CashVsInvestedChartProps) {
   const extraWarnings = [];
-  if (valuationStatus !== "available") {
+  if (valuationStatus !== "complete") {
     extraWarnings.push(`Valuation status: ${formatStatus(valuationStatus)}.`);
   }
   if (priceCompletenessStatus !== "complete") {

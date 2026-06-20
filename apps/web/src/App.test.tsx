@@ -100,7 +100,7 @@ function chartSeries(
 
 const analysisCharts = {
   portfolio_name: "Primary",
-  valuation_status: "available",
+  valuation_status: "complete",
   price_completeness_status: "complete",
   data_warnings: [],
   charts: {
@@ -146,7 +146,7 @@ const analysisCharts = {
           report_id: 1,
           created_at: "2026-06-19T15:30:00Z",
           command_context: "scheduled",
-          valuation_status: "available",
+          valuation_status: "complete",
           price_completeness_status: "complete",
           recommendation_summary: "Hold current positions.",
           report_summary: "Portfolio remains balanced.",
@@ -412,6 +412,18 @@ describe("App", () => {
     expect(within(table).getByText("1250.50")).toBeInTheDocument();
     expect(within(table).getByText("Invested")).toBeInTheDocument();
     expect(within(table).getByText("3000.00")).toBeInTheDocument();
+  });
+
+  it("does not mark complete cash valuation data as partial", async () => {
+    mockFetch();
+
+    renderAt("/dashboard");
+
+    await screen.findByRole("table", {
+      name: "Cash vs invested fallback table",
+    });
+    expect(screen.queryByText("Valuation status: Complete.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Partial data visible")).not.toBeInTheDocument();
   });
 
   it("renders unrealized gain/loss positive and negative values", async () => {
