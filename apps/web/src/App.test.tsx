@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { queryClient, queryKeys } from "./api/queryClient";
 import App from "./App";
 
 function renderAt(pathname: string) {
@@ -228,6 +229,44 @@ describe("App", () => {
     );
   });
 
+  it("returns to login when a session refetch fails after prior authentication", async () => {
+    let sessionValid = true;
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url === "/api/v1/auth/session") {
+        if (!sessionValid) {
+          return Promise.resolve(
+            jsonResponse({ detail: "invalid" }, { status: 401 }),
+          );
+        }
+        return Promise.resolve(jsonResponse({ authenticated: true }));
+      }
+      if (url === "/api/v1/portfolio") {
+        return Promise.resolve(jsonResponse(populatedPortfolio));
+      }
+      if (url.startsWith("/api/v1/portfolio/analysis/charts")) {
+        return Promise.resolve(jsonResponse(analysisCharts));
+      }
+      if (url.startsWith("/api/v1/portfolio/audit")) {
+        return Promise.resolve(jsonResponse(auditPreview));
+      }
+
+      return Promise.resolve(jsonResponse({ detail: "not found" }, { status: 404 }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderAt("/dashboard");
+
+    expect(await screen.findByRole("heading", { name: "Portfolio overview" })).toBeInTheDocument();
+
+    sessionValid = false;
+    await queryClient.refetchQueries({ queryKey: queryKeys.session });
+
+    expect(await screen.findByRole("heading", { name: "Sign in to Finwall" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Portfolio overview" })).not.toBeInTheDocument();
+  });
+
   it("renders the dashboard portfolio loading state", async () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {
       const url = String(input);
@@ -392,6 +431,12 @@ describe("App", () => {
     const fetchMock = mockFetch();
 
     renderAt("/dashboard");
+    await screen.findByRole("heading", { name: "Current holdings" });
+
+    expect(queryClient.getQueryData(queryKeys.portfolio)).toBeDefined();
+    expect(queryClient.getQueriesData({ queryKey: ["analysis"] })).toHaveLength(1);
+    expect(queryClient.getQueriesData({ queryKey: ["audit"] })).toHaveLength(1);
+
     fireEvent.click(await screen.findByRole("button", { name: "Log out" }));
 
     await waitFor(() => expect(window.location.pathname).toBe("/login"));
@@ -399,6 +444,9 @@ describe("App", () => {
     expect(fetchMock.mock.calls.some((call) => call[0] === "/api/v1/auth/logout")).toBe(
       true,
     );
+    expect(queryClient.getQueryData(queryKeys.portfolio)).toBeUndefined();
+    expect(queryClient.getQueriesData({ queryKey: ["analysis"] })).toHaveLength(0);
+    expect(queryClient.getQueriesData({ queryKey: ["audit"] })).toHaveLength(0);
   });
 
   it("keeps the dashboard authenticated when logout fails", async () => {

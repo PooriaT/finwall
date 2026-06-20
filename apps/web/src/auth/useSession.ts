@@ -22,6 +22,9 @@ export function useSession() {
     try {
       const session = await logoutRequest();
       queryClient.setQueryData(queryKeys.session, session);
+      queryClient.removeQueries({ queryKey: queryKeys.portfolio });
+      queryClient.removeQueries({ queryKey: ["analysis"] });
+      queryClient.removeQueries({ queryKey: ["audit"] });
       return true;
     } catch {
       setLogoutError("Logout failed. Try again.");
@@ -30,7 +33,9 @@ export function useSession() {
   }, [queryClient]);
 
   return {
-    authenticated: sessionQuery.data?.authenticated ?? false,
+    authenticated: sessionQuery.isSuccess
+      ? sessionQuery.data.authenticated
+      : false,
     loading: sessionQuery.isPending,
     error: logoutError,
     refresh,
