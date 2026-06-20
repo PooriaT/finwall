@@ -74,6 +74,29 @@ For fuller local setup and command walkthroughs, see [docs/local-setup.md](docs/
 
 For the React frontend, see [docs/frontend.md](docs/frontend.md).
 
+## Run the web app locally
+
+Run the backend API and frontend dev server in separate terminals.
+
+Backend:
+
+```bash
+FINWALL_API_TOKEN=change-me-long-random-token \
+poetry run uvicorn finwall.api:app --reload --host 127.0.0.1 --port 8000
+```
+
+Frontend:
+
+```bash
+cd apps/web
+npm install
+npm run dev
+```
+
+Open the Vite URL, usually `http://localhost:5173`. The frontend calls relative
+`/api/v1/...` URLs, and Vite proxies `/api` to the FastAPI backend on
+`http://127.0.0.1:8000`, so local browser requests do not require CORS.
+
 ## Common workflows
 
 ### Portfolio maintenance
