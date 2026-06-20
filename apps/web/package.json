@@ -1,0 +1,37 @@
+{
+  "name": "@finwall/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "openapi:check": "npm run openapi:export && npm run openapi:generate && git diff --exit-code openapi/finwall-openapi.json src/api/generated/schema.ts",
+    "openapi:export": "cd ../.. && poetry run python scripts/export_openapi.py --output apps/web/openapi/finwall-openapi.json",
+    "openapi:generate": "openapi-typescript openapi/finwall-openapi.json -o src/api/generated/schema.ts",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.101.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "recharts": "^3.8.1"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.1.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "jsdom": "^25.0.1",
+    "openapi-typescript": "^7.13.0",
+    "typescript": "^5.7.2",
+    "vite": "^7.0.0",
+    "vitest": "^3.0.0"
+  },
+  "overrides": {
+    "esbuild": "^0.28.1"
+  }
+}

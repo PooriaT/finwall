@@ -113,12 +113,12 @@ override deterministic recommendation, risk, or report outputs. Invalid/unsafe n
 
 See also: [docs/email-notifications.md](email-notifications.md)
 
-## API / admin
+## API / frontend
 
 | Variable | Purpose | Default | Required (local-only) | Required (scheduled/email/API) | Example |
 |---|---|---|---|---|---|
-| `FINWALL_API_ENABLED` | Enables API/admin server mode in CLI launch path. | `false` | No | Required if you intentionally run API/admin mode. | `true` |
-| `FINWALL_API_TOKEN` | Bearer token and admin login secret. | empty | No | Required for API/admin mode. | `change-me-long-random-token` |
+| `FINWALL_API_ENABLED` | Enables API server mode in CLI launch path. | `false` | No | Required if you intentionally run API mode. | `true` |
+| `FINWALL_API_TOKEN` | Bearer token and browser session login secret. | empty | No | Required for API/frontend mode. | `change-me-long-random-token` |
 | `FINWALL_API_HOST` | API bind host. | `127.0.0.1` | No | Recommended to keep loopback unless protected network exposure is deliberate. | `127.0.0.1` |
 | `FINWALL_API_PORT` | API bind port. | `8000` | No | Optional | `8000` |
 

@@ -7,7 +7,7 @@ Finwall includes application-level hardening for local development and self-mana
 - Never commit `.env` files.
 - Never paste real portfolio data or secrets into logs, issues, PRs, or screenshots.
 
-## Required variables for API/admin mode
+## Required variables for API/frontend mode
 - `FINWALL_API_ENABLED=true`
 - `FINWALL_API_TOKEN=<strong-random-token>`
 - Prefer `FINWALL_API_HOST=127.0.0.1` unless network exposure is intentional.
@@ -35,7 +35,7 @@ poetry run finwall security-check --json
 - Local SQLite data is sensitive financial data.
 - Reports and scheduled email summaries can contain sensitive portfolio context.
 - Email delivery sends report summaries through your configured provider.
-- API/admin should be protected with token auth plus host/network controls.
+- API and frontend access should be protected with token auth plus host/network controls.
 
 ## Scope limits
 This is application-level hardening only. It does not implement enterprise compliance, encryption-at-rest, KMS, SSO, RBAC, SOC2, or broker security certification.
