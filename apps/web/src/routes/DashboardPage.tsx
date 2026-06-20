@@ -1,43 +1,135 @@
+import { ActiveOrdersTable } from "../features/dashboard/ActiveOrdersTable";
+import { AuditPreview } from "../features/dashboard/AuditPreview";
+import { CashTable } from "../features/dashboard/CashTable";
+import { DashboardSummary } from "../features/dashboard/DashboardSummary";
+import { EmptyState } from "../features/dashboard/EmptyState";
+import { ErrorState } from "../features/dashboard/ErrorState";
+import { HoldingsTable } from "../features/dashboard/HoldingsTable";
+import { LatestReportCard } from "../features/dashboard/LatestReportCard";
+import { LiveDataStatus } from "../features/dashboard/LiveDataStatus";
+import { LoadingState } from "../features/dashboard/LoadingState";
+import { useDashboardData } from "../features/dashboard/useDashboardData";
+import { WatchlistTable } from "../features/dashboard/WatchlistTable";
+
 type DashboardPageProps = {
   authError?: string | null;
   onLogout?: () => void | Promise<void>;
 };
 
 export default function DashboardPage({ authError, onLogout }: DashboardPageProps) {
+  const { portfolioQuery, analysisChartsQuery, auditPreviewQuery } =
+    useDashboardData();
+
+  if (portfolioQuery.isPending) {
+    return (
+      <section className="dashboard-page" aria-labelledby="dashboard-title">
+        <DashboardHeader onLogout={onLogout} />
+        <LoadingState
+          title="Loading portfolio"
+          message="Loading portfolio summary, holdings, cash, orders, and watchlist."
+        />
+      </section>
+    );
+  }
+
+  if (portfolioQuery.isError) {
+    return (
+      <section className="dashboard-page" aria-labelledby="dashboard-title">
+        <DashboardHeader onLogout={onLogout} />
+        <ErrorState
+          title="Portfolio data could not load"
+          message="The portfolio endpoint returned an error. No dashboard data is being shown."
+        />
+      </section>
+    );
+  }
+
+  const portfolio = portfolioQuery.data;
+  const holdings = portfolio.holdings ?? [];
+  const cashBalances = portfolio.cash_balances ?? [];
+  const activeOrders = portfolio.active_orders ?? [];
+  const watchlist = portfolio.watchlist ?? [];
+  const isEmptyPortfolio =
+    holdings.length === 0 &&
+    cashBalances.length === 0 &&
+    activeOrders.length === 0 &&
+    watchlist.length === 0 &&
+    (portfolio.goals ?? []).length === 0 &&
+    !portfolio.risk_profile;
+
   return (
-    <section className="panel" aria-labelledby="dashboard-title">
-      <p className="eyebrow">Dashboard</p>
-      <div className="panel-heading">
-        <h1 id="dashboard-title">Portfolio overview placeholder</h1>
-        {onLogout ? (
-          <button className="secondary-button" type="button" onClick={() => void onLogout()}>
-            Log out
-          </button>
-        ) : null}
-      </div>
-      <p>
-        This page will present backend-provided portfolio summaries, risk signals, and
-        chart-ready analysis in later issues.
-      </p>
+    <section className="dashboard-page" aria-labelledby="dashboard-title">
+      <DashboardHeader onLogout={onLogout} />
       {authError ? (
         <p className="form-error" role="alert">
           {authError}
         </p>
       ) : null}
-      <div className="placeholder-grid" aria-label="Planned dashboard sections">
-        <div>
-          <h2>Allocation</h2>
-          <p>Charts are intentionally deferred until backend API integration is added.</p>
-        </div>
-        <div>
-          <h2>Risk signals</h2>
-          <p>Risk rules remain owned by the Finwall backend.</p>
-        </div>
-        <div>
-          <h2>Recommendations</h2>
-          <p>Decision-support output will be rendered from backend responses only.</p>
-        </div>
+
+      {isEmptyPortfolio ? <EmptyState /> : null}
+
+      <DashboardSummary
+        portfolio={portfolio}
+        analysis={analysisChartsQuery.data}
+      />
+
+      <div className="dashboard-grid">
+        {analysisChartsQuery.isPending ? (
+          <LoadingState
+            title="Loading analysis status"
+            message="Loading backend chart metadata and live-data status."
+          />
+        ) : analysisChartsQuery.isError ? (
+          <ErrorState
+            title="Analysis status could not load"
+            message="Portfolio data is visible, but chart metadata and live-data status are unavailable."
+          />
+        ) : (
+          <>
+            <LiveDataStatus analysis={analysisChartsQuery.data} />
+            <LatestReportCard analysis={analysisChartsQuery.data} />
+          </>
+        )}
       </div>
+
+      <HoldingsTable holdings={holdings} />
+      <CashTable cashBalances={cashBalances} />
+      <ActiveOrdersTable activeOrders={activeOrders} />
+      <WatchlistTable watchlist={watchlist} />
+
+      {auditPreviewQuery.isPending ? (
+        <LoadingState
+          title="Loading audit preview"
+          message="Loading the latest portfolio audit events."
+        />
+      ) : auditPreviewQuery.isError ? (
+        <ErrorState
+          title="Audit preview could not load"
+          message="Portfolio data is visible, but recent audit events are unavailable."
+        />
+      ) : (
+        <AuditPreview audit={auditPreviewQuery.data} />
+      )}
     </section>
+  );
+}
+
+function DashboardHeader({ onLogout }: Pick<DashboardPageProps, "onLogout">) {
+  return (
+    <div className="dashboard-hero">
+      <div>
+        <p className="eyebrow">Dashboard</p>
+        <h1 id="dashboard-title">Portfolio overview</h1>
+        <p>
+          Read-only portfolio state, backend analysis status, report metadata, and
+          recent audit activity.
+        </p>
+      </div>
+      {onLogout ? (
+        <button className="secondary-button" type="button" onClick={() => void onLogout()}>
+          Log out
+        </button>
+      ) : null}
+    </div>
   );
 }

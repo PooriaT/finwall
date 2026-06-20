@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { queryClient } from "./api/queryClient";
 import { useSession } from "./auth/useSession";
 import AppLayout from "./components/AppLayout";
 import DashboardPage from "./routes/DashboardPage";
@@ -75,6 +77,8 @@ export default function App() {
   }, []);
 
   return (
-    <AppLayout currentPath={currentPath}>{getRoute(currentPath, navigateTo)}</AppLayout>
+    <QueryClientProvider client={queryClient}>
+      <AppLayout currentPath={currentPath}>{getRoute(currentPath, navigateTo)}</AppLayout>
+    </QueryClientProvider>
   );
 }

@@ -1,63 +1,38 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getSession, logout as logoutRequest } from "../api/client";
-
-type SessionState = {
-  authenticated: boolean;
-  loading: boolean;
-  error: string | null;
-};
+import { queryKeys } from "../api/queryClient";
 
 export function useSession() {
-  const [state, setState] = useState<SessionState>({
-    authenticated: false,
-    loading: true,
-    error: null,
+  const queryClient = useQueryClient();
+  const [logoutError, setLogoutError] = useState<string | null>(null);
+  const sessionQuery = useQuery({
+    queryKey: queryKeys.session,
+    queryFn: getSession,
   });
+  const { refetch } = sessionQuery;
 
   const refresh = useCallback(async () => {
-    setState((current) => ({ ...current, loading: true, error: null }));
-    try {
-      const session = await getSession();
-      setState({
-        authenticated: session.authenticated,
-        loading: false,
-        error: null,
-      });
-    } catch {
-      setState({
-        authenticated: false,
-        loading: false,
-        error: null,
-      });
-    }
-  }, []);
+    setLogoutError(null);
+    await refetch();
+  }, [refetch]);
 
   const logout = useCallback(async () => {
-    setState((current) => ({ ...current, loading: true, error: null }));
+    setLogoutError(null);
     try {
-      await logoutRequest();
-      setState({
-        authenticated: false,
-        loading: false,
-        error: null,
-      });
+      const session = await logoutRequest();
+      queryClient.setQueryData(queryKeys.session, session);
       return true;
     } catch {
-      setState((current) => ({
-        ...current,
-        loading: false,
-        error: "Logout failed. Try again.",
-      }));
+      setLogoutError("Logout failed. Try again.");
       return false;
     }
-  }, []);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
+  }, [queryClient]);
 
   return {
-    ...state,
+    authenticated: sessionQuery.data?.authenticated ?? false,
+    loading: sessionQuery.isPending,
+    error: logoutError,
     refresh,
     logout,
   };
