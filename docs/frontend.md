@@ -69,6 +69,28 @@ Generated files live in:
 The small hand-written wrapper lives in `apps/web/src/api/client.ts`, with
 operation-derived aliases in `apps/web/src/api/types.ts`.
 
+## Dashboard charts
+
+The dashboard uses Recharts as its only charting library. The first read-only
+chart components live in `apps/web/src/features/charts` and render these
+backend chart-ready series from `GET /api/v1/portfolio/analysis/charts`:
+
+- `allocation_by_holding`
+- `cash_vs_invested`
+- `unrealized_gain_loss_by_holding`
+- `risk_warnings_by_severity`
+
+The backend remains the source of truth for chart semantics and financial
+calculations. Frontend chart adapters only parse backend string values into
+numbers for display, while preserving the original string values for visible
+labels, tooltips, and fallback tables.
+
+Missing, invalid, or `null` chart values are displayed as unavailable instead of
+being silently removed. Series warnings, incomplete valuation status, and partial
+price-completeness status are shown visibly in chart cards. Every chart includes
+a title, short summary, visible numeric labels, and an HTML fallback table for
+accessible non-SVG content.
+
 Browser authentication uses the frontend session endpoints:
 
 - `POST /api/v1/auth/login`
@@ -98,15 +120,14 @@ The scaffold currently includes:
 - generated OpenAPI TypeScript schema workflow
 - typed wrappers for portfolio, analysis chart, and audit reads
 - typed wrappers for session login, logout, and session checks
+- reusable Recharts dashboard components for allocation, cash/invested,
+  unrealized gain/loss, and risk-warning severity series
 - local CSS
 - frontend typecheck, test, build, and preview scripts
 
 Not implemented yet:
 
-- live dashboard data
-- charts
 - portfolio mutation forms
-- backend API integration
 
 ## Safety and non-goals
 

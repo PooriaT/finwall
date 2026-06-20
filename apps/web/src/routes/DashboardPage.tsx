@@ -10,6 +10,7 @@ import { LiveDataStatus } from "../features/dashboard/LiveDataStatus";
 import { LoadingState } from "../features/dashboard/LoadingState";
 import { useDashboardData } from "../features/dashboard/useDashboardData";
 import { WatchlistTable } from "../features/dashboard/WatchlistTable";
+import { DashboardCharts } from "../features/charts/DashboardCharts";
 
 type DashboardPageProps = {
   authError?: string | null;
@@ -91,6 +92,20 @@ export default function DashboardPage({ authError, onLogout }: DashboardPageProp
           </>
         )}
       </div>
+
+      {analysisChartsQuery.isPending ? (
+        <LoadingState
+          title="Loading dashboard charts"
+          message="Loading chart-ready portfolio analysis series."
+        />
+      ) : analysisChartsQuery.isError ? (
+        <ErrorState
+          title="Dashboard charts could not load"
+          message="Portfolio tables are visible, but chart-ready analysis data is unavailable."
+        />
+      ) : (
+        <DashboardCharts analysis={analysisChartsQuery.data} />
+      )}
 
       <HoldingsTable holdings={holdings} />
       <CashTable cashBalances={cashBalances} />

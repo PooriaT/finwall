@@ -1,4 +1,4 @@
-import type { operations } from "./generated/schema";
+import type { components, operations } from "./generated/schema";
 
 type JsonResponse<Operation> = Operation extends {
   responses: {
@@ -43,3 +43,6 @@ export type PortfolioAuditQuery = QueryParams<
 export type AuthSession = JsonResponse<
   operations["auth_session_api_v1_auth_session_get"]
 >;
+
+export type ChartSeries = components["schemas"]["ChartSeriesResponse"];
+export type ChartPoint = components["schemas"]["ChartPointResponse"];
