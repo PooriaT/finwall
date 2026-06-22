@@ -16,9 +16,9 @@ Finwall is a decision-support tool, not an execution platform.
 ## Data and analysis limitations
 
 - Market data defaults to `yfinance` but can still be missing, delayed, stale, partial, malformed, unavailable, rate-limited, or blocked. It is not broker-grade market data.
-- Technical indicators, market-condition analysis, fundamentals, and news coverage can be optional, experimental, provider-dependent, or incomplete.
+- Technical indicators, market-condition analysis, fundamentals, and news coverage can be optional, experimental, provider-dependent, or incomplete. Live fundamentals from free providers such as `yfinance` may be stale, partial, unavailable, or malformed and are not broker-grade or institutional fundamentals.
 - Deterministic checks are guardrails, not predictions.
-- Deterministic recommendations remain conservative and primarily snapshot/risk driven unless a rule set explicitly consumes additional inputs.
+- Deterministic recommendations remain conservative and primarily snapshot/risk driven unless a rule set explicitly consumes additional inputs; live fundamentals are not authoritative recommendation drivers by default.
 - Narrative/LLM-style outputs (if enabled) are optional context and must not override deterministic evidence.
 
 ## Operational limitations

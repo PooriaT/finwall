@@ -69,8 +69,8 @@ class Settings:
     market_data_timeout_seconds: float = _parse_timeout_seconds(
         os.getenv("FINWALL_MARKET_DATA_TIMEOUT_SECONDS"), 5.0
     )
-    fundamental_data_provider: str = os.getenv(
-        "FINWALL_FUNDAMENTAL_DATA_PROVIDER", "static"
+    fundamental_data_provider: str = _parse_optional_string(
+        os.getenv("FINWALL_FUNDAMENTAL_DATA_PROVIDER"), "yfinance"
     )
     fundamental_data_timeout_seconds: float = _parse_timeout_seconds(
         os.getenv("FINWALL_FUNDAMENTAL_DATA_TIMEOUT_SECONDS"), 5.0

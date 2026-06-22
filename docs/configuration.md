@@ -61,8 +61,12 @@ Run `market-data-check` to diagnose default live-provider availability, provider
 
 | Variable | Purpose | Default | Required (local-only) | Required (scheduled/email/API) | Example |
 |---|---|---|---|---|---|
-| `FINWALL_FUNDAMENTAL_DATA_PROVIDER` | Fundamentals provider selector. | `static` | No | Optional | `static` |
+| `FINWALL_FUNDAMENTAL_DATA_PROVIDER` | Fundamentals provider selector. Supported values: `yfinance`, `static`. Unknown values use safe static provider behavior. | `yfinance` | No | Optional | `yfinance` |
 | `FINWALL_FUNDAMENTAL_DATA_TIMEOUT_SECONDS` | Fundamentals timeout. | `5` | No | Optional | `5` |
+
+Finwall defaults to a small `yfinance` fundamentals provider. It reads company profile fields and a limited set of growth, profitability, debt/liquidity, and valuation metrics when available. These fundamentals are live, partial decision-support inputs and may be incomplete, stale, unavailable, malformed, rate-limited, or provider-dependent. Missing or unparseable values are reported as unavailable metrics rather than raw provider errors or tracebacks.
+
+Fundamentals are not authoritative recommendation drivers unless explicitly integrated into deterministic rules elsewhere. The static fundamentals provider remains available for tests, demos, and explicit manual overrides. Neither provider supplies financial advice, paid-provider coverage, broker-grade guarantees, full financial statement modeling, broker integration, caching, or automatic trading.
 
 ## News
 

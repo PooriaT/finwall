@@ -1576,3 +1576,97 @@ def test_market_data_check_does_not_initialize_store(
 
     assert code == 0
     assert payload["ok"] is True
+
+
+def test_fundamentals_json_uses_live_provider_when_configured(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    from finwall.fundamentals import (
+        CompanyProfile,
+        FundamentalMetric,
+        FundamentalSnapshot,
+    )
+
+    database = tmp_path / "finwall.db"
+    run(["--database", str(database), "add-watchlist", "LIVE"])
+
+    class LiveProvider:
+        def get_fundamentals(self, ticker: str):
+            return FundamentalSnapshot(
+                ticker=ticker,
+                source="yfinance",
+                data_status="partial",
+                profile=CompanyProfile(
+                    ticker, "Live Corp", None, None, None, None, "yfinance", True
+                ),
+                revenue_growth=FundamentalMetric(
+                    "revenue_growth", "10%", True, "yfinance"
+                ),
+                earnings_growth=FundamentalMetric(
+                    "earnings_growth", None, False, "yfinance"
+                ),
+                profitability=(),
+                debt=(),
+                valuation=(),
+                warnings=(),
+            )
+
+    seen = {}
+
+    def fake_builder(provider_name, timeout_seconds):
+        seen["provider_name"] = provider_name
+        return LiveProvider()
+
+    monkeypatch.setattr("finwall.cli.build_fundamental_data_provider", fake_builder)
+
+    run(["--database", str(database), "fundamentals", "--json"])
+    out = capsys.readouterr().out
+
+    assert seen["provider_name"] == "yfinance"
+    assert '"source": "yfinance"' in out
+    assert '"company_name": "Live Corp"' in out
+
+
+def test_fundamentals_summary_json_handles_partial_live_snapshot(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    from finwall.fundamentals import (
+        CompanyProfile,
+        FundamentalMetric,
+        FundamentalSnapshot,
+    )
+
+    database = tmp_path / "finwall.db"
+    run(["--database", str(database), "add-watchlist", "PART"])
+
+    class PartialProvider:
+        def get_fundamentals(self, ticker: str):
+            return FundamentalSnapshot(
+                ticker=ticker,
+                source="yfinance",
+                data_status="partial",
+                profile=CompanyProfile(
+                    ticker, "Partial Corp", None, None, None, None, "yfinance", True
+                ),
+                revenue_growth=FundamentalMetric(
+                    "revenue_growth", None, False, "yfinance"
+                ),
+                earnings_growth=FundamentalMetric(
+                    "earnings_growth", None, False, "yfinance"
+                ),
+                profitability=(),
+                debt=(),
+                valuation=(),
+                warnings=("partial live fundamentals",),
+            )
+
+    monkeypatch.setattr(
+        "finwall.cli.build_fundamental_data_provider", lambda *_: PartialProvider()
+    )
+
+    run(["--database", str(database), "fundamentals-summary", "--json"])
+    out = capsys.readouterr().out
+
+    assert '"ticker": "PART"' in out
+    assert '"data_status": "partial"' in out
+    assert "revenue_growth" in out
