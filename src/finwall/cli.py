@@ -18,6 +18,7 @@ from finwall.fundamentals import (
     build_fundamental_analysis_report,
     build_fundamental_data_provider,
 )
+from finwall.live_data_status import diagnostics_status
 from finwall.market_calendar import evaluate_us_trading_day
 from finwall.market_condition import classify_market_condition
 from finwall.market_data import (
@@ -899,6 +900,8 @@ def print_market_data_diagnostics(result: MarketDataDiagnosticResult) -> None:
         print(f"Fallback provider: {result.fallback_provider}")
     print(f"Timeout: {result.timeout_seconds}s")
     print(f"Sample ticker: {result.sample_ticker}")
+    status = diagnostics_status(result)
+    print(f"Live data availability: {status.availability}")
     print("")
     for check in result.checks:
         status = "ok" if check.ok else "failed"
@@ -1032,7 +1035,9 @@ def run(argv: list[str] | None = None) -> int:
             historical_days=args.historical_days,
         )
         if args.json:
-            print(json.dumps(result.as_dict(), indent=2))
+            payload = result.as_dict()
+            payload["live_data_status"] = diagnostics_status(result).as_dict()
+            print(json.dumps(payload, indent=2))
         else:
             print_market_data_diagnostics(result)
         return 0 if result.ok else 1

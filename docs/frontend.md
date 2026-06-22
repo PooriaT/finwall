@@ -154,3 +154,17 @@ Browser API calls must use session-cookie-friendly requests for read endpoints.
 Do not store raw API tokens in frontend code or browser-accessible storage. OAuth,
 user registration, password reset, RBAC, and multi-user account management are
 out of scope.
+
+
+## Live-data status contract
+
+Finwall exposes a shared `live_data_status` contract for frontend, API, CLI diagnostics, and report payloads. Status values are:
+
+- `live`: the evaluated data source returned the requested data for that surface.
+- `partial`: some requested items were available and some were missing.
+- `unavailable`: the evaluated source could not provide usable data.
+- `static`: the configured source is static/sample/manual fallback data rather than a live provider.
+- `manual`: user-supplied values were used instead of provider fetches.
+- `unknown`: only configuration is known or the domain has not been evaluated.
+
+Provider status is decision-support metadata only. It is not a guarantee that data is real-time, complete, broker-grade, or suitable for trading automation. The contract does not add caching, new providers, broker integration, or automatic trading.

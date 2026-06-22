@@ -334,6 +334,90 @@
         "title": "InvestmentGoalResponse",
         "type": "object"
       },
+      "LiveDataStatusListResponse": {
+        "properties": {
+          "statuses": {
+            "items": {
+              "$ref": "#/components/schemas/LiveDataStatusResponse"
+            },
+            "title": "Statuses",
+            "type": "array"
+          }
+        },
+        "required": [
+          "statuses"
+        ],
+        "title": "LiveDataStatusListResponse",
+        "type": "object"
+      },
+      "LiveDataStatusResponse": {
+        "properties": {
+          "availability": {
+            "title": "Availability",
+            "type": "string"
+          },
+          "domain": {
+            "title": "Domain",
+            "type": "string"
+          },
+          "fallback_provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fallback Provider"
+          },
+          "fallback_used": {
+            "default": false,
+            "title": "Fallback Used",
+            "type": "boolean"
+          },
+          "last_attempted_at": {
+            "title": "Last Attempted At",
+            "type": "string"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "title": "Metadata",
+            "type": "object"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "safe_error_messages": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Safe Error Messages",
+            "type": "array"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "domain",
+          "provider",
+          "source",
+          "availability",
+          "last_attempted_at"
+        ],
+        "title": "LiveDataStatusResponse",
+        "type": "object"
+      },
       "OrderRequest": {
         "properties": {
           "limit_price": {
@@ -409,6 +493,13 @@
               "type": "string"
             },
             "title": "Data Warnings",
+            "type": "array"
+          },
+          "live_data_status": {
+            "items": {
+              "$ref": "#/components/schemas/LiveDataStatusResponse"
+            },
+            "title": "Live Data Status",
             "type": "array"
           },
           "portfolio_name": {
@@ -1054,6 +1145,68 @@
           }
         },
         "summary": "Auth Session"
+      }
+    },
+    "/api/v1/live-data/status": {
+      "get": {
+        "operationId": "live_data_status_api_v1_live_data_status_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "finwall_web_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Finwall Web Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveDataStatusListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Live Data Status"
       }
     },
     "/api/v1/portfolio": {

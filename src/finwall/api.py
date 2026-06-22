@@ -11,6 +11,11 @@ from pydantic import BaseModel, Field
 
 from finwall.chart_data import build_portfolio_chart_data
 from finwall.config import Settings, settings
+from finwall.live_data_status import (
+    LiveDataDomain,
+    LiveDataStatus,
+    configured_status,
+)
 from finwall.models import ActiveOrder, OrderSide, OrderType, Portfolio, RiskLevel
 from finwall.portfolio_audit import (
     PortfolioAuditEntityType,
@@ -190,11 +195,29 @@ class PortfolioChartsResponse(BaseModel):
     report_history_summary: ChartSeriesResponse
 
 
+class LiveDataStatusResponse(BaseModel):
+    domain: str
+    provider: str
+    source: str
+    availability: str
+    last_attempted_at: str
+    fallback_used: bool = False
+    fallback_provider: str | None = None
+    warnings: list[str] = Field(default_factory=list)
+    safe_error_messages: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class LiveDataStatusListResponse(BaseModel):
+    statuses: list[LiveDataStatusResponse]
+
+
 class PortfolioAnalysisChartsResponse(BaseModel):
     portfolio_name: str
     valuation_status: str
     price_completeness_status: str
     data_warnings: list[str]
+    live_data_status: list[LiveDataStatusResponse] = Field(default_factory=list)
     charts: PortfolioChartsResponse
 
 
@@ -410,6 +433,35 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
     @app.get("/api/v1/auth/session", response_model=AuthSessionResponse)
     def auth_session(_: str = Depends(web_session_auth)):
         return {"authenticated": True}
+
+    @app.get("/api/v1/live-data/status", response_model=LiveDataStatusListResponse)
+    def live_data_status(_: str = Depends(read_auth)):
+        statuses = (
+            configured_status(
+                domain=LiveDataDomain.MARKET_PRICES,
+                provider=app.state.settings.market_data_provider,
+            ),
+            configured_status(
+                domain=LiveDataDomain.FUNDAMENTALS,
+                provider=app.state.settings.fundamental_data_provider,
+            ),
+            configured_status(
+                domain=LiveDataDomain.NEWS,
+                provider=app.state.settings.news_provider,
+            ),
+            LiveDataStatus(
+                domain=LiveDataDomain.MARKET_CONDITION.value,
+                provider=app.state.settings.market_data_provider,
+                source=app.state.settings.market_data_provider,
+                availability="unknown",
+                last_attempted_at=configured_status(
+                    domain=LiveDataDomain.MARKET_CONDITION,
+                    provider=app.state.settings.market_data_provider,
+                ).last_attempted_at,
+                metadata={"configured_only": True},
+            ),
+        )
+        return {"statuses": [status.as_dict() for status in statuses]}
 
     @app.get("/api/v1/portfolio", response_model=PortfolioResponse)
     def read_portfolio(_: str = Depends(read_auth)):
