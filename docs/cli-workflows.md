@@ -53,6 +53,8 @@ poetry run finwall --database finwall.db report --live-prices --market-index SP5
 
 Fundamentals commands use the default `yfinance` fundamentals provider unless `FINWALL_FUNDAMENTAL_DATA_PROVIDER=static` is set. Live fundamentals are partial decision-support context only; they may be incomplete, stale, unavailable, or provider-dependent, and they do not change recommendation scoring unless integrated by a separate rule set.
 
+News commands use the default `yfinance` news provider unless `FINWALL_NEWS_PROVIDER=static` is set. `yfinance` supports ticker/company news when available; market and sector topics are safely reported as unavailable and commands continue. News source quality and recency are heuristic context only, not sentiment analysis, recommendation inputs, broker actions, or trading signals.
+
 Additional command examples:
 
 ```bash

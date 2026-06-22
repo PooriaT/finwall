@@ -154,3 +154,145 @@ def test_provider_errors_become_warnings_and_json() -> None:
     assert '"warnings"' in payload
     assert '"limitations"' in payload
     assert '"source_quality"' in payload or '"articles"' in payload
+
+
+def _install_fake_yfinance_news(monkeypatch, ticker_class) -> None:
+    import finwall.news_yfinance as news_yfinance
+
+    class FakeYFinance:
+        Ticker = ticker_class
+
+    monkeypatch.setattr(
+        news_yfinance.importlib,
+        "import_module",
+        lambda name: FakeYFinance if name == "yfinance" else __import__(name),
+    )
+
+
+def test_yfinance_company_news_success_and_enrichment(monkeypatch) -> None:
+    from finwall.news import build_news_data_provider
+    from finwall.news_yfinance import YFinanceNewsDataProvider
+
+    now = datetime.now(timezone.utc)
+
+    class FakeTicker:
+        def __init__(self, ticker):
+            self.ticker = ticker
+
+        def get_news(self, **kwargs):
+            return [
+                {
+                    "title": "NVDA expands platform",
+                    "publisher": "Reuters",
+                    "link": "https://example.com/nvda",
+                    "providerPublishTime": int(now.timestamp()),
+                }
+            ]
+
+    _install_fake_yfinance_news(monkeypatch, FakeTicker)
+    provider = build_news_data_provider("yfinance", 1.0)
+    assert isinstance(provider, YFinanceNewsDataProvider)
+    report = build_news_report(
+        Portfolio(name="P", holdings=(Holding("NVDA", 1, 1),)),
+        provider,
+        max_age_hours=72,
+    )
+    article = report.holdings[0].articles[0]
+    assert article.source_quality == SourceQuality.TRUSTED
+    assert article.recency_status == RecencyStatus.RECENT
+    assert article.ticker == "NVDA"
+
+
+def test_yfinance_news_no_articles_is_unavailable(monkeypatch) -> None:
+    from finwall.news_yfinance import YFinanceNewsDataProvider
+
+    class FakeTicker:
+        news = []
+
+        def __init__(self, ticker):
+            self.ticker = ticker
+
+    _install_fake_yfinance_news(monkeypatch, FakeTicker)
+    result = YFinanceNewsDataProvider().get_company_news("AAPL", 5)
+    assert result.available is False
+    assert result.error == "no company news available from yfinance"
+
+
+def test_yfinance_news_missing_and_malformed_fields_are_safe(monkeypatch) -> None:
+    from finwall.news_yfinance import YFinanceNewsDataProvider
+
+    class FakeTicker:
+        def __init__(self, ticker):
+            self.ticker = ticker
+
+        def get_news(self):
+            return [
+                "bad",
+                {"publisher": "Reuters"},
+                {"title": "Missing optional fields"},
+                {
+                    "content": {
+                        "title": "Nested story",
+                        "provider": {"displayName": "Yahoo Finance"},
+                        "canonicalUrl": {"url": "https://example.com/nested"},
+                        "pubDate": "2026-06-22T00:00:00Z",
+                    }
+                },
+            ]
+
+    _install_fake_yfinance_news(monkeypatch, FakeTicker)
+    result = YFinanceNewsDataProvider().get_company_news("MSFT", 10)
+    assert result.available is True
+    assert len(result.articles) == 2
+    assert result.articles[0].source_name == "Unknown"
+    assert result.articles[0].url is None
+    assert result.articles[0].published_at is None
+    assert result.articles[1].source_name == "Yahoo Finance"
+
+
+def test_yfinance_news_exception_returns_safe_unavailable(monkeypatch) -> None:
+    from finwall.news_yfinance import YFinanceNewsDataProvider
+
+    class FakeTicker:
+        def __init__(self, ticker):
+            raise RuntimeError("secret traceback details")
+
+    _install_fake_yfinance_news(monkeypatch, FakeTicker)
+    result = YFinanceNewsDataProvider().get_company_news("NVDA", 5)
+    assert result.available is False
+    assert result.error == "yfinance news request failed"
+    assert "secret" not in result.error
+
+
+def test_yfinance_market_and_sector_news_are_safe_unavailable() -> None:
+    from finwall.news_yfinance import YFinanceNewsDataProvider
+
+    provider = YFinanceNewsDataProvider()
+    market = provider.get_market_news("market", 5)
+    sector = provider.get_sector_news("Technology", 5)
+    assert market.available is False
+    assert "does not support market" in (market.error or "")
+    assert sector.available is False
+    assert "does not support sector" in (sector.error or "")
+
+
+def test_yfinance_news_get_news_honors_timeout(monkeypatch) -> None:
+    import time
+
+    from finwall.news_yfinance import YFinanceNewsDataProvider
+
+    class FakeTicker:
+        def __init__(self, ticker):
+            self.ticker = ticker
+
+        def get_news(self, **kwargs):
+            time.sleep(0.2)
+            return [{"title": "Too late"}]
+
+    _install_fake_yfinance_news(monkeypatch, FakeTicker)
+    started = time.monotonic()
+    result = YFinanceNewsDataProvider(timeout_seconds=0.01).get_company_news("NVDA", 5)
+    elapsed = time.monotonic() - started
+    assert result.available is False
+    assert result.error == "yfinance news request timed out"
+    assert elapsed < 0.15

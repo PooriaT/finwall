@@ -755,6 +755,82 @@ def test_news_summary_text_json_and_filters(tmp_path, monkeypatch, capsys) -> No
     assert "Holdings:" not in capsys.readouterr().out
 
 
+def test_news_json_with_yfinance_provider(monkeypatch, tmp_path, capsys) -> None:
+    from dataclasses import replace
+
+    from finwall.cli import settings
+    from finwall.news import NewsArticle, NewsProviderResult, NewsTopicType
+
+    database = tmp_path / "finwall.db"
+    run(["--database", str(database), "add-holding", "NVDA", "1", "100"])
+
+    class FakeLiveProvider:
+        def get_company_news(self, ticker: str, limit: int):
+            return NewsProviderResult(
+                NewsTopicType.TICKER,
+                ticker,
+                (
+                    NewsArticle(
+                        "Live headline",
+                        "Reuters",
+                        "https://example.com/live",
+                        None,
+                        NewsTopicType.TICKER,
+                        ticker,
+                        ticker,
+                        None,
+                    ),
+                ),
+                "yfinance",
+                True,
+            )
+
+        def get_market_news(self, topic: str, limit: int):
+            return NewsProviderResult(
+                NewsTopicType.MARKET, topic, (), "yfinance", False, "unsupported"
+            )
+
+        def get_sector_news(self, sector: str, limit: int):
+            return NewsProviderResult(
+                NewsTopicType.SECTOR, sector, (), "yfinance", False, "unsupported"
+            )
+
+    monkeypatch.setattr(
+        "finwall.cli.build_news_data_provider", lambda *_: FakeLiveProvider()
+    )
+    monkeypatch.setattr(
+        "finwall.cli.settings", replace(settings, news_provider="yfinance")
+    )
+
+    run(
+        [
+            "--database",
+            str(database),
+            "news",
+            "--json",
+            "--include-market",
+            "--include-sectors",
+        ]
+    )
+    out = capsys.readouterr().out
+    assert '"source": "yfinance"' in out
+    assert "unsupported news provider" not in out
+
+    run(
+        [
+            "--database",
+            str(database),
+            "news-summary",
+            "--json",
+            "--include-market",
+            "--include-sectors",
+        ]
+    )
+    out = capsys.readouterr().out
+    assert '"warnings"' in out
+    assert "unsupported news provider" not in out
+
+
 def test_news_summary_warns_on_unsupported_provider(
     tmp_path, monkeypatch, capsys
 ) -> None:

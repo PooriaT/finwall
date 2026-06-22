@@ -1240,7 +1240,7 @@ def run(argv: list[str] | None = None) -> int:
             report = replace(report, watchlist=())
         if args.watchlist_only and not args.holdings_only:
             report = replace(report, holdings=())
-        if settings.news_provider.strip().lower() != "static":
+        if settings.news_provider.strip().lower() not in {"static", "yfinance"}:
             report = replace(
                 report,
                 warnings=report.warnings
@@ -1276,7 +1276,7 @@ def run(argv: list[str] | None = None) -> int:
             report = replace(report, watchlist=())
         if args.watchlist_only and not args.holdings_only:
             report = replace(report, holdings=())
-        if settings.news_provider.strip().lower() != "static":
+        if settings.news_provider.strip().lower() not in {"static", "yfinance"}:
             report = replace(
                 report,
                 warnings=report.warnings
