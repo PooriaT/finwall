@@ -2,6 +2,7 @@ from decimal import Decimal
 from urllib.error import HTTPError, URLError
 
 from finwall.market_data import (
+    FallbackMarketDataProvider,
     HistoricalPriceBar,
     IndexQuote,
     MarketPrice,
@@ -13,6 +14,58 @@ from finwall.market_data import (
 from finwall.market_data_diagnostics import run_market_data_diagnostics
 from finwall.market_data_yfinance import YFinanceMarketDataProvider
 from finwall.models import Holding, Portfolio
+
+
+class _FakeMarketDataProvider:
+    def __init__(
+        self,
+        *,
+        source: str,
+        prices: dict[str, MarketPrice] | None = None,
+        index_quotes: dict[str, IndexQuote] | None = None,
+        historical_prices: dict[str, tuple[HistoricalPriceBar, ...]] | None = None,
+        latest_error: Exception | None = None,
+        index_error: Exception | None = None,
+        historical_error: Exception | None = None,
+    ) -> None:
+        self.source = source
+        self.prices = prices or {}
+        self.index_quotes = index_quotes or {}
+        self.historical_prices = historical_prices or {}
+        self.latest_error = latest_error
+        self.index_error = index_error
+        self.historical_error = historical_error
+        self.latest_calls: list[tuple[str, ...]] = []
+        self.index_calls: list[str] = []
+        self.historical_calls: list[tuple[str, int]] = []
+
+    def get_latest_prices(self, tickers):
+        normalized = tuple(sorted(ticker.upper() for ticker in tickers))
+        self.latest_calls.append(normalized)
+        if self.latest_error is not None:
+            raise self.latest_error
+        return {
+            ticker: self.prices[ticker]
+            for ticker in normalized
+            if ticker in self.prices
+        }
+
+    def get_index_quote(self, symbol):
+        normalized = symbol.upper()
+        self.index_calls.append(normalized)
+        if self.index_error is not None:
+            raise self.index_error
+        return self.index_quotes.get(
+            normalized,
+            IndexQuote(normalized, None, self.source, False, "index missing"),
+        )
+
+    def get_historical_prices(self, ticker: str, days: int = 250):
+        normalized = ticker.upper()
+        self.historical_calls.append((normalized, days))
+        if self.historical_error is not None:
+            raise self.historical_error
+        return self.historical_prices.get(normalized, ())
 
 
 def test_static_provider_returns_configured_prices_and_index_quote() -> None:
@@ -50,6 +103,79 @@ def test_fetch_portfolio_latest_prices_skips_missing_and_collects_warnings() -> 
 
     assert latest_prices == {"NVDA": Decimal("900")}
     assert warnings == ["PLTR: missing"]
+
+
+def test_fetch_portfolio_latest_prices_reports_fallback_success() -> None:
+    portfolio = Portfolio(
+        name="Primary",
+        holdings=(Holding("NVDA", Decimal("2"), Decimal("800")),),
+    )
+    provider = FallbackMarketDataProvider(
+        _FakeMarketDataProvider(
+            source="primary",
+            latest_error=RuntimeError("raw https://provider/private"),
+        ),
+        _FakeMarketDataProvider(
+            source="fallback",
+            prices={
+                "NVDA": MarketPrice("NVDA", Decimal("900"), "USD", "fallback", True),
+            },
+        ),
+    )
+
+    latest_prices, warnings = fetch_portfolio_latest_prices(portfolio, provider)
+
+    assert latest_prices == {"NVDA": Decimal("900")}
+    assert warnings == [
+        "market data fallback used: primary primary unavailable; "
+        "fallback fallback succeeded"
+    ]
+
+
+def test_fetch_portfolio_latest_prices_reports_partial_fallback() -> None:
+    portfolio = Portfolio(
+        name="Primary",
+        holdings=(
+            Holding("AAPL", Decimal("2"), Decimal("180")),
+            Holding("MSFT", Decimal("1"), Decimal("400")),
+        ),
+    )
+    provider = FallbackMarketDataProvider(
+        _FakeMarketDataProvider(
+            source="primary",
+            latest_error=RuntimeError("primary failed"),
+        ),
+        _FakeMarketDataProvider(
+            source="fallback",
+            prices={
+                "AAPL": MarketPrice("AAPL", Decimal("190"), "USD", "fallback", True),
+            },
+        ),
+    )
+
+    latest_prices, warnings = fetch_portfolio_latest_prices(portfolio, provider)
+
+    assert latest_prices == {"AAPL": Decimal("190")}
+    assert warnings[:2] == [
+        "market data fallback used: primary primary unavailable; "
+        "fallback fallback succeeded",
+        "market data fallback returned partial prices: unavailable MSFT",
+    ]
+    assert warnings[2].startswith("MSFT: primary primary:")
+
+
+def test_fetch_portfolio_latest_prices_reports_unknown_provider_config() -> None:
+    portfolio = Portfolio(
+        name="Primary",
+        holdings=(Holding("NVDA", Decimal("2"), Decimal("800")),),
+    )
+    provider = build_market_data_provider("not-real", 1.0)
+
+    _latest_prices, warnings = fetch_portfolio_latest_prices(portfolio, provider)
+
+    assert (
+        warnings[0] == "unknown market data provider 'not-real'; using static provider"
+    )
 
 
 def test_market_data_diagnostics_pass_with_mock_provider() -> None:
@@ -145,14 +271,15 @@ def test_market_data_diagnostics_uses_safe_errors_for_provider_exceptions() -> N
     assert "query1.finance.yahoo.com" not in str(payload)
 
 
-def test_build_market_data_provider_supports_static_and_yahoo() -> None:
+def test_build_market_data_provider_supports_static_yahoo_and_yfinance_chain() -> None:
     assert isinstance(
         build_market_data_provider("static", 1.0), StaticMarketDataProvider
     )
     assert isinstance(build_market_data_provider("yahoo", 1.0), YahooMarketDataProvider)
-    assert isinstance(
-        build_market_data_provider("yfinance", 1.0), YFinanceMarketDataProvider
-    )
+    provider = build_market_data_provider("yfinance", 1.0)
+    assert isinstance(provider, FallbackMarketDataProvider)
+    assert isinstance(provider.primary, YFinanceMarketDataProvider)
+    assert isinstance(provider.fallback, YahooMarketDataProvider)
 
 
 def test_build_market_data_provider_normalizes_names_and_falls_back_to_static() -> None:
@@ -160,7 +287,7 @@ def test_build_market_data_provider_normalizes_names_and_falls_back_to_static() 
         build_market_data_provider(" Yahoo ", 1.0), YahooMarketDataProvider
     )
     assert isinstance(
-        build_market_data_provider(" YFINANCE ", 1.0), YFinanceMarketDataProvider
+        build_market_data_provider(" YFINANCE ", 1.0), FallbackMarketDataProvider
     )
     assert isinstance(
         build_market_data_provider("STATIC", 1.0), StaticMarketDataProvider
@@ -168,6 +295,251 @@ def test_build_market_data_provider_normalizes_names_and_falls_back_to_static() 
     assert isinstance(
         build_market_data_provider("unknown", 1.0), StaticMarketDataProvider
     )
+
+
+def test_yahoo_and_static_are_not_automatic_fallback_chains() -> None:
+    assert not isinstance(
+        build_market_data_provider("yahoo", 1.0), FallbackMarketDataProvider
+    )
+    assert not isinstance(
+        build_market_data_provider("static", 1.0), FallbackMarketDataProvider
+    )
+
+
+def test_fallback_latest_prices_uses_primary_success_without_fallback() -> None:
+    primary = _FakeMarketDataProvider(
+        source="primary",
+        prices={
+            "AAPL": MarketPrice("AAPL", Decimal("190"), "USD", "primary", True),
+        },
+    )
+    fallback = _FakeMarketDataProvider(
+        source="fallback",
+        prices={
+            "AAPL": MarketPrice("AAPL", Decimal("191"), "USD", "fallback", True),
+        },
+    )
+    provider = FallbackMarketDataProvider(primary, fallback)
+
+    prices = provider.get_latest_prices(["aapl"])
+
+    assert prices["AAPL"].price == Decimal("190")
+    assert prices["AAPL"].source == "primary"
+    assert fallback.latest_calls == []
+    assert provider.latest_status is not None
+    assert provider.latest_status.fallback_attempted is False
+
+
+def test_fallback_latest_prices_uses_fallback_when_primary_fails() -> None:
+    provider = FallbackMarketDataProvider(
+        _FakeMarketDataProvider(
+            source="primary",
+            latest_error=RuntimeError("raw https://provider/private"),
+        ),
+        _FakeMarketDataProvider(
+            source="fallback",
+            prices={
+                "AAPL": MarketPrice("AAPL", Decimal("191"), "USD", "fallback", True),
+            },
+        ),
+    )
+
+    prices = provider.get_latest_prices(["AAPL"])
+
+    assert prices["AAPL"].available is True
+    assert prices["AAPL"].price == Decimal("191")
+    assert prices["AAPL"].source == "fallback:primary->fallback"
+    assert provider.latest_status is not None
+    assert provider.latest_status.primary_failed is True
+    assert provider.latest_status.fallback_succeeded is True
+
+
+def test_fallback_latest_prices_fills_only_missing_tickers() -> None:
+    primary = _FakeMarketDataProvider(
+        source="primary",
+        prices={
+            "AAPL": MarketPrice("AAPL", Decimal("190"), "USD", "primary", True),
+            "MSFT": MarketPrice("MSFT", None, None, "primary", False, "missing"),
+        },
+    )
+    fallback = _FakeMarketDataProvider(
+        source="fallback",
+        prices={
+            "MSFT": MarketPrice("MSFT", Decimal("420"), "USD", "fallback", True),
+        },
+    )
+    provider = FallbackMarketDataProvider(primary, fallback)
+
+    prices = provider.get_latest_prices(["MSFT", "AAPL"])
+
+    assert prices["AAPL"].source == "primary"
+    assert prices["MSFT"].price == Decimal("420")
+    assert prices["MSFT"].source == "fallback:primary->fallback"
+    assert fallback.latest_calls == [("MSFT",)]
+    assert provider.latest_status is not None
+    assert provider.latest_status.fulfilled_by_primary == ("AAPL",)
+    assert provider.latest_status.fulfilled_by_fallback == ("MSFT",)
+
+
+def test_fallback_latest_prices_returns_safe_unavailable_when_both_fail() -> None:
+    provider = FallbackMarketDataProvider(
+        _FakeMarketDataProvider(
+            source="primary",
+            latest_error=RuntimeError("secret https://primary/private"),
+        ),
+        _FakeMarketDataProvider(
+            source="fallback",
+            latest_error=RuntimeError("secret https://fallback/private"),
+        ),
+    )
+
+    prices = provider.get_latest_prices(["AAPL"])
+
+    assert prices["AAPL"].available is False
+    assert prices["AAPL"].source == "fallback:primary->fallback"
+    assert prices["AAPL"].error == (
+        "primary primary: primary provider latest quote request failed; "
+        "fallback fallback: fallback provider latest quote request failed"
+    )
+    assert "https://" not in str(prices)
+
+
+def test_fallback_index_quote_uses_primary_success_without_fallback() -> None:
+    primary = _FakeMarketDataProvider(
+        source="primary",
+        index_quotes={
+            "SP500": IndexQuote("SP500", Decimal("5000"), "primary", True),
+        },
+    )
+    fallback = _FakeMarketDataProvider(
+        source="fallback",
+        index_quotes={
+            "SP500": IndexQuote("SP500", Decimal("5100"), "fallback", True),
+        },
+    )
+    provider = FallbackMarketDataProvider(primary, fallback)
+
+    quote = provider.get_index_quote("SP500")
+
+    assert quote.price == Decimal("5000")
+    assert quote.source == "primary"
+    assert fallback.index_calls == []
+
+
+def test_fallback_index_quote_uses_fallback_when_primary_unavailable() -> None:
+    provider = FallbackMarketDataProvider(
+        _FakeMarketDataProvider(source="primary"),
+        _FakeMarketDataProvider(
+            source="fallback",
+            index_quotes={
+                "SP500": IndexQuote("SP500", Decimal("5100"), "fallback", True),
+            },
+        ),
+    )
+
+    quote = provider.get_index_quote("SP500")
+
+    assert quote.available is True
+    assert quote.price == Decimal("5100")
+    assert quote.source == "fallback:primary->fallback"
+    assert provider.index_status is not None
+    assert provider.index_status.primary_failed is True
+
+
+def test_fallback_historical_prices_uses_primary_success_without_fallback() -> None:
+    bars = (HistoricalPriceBar("AAPL", "2026-01-01", Decimal("190"), 1, "primary"),)
+    primary = _FakeMarketDataProvider(
+        source="primary",
+        historical_prices={"AAPL": bars},
+    )
+    fallback = _FakeMarketDataProvider(source="fallback")
+    provider = FallbackMarketDataProvider(primary, fallback)
+
+    result = provider.get_historical_prices("AAPL", days=5)
+
+    assert result == bars
+    assert fallback.historical_calls == []
+
+
+def test_fallback_historical_prices_uses_fallback_when_primary_empty() -> None:
+    bars = (HistoricalPriceBar("AAPL", "2026-01-01", Decimal("190"), 1, "fallback"),)
+    provider = FallbackMarketDataProvider(
+        _FakeMarketDataProvider(source="primary"),
+        _FakeMarketDataProvider(
+            source="fallback",
+            historical_prices={"AAPL": bars},
+        ),
+    )
+
+    result = provider.get_historical_prices("AAPL", days=5)
+
+    assert len(result) == 1
+    assert result[0].source == "fallback:primary->fallback"
+    assert provider.historical_status is not None
+    assert provider.historical_status.fallback_succeeded is True
+    assert provider.historical_status.primary_failed is True
+
+
+def test_fallback_historical_prices_returns_empty_when_both_fail() -> None:
+    provider = FallbackMarketDataProvider(
+        _FakeMarketDataProvider(
+            source="primary",
+            historical_error=RuntimeError("raw https://primary/private"),
+        ),
+        _FakeMarketDataProvider(
+            source="fallback",
+            historical_error=RuntimeError("raw https://fallback/private"),
+        ),
+    )
+
+    result = provider.get_historical_prices("AAPL", days=5)
+
+    assert result == ()
+    assert provider.historical_status is not None
+    assert provider.historical_status.fallback_attempted is True
+    assert "https://" not in str(provider.historical_status.as_dict())
+
+
+def test_market_data_diagnostics_exposes_fallback_attempt_and_source(
+    monkeypatch,
+) -> None:
+    provider = FallbackMarketDataProvider(
+        _FakeMarketDataProvider(source="primary"),
+        _FakeMarketDataProvider(
+            source="fallback",
+            prices={
+                "AAPL": MarketPrice("AAPL", Decimal("191"), "USD", "fallback", True),
+            },
+            historical_prices={
+                "AAPL": (
+                    HistoricalPriceBar(
+                        "AAPL", "2026-01-01", Decimal("190"), 1, "fallback"
+                    ),
+                ),
+            },
+        ),
+    )
+    monkeypatch.setattr(
+        "finwall.market_data_diagnostics._is_yfinance_available",
+        lambda: True,
+    )
+
+    result = run_market_data_diagnostics(
+        provider_name="yfinance",
+        timeout_seconds=1.0,
+        sample_ticker="AAPL",
+        historical_days=5,
+        provider=provider,
+    )
+
+    assert result.primary_provider == "primary"
+    assert result.fallback_provider == "fallback"
+    latest_fallback = result.checks[2].details["fallback"]
+    historical_fallback = result.checks[3].details["fallback"]
+    assert latest_fallback["fallback_attempted"] is True
+    assert latest_fallback["fallback_succeeded"] is True
+    assert result.checks[2].details["source"] == "fallback:primary->fallback"
+    assert historical_fallback["fallback_attempted"] is True
 
 
 def test_yahoo_latest_prices_returns_price_and_currency(monkeypatch) -> None:
