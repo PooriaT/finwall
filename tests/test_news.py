@@ -274,3 +274,25 @@ def test_yfinance_market_and_sector_news_are_safe_unavailable() -> None:
     assert "does not support market" in (market.error or "")
     assert sector.available is False
     assert "does not support sector" in (sector.error or "")
+
+
+def test_yfinance_news_get_news_honors_timeout(monkeypatch) -> None:
+    import time
+
+    from finwall.news_yfinance import YFinanceNewsDataProvider
+
+    class FakeTicker:
+        def __init__(self, ticker):
+            self.ticker = ticker
+
+        def get_news(self, **kwargs):
+            time.sleep(0.2)
+            return [{"title": "Too late"}]
+
+    _install_fake_yfinance_news(monkeypatch, FakeTicker)
+    started = time.monotonic()
+    result = YFinanceNewsDataProvider(timeout_seconds=0.01).get_company_news("NVDA", 5)
+    elapsed = time.monotonic() - started
+    assert result.available is False
+    assert result.error == "yfinance news request timed out"
+    assert elapsed < 0.15

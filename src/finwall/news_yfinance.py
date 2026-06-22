@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import importlib
+import queue
+import threading
+from collections.abc import Callable
 from datetime import datetime, timezone
 from numbers import Number
 from typing import Any
@@ -31,6 +34,14 @@ class YFinanceNewsDataProvider:
         try:
             ticker_data = yfinance.Ticker(normalized)
             raw_news = _get_ticker_news(ticker_data, self.timeout_seconds)
+        except TimeoutError:
+            return _result(
+                NewsTopicType.TICKER,
+                normalized,
+                (),
+                False,
+                "yfinance news request timed out",
+            )
         except Exception:
             return _result(
                 NewsTopicType.TICKER,
@@ -80,16 +91,40 @@ def _load_yfinance() -> tuple[object | None, str | None]:
 
 
 def _get_ticker_news(ticker_data: object, timeout_seconds: float) -> object:
-    get_news = getattr(ticker_data, "get_news", None)
-    if callable(get_news):
-        try:
-            return get_news(count=100, timeout=timeout_seconds)
-        except TypeError:
+    def fetch() -> object:
+        get_news = getattr(ticker_data, "get_news", None)
+        if callable(get_news):
             try:
                 return get_news(count=100)
             except TypeError:
                 return get_news()
-    return getattr(ticker_data, "news", ())
+        return getattr(ticker_data, "news", ())
+
+    return _call_with_timeout(fetch, timeout_seconds)
+
+
+def _call_with_timeout(
+    callback: Callable[[], object], timeout_seconds: float
+) -> object:
+    result_queue: queue.Queue[tuple[bool, object]] = queue.Queue(maxsize=1)
+
+    def target() -> None:
+        try:
+            result_queue.put((True, callback()))
+        except Exception as exc:
+            result_queue.put((False, exc))
+
+    worker = threading.Thread(target=target, daemon=True)
+    worker.start()
+    try:
+        success, value = result_queue.get(timeout=timeout_seconds)
+    except queue.Empty as exc:
+        raise TimeoutError("yfinance news request timed out") from exc
+    if success:
+        return value
+    if isinstance(value, Exception):
+        raise value
+    raise RuntimeError("yfinance news request failed")
 
 
 def _normalize_articles(
