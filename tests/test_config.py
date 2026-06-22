@@ -32,6 +32,22 @@ def test_market_data_settings_accept_static_override(monkeypatch) -> None:
     assert reloaded.settings.market_data_provider == "static"
 
 
+def test_market_data_blank_provider_uses_default(monkeypatch) -> None:
+    monkeypatch.setenv("FINWALL_MARKET_DATA_PROVIDER", "")
+
+    reloaded = importlib.reload(config)
+
+    assert reloaded.settings.market_data_provider == "yfinance"
+
+
+def test_market_data_whitespace_provider_uses_default(monkeypatch) -> None:
+    monkeypatch.setenv("FINWALL_MARKET_DATA_PROVIDER", "  ")
+
+    reloaded = importlib.reload(config)
+
+    assert reloaded.settings.market_data_provider == "yfinance"
+
+
 def test_market_data_timeout_invalid_env_uses_default(monkeypatch) -> None:
     monkeypatch.setenv("FINWALL_MARKET_DATA_TIMEOUT_SECONDS", "not-a-number")
 
