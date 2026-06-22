@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from math import isfinite
 from numbers import Real
 from typing import Any
 
@@ -27,17 +28,20 @@ def _unavailable_metric(name: str, error: str | None = None) -> FundamentalMetri
 def _coerce_number(raw: Any) -> float | None:
     if raw is None or isinstance(raw, bool):
         return None
+    parsed: float
     if isinstance(raw, Real):
-        return float(raw)
-    if isinstance(raw, str):
+        parsed = float(raw)
+    elif isinstance(raw, str):
         value = raw.strip().replace(",", "")
         if not value or value.lower() in {"none", "nan", "n/a", "null"}:
             return None
         try:
-            return float(value)
+            parsed = float(value)
         except ValueError:
             return None
-    return None
+    else:
+        return None
+    return parsed if isfinite(parsed) else None
 
 
 def _format_decimal(raw: Any) -> str | None:
@@ -55,10 +59,18 @@ def _format_percent(raw: Any) -> str | None:
 
 
 def _metric(
-    info: Mapping[str, Any], name: str, key: str, percent: bool = False
+    info: Mapping[str, Any],
+    name: str,
+    key: str,
+    percent: bool = False,
+    scale: float = 1.0,
 ) -> FundamentalMetric:
+    raw_value = info.get(key)
+    if scale != 1.0:
+        number = _coerce_number(raw_value)
+        raw_value = None if number is None else number * scale
     formatter = _format_percent if percent else _format_decimal
-    value = formatter(info.get(key))
+    value = formatter(raw_value)
     if value is None:
         return _unavailable_metric(name, "metric unavailable")
     return FundamentalMetric(name=name, value=value, available=True, source=SOURCE)
@@ -101,11 +113,11 @@ class YFinanceFundamentalDataProvider:
                 _metric(info, "return_on_assets", "returnOnAssets", percent=True),
             ),
             debt=(
-                _metric(info, "debt_to_equity", "debtToEquity"),
+                _metric(info, "debt_to_equity", "debtToEquity", scale=0.01),
                 _metric(info, "current_ratio", "currentRatio"),
             ),
             valuation=(
-                _metric(info, "trailing_pe", "trailingPE"),
+                _metric(info, "pe_ratio", "trailingPE"),
                 _metric(info, "forward_pe", "forwardPE"),
                 _metric(info, "price_to_sales", "priceToSalesTrailing12Months"),
                 _metric(info, "price_to_book", "priceToBook"),

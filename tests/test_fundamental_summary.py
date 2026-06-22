@@ -100,6 +100,30 @@ def test_debt_not_moderate_without_usable_metrics() -> None:
     assert "debt_metrics" in summary.missing_information
 
 
+def test_summary_consumes_trailing_pe_alias_from_live_provider() -> None:
+    summary = summarize_fundamental_snapshot(
+        mk_snapshot(
+            "PE",
+            valuation=(FundamentalMetric("pe_ratio", "80", True, "yfinance"),),
+        )
+    )
+
+    assert summary.valuation_risk == "high"
+    assert "high_valuation_risk" in summary.flags
+
+
+def test_summary_uses_ratio_scaled_yfinance_debt_to_equity() -> None:
+    summary = summarize_fundamental_snapshot(
+        mk_snapshot(
+            "DTE",
+            debt=(FundamentalMetric("debt_to_equity", "0.22", True, "yfinance"),),
+        )
+    )
+
+    assert summary.debt_risk == "moderate"
+    assert "high_debt_risk" not in summary.flags
+
+
 def test_build_report_preserves_holdings_and_watchlist_and_json() -> None:
     raw = FundamentalAnalysisReport(
         holdings=(mk_snapshot("AAA"),),

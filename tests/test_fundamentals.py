@@ -1,3 +1,4 @@
+import math
 from decimal import Decimal
 
 from finwall.fundamentals import (
@@ -161,8 +162,30 @@ def test_yfinance_provider_extracts_profile_and_metrics() -> None:
     assert snapshot.revenue_growth.value == "12%"
     assert snapshot.earnings_growth.value == "20%"
     assert snapshot.profitability[0].value == "75%"
-    assert snapshot.debt[0].value == "22.4"
+    assert snapshot.debt[0].value == "0.22"
+    assert snapshot.valuation[0].name == "pe_ratio"
     assert snapshot.valuation[0].value == "50.2"
+
+
+def test_yfinance_provider_rejects_non_finite_metric_values() -> None:
+    provider = FakeYFinanceProvider(
+        {
+            "longName": "Non Finite Corp",
+            "revenueGrowth": math.nan,
+            "earningsGrowth": math.inf,
+            "trailingPE": "-inf",
+        }
+    )
+
+    snapshot = provider.get_fundamentals("NAN")
+
+    assert snapshot.data_status == "partial"
+    assert snapshot.revenue_growth.available is False
+    assert snapshot.earnings_growth.available is False
+    assert snapshot.valuation[0].name == "pe_ratio"
+    assert snapshot.valuation[0].available is False
+    assert "revenue growth unavailable" in snapshot.warnings
+    assert "valuation metrics unavailable" in snapshot.warnings
 
 
 def test_yfinance_provider_handles_partial_missing_profile_and_metrics() -> None:
