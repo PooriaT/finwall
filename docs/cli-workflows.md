@@ -51,6 +51,8 @@ poetry run finwall --database finwall.db recommendations --live-prices --json
 poetry run finwall --database finwall.db report --live-prices --market-index SP500 --compare --save-run
 ```
 
+Fundamentals commands use the default `yfinance` fundamentals provider unless `FINWALL_FUNDAMENTAL_DATA_PROVIDER=static` is set. Live fundamentals are partial decision-support context only; they may be incomplete, stale, unavailable, or provider-dependent, and they do not change recommendation scoring unless integrated by a separate rule set.
+
 Additional command examples:
 
 ```bash

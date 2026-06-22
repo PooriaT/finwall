@@ -6,7 +6,9 @@ from finwall.fundamentals import (
     FundamentalSnapshot,
     StaticFundamentalDataProvider,
     build_fundamental_analysis_report,
+    build_fundamental_data_provider,
 )
+from finwall.fundamentals_yfinance import YFinanceFundamentalDataProvider
 from finwall.models import Holding, Portfolio, WatchlistItem
 
 
@@ -112,3 +114,102 @@ def test_section_availability_uses_metric_flags_not_tuple_presence() -> None:
     assert "profitability metrics unavailable" in normalized.warnings
     assert "debt metrics unavailable" in normalized.warnings
     assert "valuation metrics unavailable" in normalized.warnings
+
+
+class FakeYFinanceProvider(YFinanceFundamentalDataProvider):
+    def __init__(self, info):
+        super().__init__()
+        self.info = info
+
+    def _load_info(self, ticker: str):
+        if isinstance(self.info, Exception):
+            raise self.info
+        return self.info
+
+
+def test_yfinance_provider_extracts_profile_and_metrics() -> None:
+    provider = FakeYFinanceProvider(
+        {
+            "longName": "NVIDIA Corporation",
+            "sector": "Technology",
+            "industry": "Semiconductors",
+            "country": "United States",
+            "website": "https://www.nvidia.com",
+            "revenueGrowth": 0.12,
+            "earningsGrowth": 0.20,
+            "grossMargins": 0.75,
+            "operatingMargins": 0.55,
+            "profitMargins": 0.48,
+            "returnOnEquity": 1.1,
+            "returnOnAssets": 0.45,
+            "debtToEquity": 22.4,
+            "currentRatio": 4.1,
+            "trailingPE": 50.2,
+            "forwardPE": 31.5,
+            "priceToSalesTrailing12Months": 28.7,
+            "priceToBook": 45.9,
+        }
+    )
+
+    snapshot = provider.get_fundamentals("nvda")
+
+    assert snapshot.ticker == "NVDA"
+    assert snapshot.source == "yfinance"
+    assert snapshot.data_status == "available"
+    assert snapshot.profile.company_name == "NVIDIA Corporation"
+    assert snapshot.profile.sector == "Technology"
+    assert snapshot.revenue_growth.value == "12%"
+    assert snapshot.earnings_growth.value == "20%"
+    assert snapshot.profitability[0].value == "75%"
+    assert snapshot.debt[0].value == "22.4"
+    assert snapshot.valuation[0].value == "50.2"
+
+
+def test_yfinance_provider_handles_partial_missing_profile_and_metrics() -> None:
+    provider = FakeYFinanceProvider({"shortName": "Partial Co", "trailingPE": 10})
+
+    snapshot = provider.get_fundamentals("PART")
+
+    assert snapshot.data_status == "partial"
+    assert snapshot.profile.company_name == "Partial Co"
+    assert snapshot.revenue_growth.available is False
+    assert snapshot.valuation[0].available is True
+    assert "revenue growth unavailable" in snapshot.warnings
+    assert "debt metrics unavailable" in snapshot.warnings
+
+
+def test_yfinance_provider_unparseable_metric_is_unavailable() -> None:
+    provider = FakeYFinanceProvider(
+        {"longName": "Bad Metric", "revenueGrowth": "not-a-number"}
+    )
+
+    snapshot = provider.get_fundamentals("BAD")
+
+    assert snapshot.revenue_growth.available is False
+    assert snapshot.revenue_growth.value is None
+    assert "revenue growth unavailable" in snapshot.warnings
+
+
+def test_yfinance_provider_exception_returns_safe_missing_snapshot() -> None:
+    provider = FakeYFinanceProvider(RuntimeError("secret provider payload"))
+
+    snapshot = provider.get_fundamentals("ERR")
+    payload = snapshot.profile.error + " " + " ".join(snapshot.warnings)
+
+    assert snapshot.data_status == "missing_data"
+    assert "provider request failed" in payload
+    assert "secret provider payload" not in payload
+
+
+def test_yfinance_provider_unknown_ticker_returns_missing_data() -> None:
+    snapshot = FakeYFinanceProvider({}).get_fundamentals("UNKNOWN")
+
+    assert snapshot.data_status == "missing_data"
+    assert snapshot.source == "yfinance"
+    assert "ticker fundamentals unavailable" in snapshot.warnings
+
+
+def test_provider_selection_supports_yfinance() -> None:
+    provider = build_fundamental_data_provider("yfinance", 3.0)
+
+    assert isinstance(provider, YFinanceFundamentalDataProvider)

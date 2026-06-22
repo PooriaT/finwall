@@ -2,11 +2,17 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 import tempfile
 from pathlib import Path
 
-from finwall.api import create_app
-from finwall.config import Settings
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
+from finwall.api import create_app  # noqa: E402
+from finwall.config import Settings  # noqa: E402
 
 
 def export_openapi(output_path: Path) -> None:
