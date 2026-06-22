@@ -72,10 +72,14 @@ Fundamentals are not authoritative recommendation drivers unless explicitly inte
 
 | Variable | Purpose | Default | Required (local-only) | Required (scheduled/email/API) | Example |
 |---|---|---|---|---|---|
-| `FINWALL_NEWS_PROVIDER` | News provider selector. | `static` | No | Optional | `static` |
+| `FINWALL_NEWS_PROVIDER` | News provider selector. Supported values: `yfinance`, `static`. Unknown values use safe static fallback behavior. | `yfinance` | No | Optional | `yfinance` |
 | `FINWALL_NEWS_TIMEOUT_SECONDS` | News provider timeout. | `5` | No | Optional | `5` |
 | `FINWALL_NEWS_MAX_ARTICLES_PER_TOPIC` | Max news items per topic. | `5` | No | Optional | `5` |
 | `FINWALL_NEWS_MAX_AGE_HOURS` | Max age filter for news freshness window. | `72` | No | Optional | `72` |
+
+Finwall defaults to live `yfinance` ticker/company news when provider data is available. Market-wide and sector news are reported as safely unavailable for `yfinance` rather than synthesized. News is decision-support context only: source quality and recency are heuristic classifications, news is not sentiment analysis unless implemented separately, and news is not integrated into recommendations or automated actions.
+
+`yfinance` news availability may be incomplete, stale, malformed, blocked, rate-limited, or provider-dependent. Missing optional fields are normalized where possible, malformed items are skipped, and provider failures are returned as unavailable results without raw tracebacks. The `static` provider remains available for tests, demos, and manual fixtures.
 
 ## Narrative
 

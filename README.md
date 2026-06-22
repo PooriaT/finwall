@@ -113,7 +113,7 @@ See: [docs/local-setup.md](docs/local-setup.md), [docs/cli-workflows.md](docs/cl
 
 ### Deterministic analysis and reports
 
-> Status: **Supported primary** for snapshots/risk/recommendations/report structure. Technical/fundamental/news/market-condition outputs are **experimental/optional decision-support inputs** and may be incomplete or provider-limited. Fundamentals default to partial live `yfinance` inputs when available; static fundamentals remain for tests/manual overrides. Deterministic recommendations remain conservative and primarily snapshot/risk driven unless a rule set explicitly consumes additional inputs. These outputs are not financial advice or broker-grade guarantees.
+> Status: **Supported primary** for snapshots/risk/recommendations/report structure. Technical/fundamental/news/market-condition outputs are **experimental/optional decision-support inputs** and may be incomplete or provider-limited. Fundamentals and ticker news default to partial live `yfinance` inputs when available; static providers remain for tests/manual overrides. Deterministic recommendations remain conservative and primarily snapshot/risk driven unless a rule set explicitly consumes additional inputs. These outputs are not financial advice or broker-grade guarantees. News source quality and recency are heuristic context only; news is not sentiment analysis and is not integrated into recommendations, broker actions, or automated trading.
 
 
 Use deterministic commands for snapshots and decision-support analysis, including:
