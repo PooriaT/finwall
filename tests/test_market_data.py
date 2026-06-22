@@ -442,6 +442,8 @@ def test_fallback_index_quote_uses_fallback_when_primary_unavailable() -> None:
     assert quote.available is True
     assert quote.price == Decimal("5100")
     assert quote.source == "fallback:primary->fallback"
+    assert provider.index_status is not None
+    assert provider.index_status.primary_failed is True
 
 
 def test_fallback_historical_prices_uses_primary_success_without_fallback() -> None:
@@ -475,6 +477,7 @@ def test_fallback_historical_prices_uses_fallback_when_primary_empty() -> None:
     assert result[0].source == "fallback:primary->fallback"
     assert provider.historical_status is not None
     assert provider.historical_status.fallback_succeeded is True
+    assert provider.historical_status.primary_failed is True
 
 
 def test_fallback_historical_prices_returns_empty_when_both_fail() -> None:

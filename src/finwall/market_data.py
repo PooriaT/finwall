@@ -467,7 +467,7 @@ class FallbackMarketDataProvider:
                 requested=(normalized,),
                 fallback_attempted=True,
                 fallback_succeeded=True,
-                primary_failed=primary_error is not None,
+                primary_failed=True,
                 fulfilled_by_fallback=(normalized,),
             )
             return replace(fallback_quote, source=self.source)
@@ -545,7 +545,7 @@ class FallbackMarketDataProvider:
                 requested=(normalized,),
                 fallback_attempted=True,
                 fallback_succeeded=True,
-                primary_failed=primary_error is not None,
+                primary_failed=True,
                 fulfilled_by_fallback=(normalized,),
             )
             return tuple(replace(bar, source=self.source) for bar in fallback_bars)
