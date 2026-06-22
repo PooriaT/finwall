@@ -113,8 +113,10 @@ def _check_provider_configuration(
     fallback_provider: str | None,
 ) -> MarketDataDiagnosticCheck:
     recognized = normalized_provider in RECOGNIZED_MARKET_DATA_PROVIDERS
-    if recognized:
-        summary = f"provider {normalized_provider} configured"
+    if recognized and normalized_provider == "yfinance":
+        summary = "default live provider yfinance selected unless overridden"
+    elif recognized:
+        summary = f"provider override {normalized_provider} selected"
     else:
         summary = (
             f"provider {normalized_provider or '<empty>'} is not recognized; "

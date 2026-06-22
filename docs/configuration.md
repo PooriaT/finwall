@@ -55,7 +55,7 @@ FINWALL_MARKET_DATA_PROVIDER=yahoo poetry run finwall market-data-check --json
 FINWALL_MARKET_DATA_PROVIDER=static poetry run finwall --database finwall.db snapshot --price NVDA=120
 ```
 
-Run `market-data-check` before relying on live-price reports when changing providers or diagnosing local connectivity. It reports the configured provider, effective provider, timeout, yfinance availability where practical, a sample latest quote check, and a sample historical-price check without initializing portfolio storage.
+Run `market-data-check` to diagnose default live-provider availability, provider overrides, or local connectivity. It reports the selected provider, effective provider, timeout, yfinance availability where practical, a sample latest quote check, and a sample historical-price check without initializing portfolio storage.
 
 ## Fundamentals
 

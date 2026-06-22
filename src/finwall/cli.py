@@ -300,7 +300,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Manual price in the format TICKER=PRICE",
     )
     snapshot.add_argument("--json", action="store_true")
-    snapshot.add_argument("--live-prices", action="store_true")
+    snapshot.add_argument(
+        "--live-prices",
+        action="store_true",
+        help="Fetch prices from the default live provider unless overridden.",
+    )
     snapshot.add_argument("--risk", action="store_true")
 
     recommendations = subparsers.add_parser("recommendations")
@@ -310,7 +314,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=[],
         help="Manual price in the format TICKER=PRICE",
     )
-    recommendations.add_argument("--live-prices", action="store_true")
+    recommendations.add_argument(
+        "--live-prices",
+        action="store_true",
+        help="Fetch prices from the default live provider unless overridden.",
+    )
     recommendations.add_argument("--json", action="store_true")
 
     evaluate_order = subparsers.add_parser("evaluate-order")
@@ -325,8 +333,17 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate_order.add_argument("--stop-price", type=parse_decimal)
     evaluate_order.add_argument("--target-price", type=parse_decimal)
     evaluate_order.add_argument("--currency", default="USD")
-    evaluate_order.add_argument("--price", action="append", default=[])
-    evaluate_order.add_argument("--live-prices", action="store_true")
+    evaluate_order.add_argument(
+        "--price",
+        action="append",
+        default=[],
+        help="Manual price in the format TICKER=PRICE; overrides fetched live prices.",
+    )
+    evaluate_order.add_argument(
+        "--live-prices",
+        action="store_true",
+        help="Fetch prices from the default live provider unless overridden.",
+    )
     evaluate_order.add_argument("--json", action="store_true")
 
     market_index = subparsers.add_parser("market-index")
@@ -345,7 +362,14 @@ def build_parser() -> argparse.ArgumentParser:
         default=[],
         help="Manual price in the format TICKER=PRICE",
     )
-    report.add_argument("--live-prices", action="store_true")
+    report.add_argument(
+        "--live-prices",
+        action="store_true",
+        help=(
+            "Use configured/default live provider; manual --price overrides "
+            "fetched values."
+        ),
+    )
     report.add_argument("--market-index", choices=sorted(INDEX_SYMBOL_MAP.keys()))
     report.add_argument("--include-nasdaq", action="store_true")
     report.add_argument("--market-condition-days", type=int, default=400)
@@ -369,7 +393,14 @@ def build_parser() -> argparse.ArgumentParser:
         default=[],
         help="Manual price in the format TICKER=PRICE",
     )
-    scheduled.add_argument("--live-prices", action="store_true")
+    scheduled.add_argument(
+        "--live-prices",
+        action="store_true",
+        help=(
+            "Use configured/default live provider; manual --price overrides "
+            "fetched values."
+        ),
+    )
     scheduled.add_argument("--market-index", choices=sorted(INDEX_SYMBOL_MAP.keys()))
     scheduled.add_argument("--include-nasdaq", action="store_true")
     scheduled.add_argument("--market-condition-days", type=int, default=400)
@@ -383,7 +414,10 @@ def build_parser() -> argparse.ArgumentParser:
     security_check = subparsers.add_parser("security-check")
     security_check.add_argument("--json", action="store_true")
 
-    market_data_check = subparsers.add_parser("market-data-check")
+    market_data_check = subparsers.add_parser(
+        "market-data-check",
+        description="Check default or overridden market-data provider.",
+    )
     market_data_check.add_argument("--ticker", default="AAPL")
     market_data_check.add_argument(
         "--historical-days",

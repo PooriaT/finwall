@@ -467,6 +467,19 @@ describe("App", () => {
     expect(screen.getByText("No chart data available.")).toBeInTheDocument();
   });
 
+  it("describes default live provider without env setup instructions", async () => {
+    mockFetch();
+
+    renderAt("/dashboard");
+
+    expect(
+      await screen.findByText(/Default live provider status is reported/),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/Set FINWALL_MARKET_DATA_PROVIDER/),
+    ).not.toBeInTheDocument();
+  });
+
   it("renders missing-price chart points as unavailable", async () => {
     const analysis = structuredClone(analysisCharts);
     analysis.charts.allocation_by_holding = chartSeries(

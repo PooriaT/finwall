@@ -125,7 +125,7 @@ Use deterministic commands for snapshots and decision-support analysis, includin
 
 See: [docs/cli-workflows.md](docs/cli-workflows.md).
 
-Finwall defaults to `yfinance` for local/self-managed live market data in commands such as `snapshot --live-prices`, `report --live-prices`, `technicals`, and `market-index SP500`. `FINWALL_MARKET_DATA_PROVIDER` is available as an override/debug setting for `yfinance`, `yahoo`, or explicit `static` workflows. Free providers may be unavailable, delayed, stale, partial, rate-limited, or blocked; they are not broker-grade market data and Finwall remains decision-support only. Run `poetry run finwall market-data-check --json` to verify the configured provider before relying on live-price reports. See [docs/configuration.md](docs/configuration.md#market-data).
+Finwall defaults to `yfinance` for local/self-managed live market data in commands such as `snapshot --live-prices`, `report --live-prices`, `technicals`, and `market-index SP500`. `FINWALL_MARKET_DATA_PROVIDER` is available as an override/debug setting for `yfinance`, `yahoo`, or explicit `static` workflows. Free providers may be unavailable, delayed, stale, partial, rate-limited, or blocked; they are not broker-grade market data and Finwall remains decision-support only. Run `poetry run finwall market-data-check --json` to check default or overridden provider availability before relying on live-price reports. See [docs/configuration.md](docs/configuration.md#market-data).
 
 ### Optional explanation
 
