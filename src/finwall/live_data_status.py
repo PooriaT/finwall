@@ -94,7 +94,9 @@ def market_price_status_from_snapshot(
 ) -> LiveDataStatus:
     normalized_provider = provider.strip().lower() or "unknown"
     warning_tuple = tuple(dict.fromkeys(str(w) for w in warnings if str(w).strip()))
-    if normalized_provider == "static":
+    if normalized_provider == "manual":
+        availability = LiveDataAvailability.MANUAL
+    elif normalized_provider == "static":
         availability = LiveDataAvailability.STATIC
     elif snapshot.holdings and all(not h.price_available for h in snapshot.holdings):
         availability = LiveDataAvailability.UNAVAILABLE
@@ -142,12 +144,20 @@ def diagnostics_status(result: MarketDataDiagnosticResult) -> LiveDataStatus:
         source=result.effective_provider,
         availability=availability.value,
         last_attempted_at=utc_now_iso(),
-        fallback_used=result.fallback_provider is not None,
+        fallback_used=_diagnostics_fallback_used(result),
         fallback_provider=result.fallback_provider,
         warnings=failed,
         safe_error_messages=failed,
         metadata={"sample_ticker": result.sample_ticker, "diagnostic_ok": result.ok},
     )
+
+
+def _diagnostics_fallback_used(result: MarketDataDiagnosticResult) -> bool:
+    for check in result.checks:
+        fallback = check.details.get("fallback")
+        if isinstance(fallback, dict) and fallback.get("fallback_attempted") is True:
+            return True
+    return False
 
 
 def fundamentals_status(report: FundamentalAnalysisReport) -> LiveDataStatus:

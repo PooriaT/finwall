@@ -2,9 +2,14 @@ from finwall.fundamentals import FundamentalAnalysisReport, unavailable_snapshot
 from finwall.live_data_status import (
     LiveDataAvailability,
     LiveDataDomain,
+    diagnostics_status,
     fundamentals_status,
     market_price_status_from_snapshot,
     news_status,
+)
+from finwall.market_data_diagnostics import (
+    MarketDataDiagnosticCheck,
+    MarketDataDiagnosticResult,
 )
 from finwall.news import NewsReport
 from finwall.snapshot import HoldingSnapshot, PortfolioSnapshot
@@ -77,16 +82,20 @@ def test_live_data_status_serialization_is_json_safe_and_deterministic():
     }
 
 
-def test_market_price_status_unavailable_and_static():
+def test_market_price_status_unavailable_static_and_manual():
     unavailable = market_price_status_from_snapshot(
         snapshot=_snapshot(False), provider="yfinance", source="yfinance"
     )
     static = market_price_status_from_snapshot(
         snapshot=_snapshot(), provider="static", source="static"
     )
+    manual = market_price_status_from_snapshot(
+        snapshot=_snapshot(), provider="manual", source="manual"
+    )
 
     assert unavailable.availability == LiveDataAvailability.UNAVAILABLE
     assert static.availability == LiveDataAvailability.STATIC
+    assert manual.availability == LiveDataAvailability.MANUAL
 
 
 def test_fundamentals_and_news_missing_reports_are_unavailable():
@@ -101,3 +110,45 @@ def test_fundamentals_and_news_missing_reports_are_unavailable():
     assert fundamentals_status(fundamentals).domain == LiveDataDomain.FUNDAMENTALS
     assert fundamentals_status(fundamentals).availability == "static"
     assert news_status(news).availability == "unknown"
+
+
+def test_diagnostics_status_marks_fallback_used_only_when_attempted():
+    configured_only = MarketDataDiagnosticResult(
+        ok=True,
+        provider="yfinance",
+        effective_provider="yfinance",
+        timeout_seconds=1.0,
+        sample_ticker="AAPL",
+        historical_days=5,
+        primary_provider="yfinance",
+        fallback_provider="yahoo",
+        checks=(
+            MarketDataDiagnosticCheck(
+                "latest_quote", True, "ok", {"fallback": {"fallback_attempted": False}}
+            ),
+            MarketDataDiagnosticCheck(
+                "historical_prices",
+                True,
+                "ok",
+                {"fallback": {"fallback_attempted": False}},
+            ),
+        ),
+    )
+    attempted = MarketDataDiagnosticResult(
+        ok=True,
+        provider="yfinance",
+        effective_provider="yfinance",
+        timeout_seconds=1.0,
+        sample_ticker="AAPL",
+        historical_days=5,
+        primary_provider="yfinance",
+        fallback_provider="yahoo",
+        checks=(
+            MarketDataDiagnosticCheck(
+                "latest_quote", True, "ok", {"fallback": {"fallback_attempted": True}}
+            ),
+        ),
+    )
+
+    assert diagnostics_status(configured_only).fallback_used is False
+    assert diagnostics_status(attempted).fallback_used is True
