@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from finwall.market_data import (
+    FallbackProviderStatus,
     MarketDataProvider,
     build_market_data_provider,
 )
@@ -37,12 +38,16 @@ class MarketDataDiagnosticResult:
     sample_ticker: str
     historical_days: int
     checks: tuple[MarketDataDiagnosticCheck, ...]
+    primary_provider: str | None = None
+    fallback_provider: str | None = None
 
     def as_dict(self) -> dict[str, object]:
         return {
             "ok": self.ok,
             "provider": self.provider,
             "effective_provider": self.effective_provider,
+            "primary_provider": self.primary_provider,
+            "fallback_provider": self.fallback_provider,
             "timeout_seconds": self.timeout_seconds,
             "sample_ticker": self.sample_ticker,
             "historical_days": self.historical_days,
@@ -69,6 +74,8 @@ def run_market_data_diagnostics(
         provider_name,
         timeout_seconds,
     )
+    primary_provider = _provider_source(getattr(provider_instance, "primary", None))
+    fallback_provider = _provider_source(getattr(provider_instance, "fallback", None))
 
     checks = (
         _check_provider_configuration(
@@ -76,6 +83,8 @@ def run_market_data_diagnostics(
             normalized_provider=normalized_provider,
             effective_provider=effective_provider,
             timeout_seconds=timeout_seconds,
+            primary_provider=primary_provider,
+            fallback_provider=fallback_provider,
         ),
         _check_yfinance_availability(effective_provider),
         _check_latest_quote(provider_instance, ticker),
@@ -89,6 +98,8 @@ def run_market_data_diagnostics(
         sample_ticker=ticker,
         historical_days=historical_days,
         checks=checks,
+        primary_provider=primary_provider,
+        fallback_provider=fallback_provider,
     )
 
 
@@ -98,6 +109,8 @@ def _check_provider_configuration(
     normalized_provider: str,
     effective_provider: str,
     timeout_seconds: float,
+    primary_provider: str | None,
+    fallback_provider: str | None,
 ) -> MarketDataDiagnosticCheck:
     recognized = normalized_provider in RECOGNIZED_MARKET_DATA_PROVIDERS
     if recognized:
@@ -117,6 +130,8 @@ def _check_provider_configuration(
             "effective_provider": effective_provider,
             "recognized": recognized,
             "timeout_seconds": timeout_seconds,
+            "primary_provider": primary_provider,
+            "fallback_provider": fallback_provider,
         },
     )
 
@@ -171,6 +186,7 @@ def _check_latest_quote(
 
     quote = prices.get(ticker)
     if quote is not None and quote.available and quote.price is not None:
+        fallback_status = _status_as_dict(getattr(provider, "latest_status", None))
         return MarketDataDiagnosticCheck(
             name="latest_quote",
             ok=True,
@@ -180,6 +196,7 @@ def _check_latest_quote(
                 "source": quote.source,
                 "currency": quote.currency,
                 "price": _decimal_as_string(quote.price),
+                "fallback": fallback_status,
             },
         )
 
@@ -197,6 +214,7 @@ def _check_latest_quote(
             "ticker": ticker,
             "source": source,
             "safe_error": safe_error,
+            "fallback": _status_as_dict(getattr(provider, "latest_status", None)),
         },
     )
 
@@ -221,6 +239,7 @@ def _check_historical_prices(
         )
 
     if bars:
+        fallback_status = _status_as_dict(getattr(provider, "historical_status", None))
         return MarketDataDiagnosticCheck(
             name="historical_prices",
             ok=True,
@@ -232,6 +251,7 @@ def _check_historical_prices(
                 "returned_bars": len(bars),
                 "first_date": bars[0].date,
                 "last_date": bars[-1].date,
+                "fallback": fallback_status,
             },
         )
 
@@ -245,9 +265,25 @@ def _check_historical_prices(
             "requested_days": days,
             "returned_bars": 0,
             "safe_message": safe_message,
+            "fallback": _status_as_dict(getattr(provider, "historical_status", None)),
         },
     )
 
 
 def _decimal_as_string(value: Decimal) -> str:
     return str(value)
+
+
+def _provider_source(provider: object | None) -> str | None:
+    if provider is None:
+        return None
+    source = getattr(provider, "source", None)
+    if isinstance(source, str) and source.strip():
+        return source.strip()
+    return provider.__class__.__name__
+
+
+def _status_as_dict(value: object) -> dict[str, object] | None:
+    if isinstance(value, FallbackProviderStatus):
+        return value.as_dict()
+    return None
