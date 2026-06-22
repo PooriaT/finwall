@@ -55,6 +55,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/live-data/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Live Data Status */
+        get: operations["live_data_status_api_v1_live_data_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/portfolio": {
         parameters: {
             query?: never;
@@ -560,6 +577,39 @@ export interface components {
             target_amount?: number | null;
             timeline?: components["schemas"]["TimelineResponse"] | null;
         };
+        /** LiveDataStatusListResponse */
+        LiveDataStatusListResponse: {
+            /** Statuses */
+            statuses: components["schemas"]["LiveDataStatusResponse"][];
+        };
+        /** LiveDataStatusResponse */
+        LiveDataStatusResponse: {
+            /** Availability */
+            availability: string;
+            /** Domain */
+            domain: string;
+            /** Fallback Provider */
+            fallback_provider?: string | null;
+            /**
+             * Fallback Used
+             * @default false
+             */
+            fallback_used: boolean;
+            /** Last Attempted At */
+            last_attempted_at: string;
+            /** Metadata */
+            metadata?: {
+                [key: string]: unknown;
+            };
+            /** Provider */
+            provider: string;
+            /** Safe Error Messages */
+            safe_error_messages?: string[];
+            /** Source */
+            source: string;
+            /** Warnings */
+            warnings?: string[];
+        };
         /** OrderRequest */
         OrderRequest: {
             /** Limit Price */
@@ -588,6 +638,8 @@ export interface components {
             charts: components["schemas"]["PortfolioChartsResponse"];
             /** Data Warnings */
             data_warnings: string[];
+            /** Live Data Status */
+            live_data_status?: components["schemas"]["LiveDataStatusResponse"][];
             /** Portfolio Name */
             portfolio_name: string;
             /** Price Completeness Status */
@@ -844,6 +896,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuthSessionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    live_data_status_api_v1_live_data_status_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                finwall_web_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LiveDataStatusListResponse"];
                 };
             };
             /** @description Validation Error */

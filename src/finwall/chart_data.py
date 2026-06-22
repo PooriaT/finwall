@@ -4,6 +4,11 @@ from dataclasses import asdict, dataclass, field
 from decimal import Decimal
 
 from finwall.config import Settings
+from finwall.live_data_status import (
+    LiveDataStatus,
+    market_price_status_from_snapshot,
+    utc_now_iso,
+)
 from finwall.market_data import (
     build_market_data_provider,
     fetch_portfolio_latest_prices,
@@ -55,6 +60,7 @@ class PortfolioChartData:
     valuation_status: str
     price_completeness_status: str
     data_warnings: tuple[str, ...]
+    live_data_status: tuple[LiveDataStatus, ...] = ()
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -62,6 +68,7 @@ class PortfolioChartData:
             "valuation_status": self.valuation_status,
             "price_completeness_status": self.price_completeness_status,
             "data_warnings": list(self.data_warnings),
+            "live_data_status": [status.as_dict() for status in self.live_data_status],
             "charts": {
                 "allocation_by_holding": self.allocation_by_holding.as_dict(),
                 "allocation_by_sector": self.allocation_by_sector.as_dict(),
@@ -83,6 +90,7 @@ def build_portfolio_chart_data(
     provider = build_market_data_provider(
         settings.market_data_provider, settings.market_data_timeout_seconds
     )
+    attempted_at = utc_now_iso()
     latest_prices, provider_warnings = fetch_portfolio_latest_prices(
         portfolio, provider
     )
@@ -94,6 +102,10 @@ def build_portfolio_chart_data(
         snapshot,
         risk,
         tuple(provider_warnings),
+        provider_name=settings.market_data_provider,
+        provider_source=getattr(provider, "source", settings.market_data_provider),
+        fallback_provider=getattr(provider, "fallback_source", None),
+        attempted_at=attempted_at,
         report_history_limit=report_history_limit,
     )
 
@@ -105,6 +117,10 @@ def build_portfolio_chart_data_from_snapshot(
     risk: RiskAssessment,
     provider_warnings: tuple[str, ...] = (),
     *,
+    provider_name: str = "unknown",
+    provider_source: str = "unknown",
+    fallback_provider: str | None = None,
+    attempted_at: str | None = None,
     report_history_limit: int = 10,
 ) -> PortfolioChartData:
     bounded_limit = max(0, min(report_history_limit, 50))
@@ -172,6 +188,16 @@ def build_portfolio_chart_data_from_snapshot(
         valuation_status=snapshot.valuation_status,
         price_completeness_status=snapshot.price_completeness_status,
         data_warnings=tuple(provider_warnings),
+        live_data_status=(
+            market_price_status_from_snapshot(
+                snapshot=snapshot,
+                provider=provider_name,
+                source=provider_source,
+                warnings=provider_warnings,
+                fallback_provider=fallback_provider,
+                last_attempted_at=attempted_at,
+            ),
+        ),
     )
 
 

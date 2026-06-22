@@ -8,6 +8,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from finwall.live_data_status import (
+    market_condition_status,
+    market_price_status_from_snapshot,
+    utc_now_iso,
+)
 from finwall.market_condition import MarketConditionReport, classify_market_condition
 from finwall.market_data import (
     IndexQuote,
@@ -40,11 +45,21 @@ def build_deterministic_report_artifacts(
     market_index_quote = None
     market_condition_report = None
     live_price_warnings: list[str] = []
+    market_provider_name = settings.market_data_provider
+    market_provider_source = (
+        "manual" if latest_prices else settings.market_data_provider
+    )
+    fallback_provider = None
+    attempted_at = utc_now_iso()
     if args.live_prices or args.market_index:
         provider = build_market_data_provider(
             settings.market_data_provider,
             settings.market_data_timeout_seconds,
         )
+        market_provider_source = getattr(
+            provider, "source", settings.market_data_provider
+        )
+        fallback_provider = getattr(provider, "fallback_source", None)
         if args.live_prices:
             fetched_prices, warnings = fetch_portfolio_latest_prices(
                 portfolio, provider
@@ -69,6 +84,19 @@ def build_deterministic_report_artifacts(
     recommendation_report = build_recommendation_report(
         portfolio, snapshot, risk_assessment
     )
+    live_data_status = [
+        market_price_status_from_snapshot(
+            snapshot=snapshot,
+            provider=market_provider_name if args.live_prices else "manual",
+            source=market_provider_source,
+            warnings=live_price_warnings,
+            fallback_provider=fallback_provider,
+            last_attempted_at=attempted_at,
+        )
+    ]
+    if market_condition_report is not None:
+        live_data_status.append(market_condition_status(market_condition_report))
+
     report = build_decision_support_report(
         portfolio,
         snapshot,
@@ -79,7 +107,10 @@ def build_deterministic_report_artifacts(
     )
 
     return DeterministicReportArtifacts(
-        payload=report.as_dict(),
+        payload={
+            **report.as_dict(),
+            "live_data_status": [status.as_dict() for status in live_data_status],
+        },
         report=report,
         snapshot=snapshot,
         risk_assessment=risk_assessment,

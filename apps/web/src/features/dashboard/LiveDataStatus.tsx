@@ -6,6 +6,7 @@ type LiveDataStatusProps = {
 };
 
 export function LiveDataStatus({ analysis }: LiveDataStatusProps) {
+  const statuses = analysis.live_data_status ?? [];
   const seriesWarnings = Object.values(analysis.charts).flatMap(
     (series) => series.warnings ?? [],
   );
@@ -20,26 +21,42 @@ export function LiveDataStatus({ analysis }: LiveDataStatusProps) {
         </div>
       </div>
       <p className="muted">
-        Default live provider status is reported by backend chart data; unavailable or
-        partial values can reflect provider availability, missing prices, or manual/static
-        override mode.
+        Default live provider status is reported by backend chart data. The shared
+        live-data contract describes whether dashboard inputs are live, partial,
+        unavailable, static, manual, or unknown; it is not a guarantee of real-time
+        or broker-grade data.
       </p>
       <div className="status-grid">
-        <div>
-          <span>Valuation status</span>
-          <strong>{formatLabel(analysis.valuation_status)}</strong>
-        </div>
-        <div>
-          <span>Price completeness</span>
-          <strong>{formatLabel(analysis.price_completeness_status)}</strong>
-        </div>
+        {statuses.length > 0 ? (
+          statuses.map((status) => (
+            <div key={status.domain}>
+              <span>{formatLabel(status.domain)}</span>
+              <strong>{formatLabel(status.availability)}</strong>
+              <small>
+                {status.provider} · {status.source}
+                {status.fallback_used && status.fallback_provider
+                  ? ` · fallback ${status.fallback_provider}`
+                  : ""}
+              </small>
+            </div>
+          ))
+        ) : (
+          <div>
+            <span>Market prices</span>
+            <strong>{formatLabel(analysis.price_completeness_status)}</strong>
+            <small>Legacy chart metadata</small>
+          </div>
+        )}
       </div>
-      {warnings.length > 0 ? (
+      {warnings.length > 0 || statuses.some((status) => (status.safe_error_messages ?? []).length) ? (
         <div className="warning-banner" role="status">
           <strong>Data warnings</strong>
           <ul>
             {warnings.map((warning) => (
               <li key={warning}>{warning}</li>
+            ))}
+            {statuses.flatMap((status) => status.safe_error_messages ?? []).map((message) => (
+              <li key={message}>{message}</li>
             ))}
           </ul>
         </div>

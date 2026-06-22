@@ -103,6 +103,20 @@ const analysisCharts = {
   valuation_status: "complete",
   price_completeness_status: "complete",
   data_warnings: [],
+  live_data_status: [
+    {
+      domain: "market_prices",
+      provider: "yfinance",
+      source: "yfinance",
+      availability: "live",
+      last_attempted_at: "2026-01-01T00:00:00+00:00",
+      fallback_used: false,
+      fallback_provider: null,
+      warnings: [],
+      safe_error_messages: [],
+      metadata: {},
+    },
+  ],
   charts: {
     allocation_by_holding: chartSeries("allocation_by_holding", "Allocation by holding", [
       chartPoint("AAPL", "AAPL", "1750.00", "58.33"),
