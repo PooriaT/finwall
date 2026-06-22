@@ -77,6 +77,8 @@ Optional runtime settings can also be configured as secrets:
 - `FINWALL_NARRATIVE_MAX_WORDS`
 - `FINWALL_NARRATIVE_STYLE`
 
+`FINWALL_MARKET_DATA_PROVIDER` is not required for normal live-price scheduled reports because Finwall defaults to `yfinance`. Set it only when deliberately overriding to `yahoo` or explicit `static` behavior.
+
 ## Email behavior
 
 - `--email` triggers success notifications for generated scheduled reports.
