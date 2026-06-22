@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 from dataclasses import dataclass
 from decimal import Decimal
 
@@ -31,6 +32,7 @@ class MarketDataDiagnosticCheck:
 class MarketDataDiagnosticResult:
     ok: bool
     provider: str
+    effective_provider: str
     timeout_seconds: float
     sample_ticker: str
     historical_days: int
@@ -40,6 +42,7 @@ class MarketDataDiagnosticResult:
         return {
             "ok": self.ok,
             "provider": self.provider,
+            "effective_provider": self.effective_provider,
             "timeout_seconds": self.timeout_seconds,
             "sample_ticker": self.sample_ticker,
             "historical_days": self.historical_days,
@@ -74,12 +77,14 @@ def run_market_data_diagnostics(
             effective_provider=effective_provider,
             timeout_seconds=timeout_seconds,
         ),
+        _check_yfinance_availability(effective_provider),
         _check_latest_quote(provider_instance, ticker),
         _check_historical_prices(provider_instance, ticker, historical_days),
     )
     return MarketDataDiagnosticResult(
         ok=all(check.ok for check in checks),
         provider=normalized_provider,
+        effective_provider=effective_provider,
         timeout_seconds=timeout_seconds,
         sample_ticker=ticker,
         historical_days=historical_days,
@@ -100,7 +105,7 @@ def _check_provider_configuration(
     else:
         summary = (
             f"provider {normalized_provider or '<empty>'} is not recognized; "
-            "using static fallback"
+            "using safe static provider behavior"
         )
     return MarketDataDiagnosticCheck(
         name="provider_configuration",
@@ -114,6 +119,37 @@ def _check_provider_configuration(
             "timeout_seconds": timeout_seconds,
         },
     )
+
+
+def _check_yfinance_availability(
+    effective_provider: str,
+) -> MarketDataDiagnosticCheck:
+    available = _is_yfinance_available()
+    required = effective_provider == "yfinance"
+    if available:
+        summary = "yfinance dependency available"
+    elif required:
+        summary = "yfinance dependency unavailable"
+    else:
+        summary = (
+            f"yfinance dependency unavailable; not required for {effective_provider}"
+        )
+    return MarketDataDiagnosticCheck(
+        name="yfinance_availability",
+        ok=available or not required,
+        summary=summary,
+        details={
+            "available": available,
+            "required": required,
+        },
+    )
+
+
+def _is_yfinance_available() -> bool:
+    try:
+        return importlib.util.find_spec("yfinance") is not None
+    except (ImportError, ValueError):
+        return False
 
 
 def _check_latest_quote(

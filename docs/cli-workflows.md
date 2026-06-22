@@ -41,6 +41,8 @@ poetry run finwall --database finwall.db set-risk moderate --notes "Example prof
 
 ## Analysis and reporting
 
+Live-price workflows use the default `yfinance` market-data provider unless `FINWALL_MARKET_DATA_PROVIDER` is set to `yahoo` or explicit `static`. Manual `--price TICKER=PRICE` values remain available and override fetched live prices where both are supplied.
+
 ```bash
 poetry run finwall --database finwall.db snapshot --price NVDA=120
 poetry run finwall --database finwall.db snapshot --live-prices --risk --json

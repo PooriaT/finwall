@@ -96,6 +96,10 @@ calculations. Frontend chart adapters only parse backend string values into
 numbers for display, while preserving the original string values for visible
 labels, tooltips, and fallback tables.
 
+Live market prices come from the backend market-data provider configuration.
+The default provider is `yfinance`; `FINWALL_MARKET_DATA_PROVIDER` is only an
+override/debug setting for `yfinance`, `yahoo`, or explicit `static` workflows.
+
 Missing, invalid, or `null` chart values are displayed as unavailable instead of
 being silently removed. Series warnings, incomplete valuation status, and partial
 price-completeness status are shown visibly in chart cards. Every chart includes

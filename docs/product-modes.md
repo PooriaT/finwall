@@ -27,7 +27,7 @@ Finwall is a self-managed decision-support tool. It is not a broker, not an exec
 - Scheduled-run logging and duplicate suppression.
 - SMTP email notifications for scheduled report outcomes.
 - GitHub Actions scheduled-report workflow as a repo automation option.
-- Yahoo public-endpoint market data via `FINWALL_MARKET_DATA_PROVIDER=yahoo` for local/self-managed live-price, index, technical, and market-condition workflows.
+- Default `yfinance` market data for local/self-managed live-price, index, technical, and market-condition workflows, with `FINWALL_MARKET_DATA_PROVIDER` overrides for `yahoo` or explicit `static`.
 
 ## Internal/self-managed
 
@@ -45,7 +45,6 @@ These are internal/self-managed tooling surfaces and are not public SaaS-grade p
 - Market-condition classification.
 - Fundamentals inputs/summaries.
 - News inputs/summaries.
-- Optional `yfinance` market-data adapter when explicitly installed and selected.
 
 These capabilities are decision-support inputs and may be provider-limited or incomplete. Deterministic report/risk/recommendation fields remain the authoritative structured outputs, and deterministic recommendations remain conservative and primarily snapshot/risk driven unless a rule set explicitly consumes additional inputs.
 
@@ -53,7 +52,7 @@ These capabilities are decision-support inputs and may be provider-limited or in
 
 - Postgres backend selection is not implemented at runtime; SQLite is the usable backend today.
 - Multi-currency aggregation has FX-conversion limitations.
-- Market/fundamentals/news freshness and coverage depend on provider constraints. Yahoo public market data may be unavailable, delayed, stale, partial, or rate-limited and is not broker-grade or guaranteed institutional market data.
+- Market/fundamentals/news freshness and coverage depend on provider constraints. Free market-data providers may be unavailable, delayed, stale, partial, malformed, rate-limited, or blocked and are not broker-grade or guaranteed institutional market data.
 - API/frontend mode is token-authenticated internal tooling, not public SaaS-grade multi-user RBAC.
 - Security posture is application-level/self-managed and not enterprise compliance certification.
 

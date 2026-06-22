@@ -75,17 +75,22 @@ def test_market_data_diagnostics_pass_with_mock_provider() -> None:
 
     assert result.ok is True
     assert result.provider == "static"
+    assert result.effective_provider == "static"
     assert result.sample_ticker == "AAPL"
     assert [check.name for check in result.checks] == [
         "provider_configuration",
+        "yfinance_availability",
         "latest_quote",
         "historical_prices",
     ]
-    assert result.checks[1].details["price"] == "190.10"
-    assert result.checks[2].details["returned_bars"] == 2
+    assert result.checks[1].details["required"] is False
+    assert result.checks[2].details["price"] == "190.10"
+    assert result.checks[3].details["returned_bars"] == 2
 
 
-def test_market_data_diagnostics_reports_unknown_provider_static_fallback() -> None:
+def test_market_data_diagnostics_reports_unknown_provider_safe_static_behavior() -> (
+    None
+):
     provider = StaticMarketDataProvider(
         prices={
             "AAPL": MarketPrice("AAPL", Decimal("190.10"), "USD", "static", True),
@@ -110,6 +115,7 @@ def test_market_data_diagnostics_reports_unknown_provider_static_fallback() -> N
     assert provider_check.ok is False
     assert provider_check.details["recognized"] is False
     assert provider_check.details["effective_provider"] == "static"
+    assert result.effective_provider == "static"
 
 
 class _ExplodingMarketDataProvider:
@@ -133,8 +139,8 @@ def test_market_data_diagnostics_uses_safe_errors_for_provider_exceptions() -> N
     )
 
     assert result.ok is False
-    assert result.checks[1].details["safe_error"] == "latest quote check failed"
-    assert result.checks[2].details["safe_error"] == "historical price check failed"
+    assert result.checks[2].details["safe_error"] == "latest quote check failed"
+    assert result.checks[3].details["safe_error"] == "historical price check failed"
     payload = result.as_dict()
     assert "query1.finance.yahoo.com" not in str(payload)
 
@@ -718,7 +724,7 @@ def test_yfinance_missing_dependency_returns_safe_unavailable_prices(
 
     assert prices["AAPL"].available is False
     assert prices["AAPL"].source == "yfinance"
-    assert "optional yfinance extra" in prices["AAPL"].error
+    assert "install project dependencies" in prices["AAPL"].error
     assert provider.get_historical_prices("AAPL", days=5) == ()
 
 

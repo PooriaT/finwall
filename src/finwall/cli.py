@@ -852,11 +852,13 @@ def print_fundamental_summary_report(report) -> None:
 def print_market_data_diagnostics(result: MarketDataDiagnosticResult) -> None:
     titles = {
         "provider_configuration": "Provider configuration",
+        "yfinance_availability": "Yfinance availability",
         "latest_quote": "Latest quote",
         "historical_prices": "Historical prices",
     }
     print("Market data diagnostics")
     print(f"Provider: {result.provider}")
+    print(f"Effective provider: {result.effective_provider}")
     print(f"Timeout: {result.timeout_seconds}s")
     print(f"Sample ticker: {result.sample_ticker}")
     print("")
