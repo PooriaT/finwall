@@ -19,6 +19,11 @@ export function LiveDataStatus({ analysis }: LiveDataStatusProps) {
           <h2 id="live-data-title">Market data readiness</h2>
         </div>
       </div>
+      <p className="muted">
+        Default live provider status is reported by backend chart data; unavailable or
+        partial values can reflect provider availability, missing prices, or manual/static
+        override mode.
+      </p>
       <div className="status-grid">
         <div>
           <span>Valuation status</span>

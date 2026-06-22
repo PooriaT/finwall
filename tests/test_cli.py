@@ -201,6 +201,29 @@ def test_snapshot_live_prices_with_manual_override(
     }
 
 
+def test_live_price_help_describes_default_provider(capsys) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        run(["snapshot", "--help"])
+    assert exc_info.value.code == 0
+    snapshot_help = capsys.readouterr().out
+    assert "Fetch prices from the default live provider unless" in snapshot_help
+    assert "overridden." in snapshot_help
+
+    with pytest.raises(SystemExit) as exc_info:
+        run(["report", "--help"])
+    assert exc_info.value.code == 0
+    report_help = capsys.readouterr().out
+    assert "Use configured/default live provider" in report_help
+    assert "manual --price" in report_help
+    assert "overrides fetched values" in report_help
+
+    with pytest.raises(SystemExit) as exc_info:
+        run(["market-data-check", "--help"])
+    assert exc_info.value.code == 0
+    diagnostics_help = capsys.readouterr().out
+    assert "Check default or overridden market-data provider." in diagnostics_help
+
+
 def test_market_index_command_with_mock_provider(tmp_path, monkeypatch, capsys) -> None:
     database = tmp_path / "finwall.db"
     provider = StaticMarketDataProvider(

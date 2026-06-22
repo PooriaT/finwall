@@ -62,7 +62,7 @@ Future portfolio mutation UI should be built in React against explicit backend A
 
 The analysis endpoints return deterministic JSON payloads used by the React dashboard charts and available to API clients. They do not mutate portfolios, place broker orders, add analytics rules, or change storage schema.
 
-These endpoints reuse the existing portfolio snapshot, risk assessment, market-data provider selection, latest-price fetching, and report-history storage services. Values are decision-support data only. Finwall defaults to `yfinance` for live market prices, while `FINWALL_MARKET_DATA_PROVIDER` can override to `yahoo` or explicit `static`. Payloads can be partial when prices are missing or a market data provider fails; missing prices are represented with status fields, `null` values where appropriate, warnings, and metadata instead of raw tracebacks.
+These endpoints reuse the existing portfolio snapshot, risk assessment, market-data provider selection, latest-price fetching, and report-history storage services. Values are decision-support data only. Finwall defaults to `yfinance` for live market prices, while `FINWALL_MARKET_DATA_PROVIDER` is only an override/debug selector for `yfinance`, `yahoo`, or explicit `static`. Payloads can be partial when prices are missing or a market data provider fails; missing prices are represented with status fields, `null` values where appropriate, warnings, and metadata instead of raw tracebacks.
 
 Use the optional `report_history_limit` query parameter to bound report history in chart payloads. The API defaults to `10` and caps requests at `50`.
 
