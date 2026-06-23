@@ -69,7 +69,7 @@ Open the Vite URL, usually `http://localhost:5173`. In local development, Vite p
 
 ## CLI overview
 
-The CLI is the primary local workflow for portfolio maintenance and deterministic reports. Prefer `poetry run finwall <command> --help` and [CLI workflows](docs/cli-workflows.md) for detailed command options instead of treating this README as a command reference.
+The CLI is the primary local workflow for portfolio maintenance and deterministic reports. Prefer `poetry run finwall <command> --help`, the [CLI reference](docs/cli-reference.md), and [CLI workflows](docs/cli-workflows.md) for detailed command options instead of treating this README as a command reference.
 
 Common entry points:
 
@@ -101,7 +101,7 @@ Live/free provider data may be unavailable, delayed, stale, partial, malformed, 
 
 - Local setup: [docs/local-setup.md](docs/local-setup.md)
 - CLI workflows: [docs/cli-workflows.md](docs/cli-workflows.md)
-- CLI reference: run `poetry run finwall --help` or `poetry run finwall <command> --help`
+- CLI reference: [docs/cli-reference.md](docs/cli-reference.md) plus `poetry run finwall --help` or `poetry run finwall <command> --help`
 - API reference: FastAPI OpenAPI is exported by `cd apps/web && npm run openapi:export`; see [API and browser session mode](docs/api-admin.md)
 - Frontend runbook: [docs/frontend.md](docs/frontend.md)
 - Live-data provider reference: [Configuration market-data/fundamentals/news sections](docs/configuration.md#market-data) and [yfinance spike](docs/market-data/yfinance-spike.md)

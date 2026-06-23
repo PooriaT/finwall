@@ -2,7 +2,7 @@
 
 > Status: **Supported primary** for CLI portfolio maintenance and deterministic report generation. Technical/fundamental/news/market-condition commands are **experimental/optional decision-support inputs** and should not be treated as prediction certainty or execution signals.
 
-This guide focuses on common command patterns. For full options, run `poetry run finwall <command> --help`.
+This guide remains workflow-focused and shows common command patterns. For full command arguments, flags, output modes, and live-data behavior, see the [CLI reference](cli-reference.md) or run `poetry run finwall <command> --help`.
 
 ## Portfolio maintenance
 
