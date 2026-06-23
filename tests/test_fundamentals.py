@@ -1,4 +1,5 @@
 import math
+import sys
 from decimal import Decimal
 
 from finwall.fundamentals import (
@@ -230,6 +231,38 @@ def test_yfinance_provider_unknown_ticker_returns_missing_data() -> None:
     assert snapshot.data_status == "missing_data"
     assert snapshot.source == "yfinance"
     assert "ticker fundamentals unavailable" in snapshot.warnings
+
+
+def test_yfinance_provider_applies_timeout_to_info_fetch(monkeypatch) -> None:
+    seen = {}
+
+    class FakeTicker:
+        def __init__(self, ticker: str) -> None:
+            self.ticker = ticker
+
+        def get_info(self):
+            return {"longName": f"{self.ticker} Corp"}
+
+    class FakeYFinance:
+        @staticmethod
+        def Ticker(ticker: str):
+            return FakeTicker(ticker)
+
+    def fake_call_with_timeout(callback, timeout_seconds):
+        seen["timeout_seconds"] = timeout_seconds
+        return callback()
+
+    monkeypatch.setitem(sys.modules, "yfinance", FakeYFinance)
+    monkeypatch.setattr(
+        "finwall.fundamentals_yfinance._call_with_timeout",
+        fake_call_with_timeout,
+    )
+
+    provider = YFinanceFundamentalDataProvider(timeout_seconds=2.5)
+    snapshot = provider.get_fundamentals("nvda")
+
+    assert seen["timeout_seconds"] == 2.5
+    assert snapshot.profile.company_name == "NVDA Corp"
 
 
 def test_provider_selection_supports_yfinance() -> None:

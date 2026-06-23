@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+import queue
+import threading
+from collections.abc import Callable, Mapping
 from math import isfinite
 from numbers import Real
 from typing import Any
@@ -88,6 +90,8 @@ class YFinanceFundamentalDataProvider:
             info = self._load_info(symbol)
         except ImportError:
             return self._missing_snapshot(symbol, "yfinance is not installed")
+        except TimeoutError:
+            return self._missing_snapshot(symbol, "provider request timed out")
         except Exception:
             return self._missing_snapshot(symbol, "provider request failed")
 
@@ -130,10 +134,7 @@ class YFinanceFundamentalDataProvider:
         import yfinance as yf
 
         yfinance_ticker = yf.Ticker(ticker)
-        get_info = getattr(yfinance_ticker, "get_info", None)
-        raw_info = (
-            get_info() if callable(get_info) else getattr(yfinance_ticker, "info", {})
-        )
+        raw_info = _get_ticker_info(yfinance_ticker, self.timeout_seconds)
         return raw_info if isinstance(raw_info, Mapping) else {}
 
     def _profile(self, ticker: str, info: Mapping[str, Any]) -> CompanyProfile:
@@ -177,3 +178,37 @@ class YFinanceFundamentalDataProvider:
             warnings=(error,),
         )
         return _normalize_snapshot(snapshot)
+
+
+def _get_ticker_info(ticker_data: object, timeout_seconds: float) -> object:
+    def fetch() -> object:
+        get_info = getattr(ticker_data, "get_info", None)
+        if callable(get_info):
+            return get_info()
+        return getattr(ticker_data, "info", {})
+
+    return _call_with_timeout(fetch, timeout_seconds)
+
+
+def _call_with_timeout(
+    callback: Callable[[], object], timeout_seconds: float
+) -> object:
+    result_queue: queue.Queue[tuple[bool, object]] = queue.Queue(maxsize=1)
+
+    def target() -> None:
+        try:
+            result_queue.put((True, callback()))
+        except Exception as exc:
+            result_queue.put((False, exc))
+
+    worker = threading.Thread(target=target, daemon=True)
+    worker.start()
+    try:
+        success, value = result_queue.get(timeout=timeout_seconds)
+    except queue.Empty as exc:
+        raise TimeoutError("yfinance fundamentals request timed out") from exc
+    if success:
+        return value
+    if isinstance(value, Exception):
+        raise value
+    raise RuntimeError("yfinance fundamentals request failed")
