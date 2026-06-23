@@ -26,7 +26,7 @@ See [Safety limits](docs/safety-limits.md) for the full boundary statement.
 | --- | --- | --- | --- |
 | CLI portfolio maintenance | Supported primary | Maintain cash, holdings, trades, orders, watchlist, goals, timeline, and risk profile. | [CLI workflows](docs/cli-workflows.md) |
 | Deterministic reports | Supported primary | Produce snapshots, risk checks, recommendations, and report output from portfolio state and inputs. | [CLI workflows](docs/cli-workflows.md) |
-| React dashboard | Internal/self-managed | Browser dashboard for authenticated portfolio reads and chart-ready analysis. | [Frontend guide](docs/frontend.md) |
+| React dashboard | Internal/self-managed | Browser dashboard for authenticated portfolio reads and chart-ready analysis. | [Frontend runbook](docs/frontend.md) |
 | API/session auth | Internal/self-managed | FastAPI bearer-token API plus HTTP-only session-cookie auth for frontend read endpoints. | [API and browser session mode](docs/api-admin.md) |
 | Live market data | Supported secondary / provider-limited | Use default `yfinance` market data for local live-price workflows, with explicit override/debug providers. | [Configuration: market data](docs/configuration.md#market-data) |
 | Fundamentals/news | Experimental / optional | Add partial provider-dependent decision-support context; not authoritative recommendation drivers by default. | [Configuration](docs/configuration.md#fundamentals) |
@@ -65,7 +65,7 @@ npm install
 npm run dev
 ```
 
-Open the Vite URL, usually `http://localhost:5173`. In local development, Vite proxies relative `/api` requests to the FastAPI backend on `http://127.0.0.1:8000`. See [Frontend guide](docs/frontend.md).
+Open the Vite URL, usually `http://localhost:5173`. In local development, Vite proxies relative `/api` requests to the FastAPI backend on `http://127.0.0.1:8000`. See [Frontend runbook](docs/frontend.md).
 
 ## CLI overview
 
@@ -89,7 +89,7 @@ Portfolio mutation endpoints remain bearer-token protected. The removed server-r
 
 The browser UI lives in `apps/web` and is built with Vite, React, TypeScript, TanStack Query, and Recharts. It consumes FastAPI endpoints and generated OpenAPI types; deterministic finance logic remains in the backend.
 
-Current frontend scope is dashboard/read-oriented. Portfolio mutation forms are not implemented yet. See [Frontend guide](docs/frontend.md).
+Current frontend scope is dashboard/read-oriented. Portfolio mutation forms are not implemented yet. See [Frontend runbook](docs/frontend.md).
 
 ## Live data behavior
 
