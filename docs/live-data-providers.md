@@ -34,7 +34,7 @@ Market-price fetching is used by CLI flows such as `snapshot --live-prices`, `re
 
 With the default market-data provider, Finwall builds a yfinance primary provider and a direct Yahoo public endpoint fallback. Per ticker, Finwall uses a primary price when available and attempts fallback for missing/unavailable primary results. If neither provider returns an available price, the ticker remains unavailable and a safe warning/error message is surfaced.
 
-Manual CLI prices are supplied as `--price TICKER=PRICE`. In supported flows, manual prices are merged after fetched live prices, so a manual value overrides a fetched value for the same ticker. Manual values are user-provided and should be labeled as manual, not live.
+Manual CLI prices are supplied as `--price TICKER=PRICE`. In supported flows, manual prices are merged after fetched live prices, so a manual value overrides a fetched value for the same ticker. Manual values are user-provided and should be labeled as manual, not live, where the surface can distinguish per-ticker provenance. Current mixed `--live-prices --price` report flows may expose an overall market-price live-data status with the configured provider/source (for example `yfinance`/`live`) even when one or more ticker prices were manually overridden; that status describes the provider attempt for the workflow, not guaranteed per-ticker provenance.
 
 ## Historical prices and technicals
 
@@ -62,7 +62,7 @@ News enrichment classifies source quality and recency heuristically, deduplicate
 
 Use `static` for tests, demos, explicit fixtures, offline examples, and deterministic manual workflows. Static provider outputs may intentionally be unavailable unless a test or fixture supplies values.
 
-Use manual `--price TICKER=PRICE` values when you need deterministic CLI valuation inputs. Manual prices override fetched prices in supported CLI flows when both are provided for the same ticker. Static and manual values must be displayed as static/manual, never as live provider data.
+Use manual `--price TICKER=PRICE` values when you need deterministic CLI valuation inputs. Manual prices override fetched prices in supported CLI flows when both are provided for the same ticker. Static and manual values should be displayed as static/manual, never as live provider data, when the consuming surface has that provenance available. Current report JSON does not expose per-ticker manual-vs-provider provenance for mixed `--live-prices --price` runs, so consumers should not infer that every price came from the provider solely from the aggregate status.
 
 ## Provider fallback behavior
 
@@ -80,7 +80,7 @@ Finwall has a public live-data status shape for diagnostics and report/frontend 
 | `partial` | Some, but not all, requested data was available. | Missing tickers, partial fundamentals, empty historical bars for some items, provider omissions. | Show a warning badge and identify missing/partial items. | Retry later, check ticker symbols, run diagnostics, or provide manual/static values where appropriate. |
 | `unavailable` | Requested live data was attempted but no usable data was available. | Network failure, dependency unavailable, provider error, blocked/rate-limited response, malformed/empty response. | Show unavailable status, safe error messages, and avoid using values as live. | Run diagnostics, verify network/dependencies, retry later, switch provider override, or use explicit manual/static data. |
 | `static` | Data came from the static provider path. | `static` provider selected explicitly, unknown provider fell back to static, or configured fixture path. | Label as static/test/fixture data, not live. | Use for tests/demos or switch back to default provider for live data. |
-| `manual` | Data came from user-provided manual input. | CLI `--price TICKER=PRICE` values in supported flows. | Label as manual/user supplied, not live. | Verify the value externally; remove manual override to use provider data. |
+| `manual` | Data came from user-provided manual input, or the workflow was run without live fetching and used supplied prices. | CLI `--price TICKER=PRICE` values in supported flows. Mixed live/manual report flows may still report an aggregate provider status rather than per-ticker `manual`. | Label as manual/user supplied when known; do not assume aggregate `live` proves every ticker value came from the provider. | Verify the value externally; remove manual override to use provider data. |
 | `unknown` | Status cannot determine availability. | No holdings/items, configured-only status, endpoint did not run a provider check. | Show neutral/unknown status and avoid implying success or failure. | Run a provider-backed workflow or diagnostics if live data is needed. |
 
 ## Diagnostics
@@ -128,7 +128,7 @@ Use deterministic manual prices in a supported CLI workflow:
 poetry run finwall snapshot --price AAPL=190 --price MSFT=420
 ```
 
-Fetch live prices and override one ticker manually:
+Fetch live prices and override one ticker manually. In current report JSON, this mixed run can still show an aggregate market-price provider status such as `yfinance`/`live`; consumers should treat that as workflow/provider status, not per-ticker provenance:
 
 ```bash
 poetry run finwall report --live-prices --price AAPL=190
