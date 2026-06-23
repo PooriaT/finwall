@@ -95,7 +95,7 @@ Current frontend scope is dashboard/read-oriented. Portfolio mutation forms are 
 
 Finwall defaults to `yfinance` for market data, fundamentals, and news where implemented. Static/manual providers remain available for tests, demos, explicit manual overrides, and safe fallback paths. Manual `--price TICKER=PRICE` values can still be used for deterministic examples and override fetched prices in supported CLI flows.
 
-Live/free provider data may be unavailable, delayed, stale, partial, malformed, rate-limited, or blocked. It is decision-support context only, not broker-grade data and not an execution signal. See [Configuration](docs/configuration.md), [Safety limits](docs/safety-limits.md), and the [yfinance market-data spike](docs/market-data/yfinance-spike.md).
+Live/free provider data may be unavailable, delayed, stale, partial, malformed, rate-limited, or blocked. It is decision-support context only, not broker-grade data and not an execution signal. See the [live-data provider reference](docs/live-data-providers.md), [Configuration](docs/configuration.md), and [Safety limits](docs/safety-limits.md).
 
 ## Documentation map
 
@@ -104,7 +104,7 @@ Live/free provider data may be unavailable, delayed, stale, partial, malformed, 
 - CLI reference: [docs/cli-reference.md](docs/cli-reference.md) plus `poetry run finwall --help` or `poetry run finwall <command> --help`
 - API reference: [docs/api-reference.md](docs/api-reference.md); FastAPI OpenAPI is exported by `cd apps/web && npm run openapi:export`; see also [API and browser session mode](docs/api-admin.md)
 - Frontend runbook: [docs/frontend.md](docs/frontend.md)
-- Live-data provider reference: [Configuration market-data/fundamentals/news sections](docs/configuration.md#market-data) and [yfinance spike](docs/market-data/yfinance-spike.md)
+- Live-data provider reference: [Live-data providers](docs/live-data-providers.md)
 - Configuration: [docs/configuration.md](docs/configuration.md)
 - Safety limits: [docs/safety-limits.md](docs/safety-limits.md)
 - Security: [docs/security.md](docs/security.md)
