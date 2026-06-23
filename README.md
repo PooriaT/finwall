@@ -83,7 +83,7 @@ poetry run finwall --database finwall.db report --live-prices --save-run
 
 Finwall includes an internal/self-managed FastAPI backend. Programmatic clients use bearer-token auth. The React frontend uses `POST /api/v1/auth/login` to exchange the configured local token for an HTTP-only `finwall_web_session` cookie used by frontend read endpoints.
 
-Portfolio mutation endpoints remain bearer-token protected. The removed server-rendered Jinja `/admin` UI is not a supported browser surface; use the React frontend instead. See [API and browser session mode](docs/api-admin.md) and [ADR 0002](docs/adr/0002-modern-frontend-scaffold.md).
+Portfolio mutation endpoints remain bearer-token protected. The removed server-rendered Jinja `/admin` UI is not a supported browser surface; use the React frontend instead. See [API and browser session mode](docs/api-admin.md), the [API reference](docs/api-reference.md), and [ADR 0002](docs/adr/0002-modern-frontend-scaffold.md).
 
 ## Frontend overview
 
@@ -102,7 +102,7 @@ Live/free provider data may be unavailable, delayed, stale, partial, malformed, 
 - Local setup: [docs/local-setup.md](docs/local-setup.md)
 - CLI workflows: [docs/cli-workflows.md](docs/cli-workflows.md)
 - CLI reference: [docs/cli-reference.md](docs/cli-reference.md) plus `poetry run finwall --help` or `poetry run finwall <command> --help`
-- API reference: FastAPI OpenAPI is exported by `cd apps/web && npm run openapi:export`; see [API and browser session mode](docs/api-admin.md)
+- API reference: [docs/api-reference.md](docs/api-reference.md); FastAPI OpenAPI is exported by `cd apps/web && npm run openapi:export`; see also [API and browser session mode](docs/api-admin.md)
 - Frontend runbook: [docs/frontend.md](docs/frontend.md)
 - Live-data provider reference: [Configuration market-data/fundamentals/news sections](docs/configuration.md#market-data) and [yfinance spike](docs/market-data/yfinance-spike.md)
 - Configuration: [docs/configuration.md](docs/configuration.md)

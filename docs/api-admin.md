@@ -2,6 +2,8 @@
 
 > Status: **Internal/self-managed API**. Token-authenticated backend API plus browser session endpoints for the React frontend; not a public SaaS product, not multi-user RBAC, and not a broker interface.
 
+For method-by-method endpoint details, see the [API reference](api-reference.md).
+
 Finwall's FastAPI app is the authoritative backend/API surface. Browser users should use the React frontend in `apps/web`; the old server-rendered Jinja `/admin` pages have been removed.
 
 ## Run locally with Uvicorn
