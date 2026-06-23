@@ -717,3 +717,23 @@ def test_failed_validation_audit_events_are_safe(tmp_path):
     assert all(event["safe_error_message"] for event in failed)
     assert "secret" not in str(failed)
     assert "Traceback" not in str(failed)
+
+
+def test_live_data_status_endpoint_requires_auth(tmp_path):
+    client = build_client(tmp_path)
+
+    response = client.get("/api/v1/live-data/status")
+
+    assert response.status_code == 401
+
+
+def test_live_data_status_endpoint_response_shape(tmp_path):
+    client = build_client(tmp_path)
+
+    response = client.get("/api/v1/live-data/status", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    domains = {status["domain"] for status in payload["statuses"]}
+    assert {"market_prices", "fundamentals", "news", "market_condition"} <= domains
+    assert all("availability" in status for status in payload["statuses"])

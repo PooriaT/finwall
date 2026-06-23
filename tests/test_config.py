@@ -3,13 +3,18 @@ import importlib
 import finwall.config as config
 
 
-def test_default_environment() -> None:
-    assert config.settings.app_env == "development"
-    assert config.settings.market_data_provider == "static"
-    assert config.settings.market_data_timeout_seconds == 5.0
+def test_default_environment(monkeypatch) -> None:
+    monkeypatch.delenv("FINWALL_MARKET_DATA_PROVIDER", raising=False)
+    monkeypatch.delenv("FINWALL_MARKET_DATA_TIMEOUT_SECONDS", raising=False)
+
+    reloaded = importlib.reload(config)
+
+    assert reloaded.settings.app_env == "development"
+    assert reloaded.settings.market_data_provider == "yfinance"
+    assert reloaded.settings.market_data_timeout_seconds == 5.0
 
 
-def test_market_data_settings_from_environment(monkeypatch) -> None:
+def test_market_data_settings_accept_yahoo_override(monkeypatch) -> None:
     monkeypatch.setenv("FINWALL_MARKET_DATA_PROVIDER", "yahoo")
     monkeypatch.setenv("FINWALL_MARKET_DATA_TIMEOUT_SECONDS", "12")
 
@@ -17,6 +22,38 @@ def test_market_data_settings_from_environment(monkeypatch) -> None:
 
     assert reloaded.settings.market_data_provider == "yahoo"
     assert reloaded.settings.market_data_timeout_seconds == 12.0
+
+
+def test_market_data_settings_accept_static_override(monkeypatch) -> None:
+    monkeypatch.setenv("FINWALL_MARKET_DATA_PROVIDER", "static")
+
+    reloaded = importlib.reload(config)
+
+    assert reloaded.settings.market_data_provider == "static"
+
+
+def test_market_data_blank_provider_uses_default(monkeypatch) -> None:
+    monkeypatch.setenv("FINWALL_MARKET_DATA_PROVIDER", "")
+
+    reloaded = importlib.reload(config)
+
+    assert reloaded.settings.market_data_provider == "yfinance"
+
+
+def test_market_data_whitespace_provider_uses_default(monkeypatch) -> None:
+    monkeypatch.setenv("FINWALL_MARKET_DATA_PROVIDER", "  ")
+
+    reloaded = importlib.reload(config)
+
+    assert reloaded.settings.market_data_provider == "yfinance"
+
+
+def test_news_blank_provider_uses_default(monkeypatch) -> None:
+    monkeypatch.setenv("FINWALL_NEWS_PROVIDER", "")
+
+    reloaded = importlib.reload(config)
+
+    assert reloaded.settings.news_provider == "yfinance"
 
 
 def test_market_data_timeout_invalid_env_uses_default(monkeypatch) -> None:

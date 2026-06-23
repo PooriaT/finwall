@@ -18,6 +18,7 @@ from finwall.fundamentals import (
     build_fundamental_analysis_report,
     build_fundamental_data_provider,
 )
+from finwall.live_data_status import diagnostics_status
 from finwall.market_calendar import evaluate_us_trading_day
 from finwall.market_condition import classify_market_condition
 from finwall.market_data import (
@@ -300,7 +301,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Manual price in the format TICKER=PRICE",
     )
     snapshot.add_argument("--json", action="store_true")
-    snapshot.add_argument("--live-prices", action="store_true")
+    snapshot.add_argument(
+        "--live-prices",
+        action="store_true",
+        help="Fetch prices from the default live provider unless overridden.",
+    )
     snapshot.add_argument("--risk", action="store_true")
 
     recommendations = subparsers.add_parser("recommendations")
@@ -310,7 +315,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=[],
         help="Manual price in the format TICKER=PRICE",
     )
-    recommendations.add_argument("--live-prices", action="store_true")
+    recommendations.add_argument(
+        "--live-prices",
+        action="store_true",
+        help="Fetch prices from the default live provider unless overridden.",
+    )
     recommendations.add_argument("--json", action="store_true")
 
     evaluate_order = subparsers.add_parser("evaluate-order")
@@ -325,8 +334,17 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate_order.add_argument("--stop-price", type=parse_decimal)
     evaluate_order.add_argument("--target-price", type=parse_decimal)
     evaluate_order.add_argument("--currency", default="USD")
-    evaluate_order.add_argument("--price", action="append", default=[])
-    evaluate_order.add_argument("--live-prices", action="store_true")
+    evaluate_order.add_argument(
+        "--price",
+        action="append",
+        default=[],
+        help="Manual price in the format TICKER=PRICE; overrides fetched live prices.",
+    )
+    evaluate_order.add_argument(
+        "--live-prices",
+        action="store_true",
+        help="Fetch prices from the default live provider unless overridden.",
+    )
     evaluate_order.add_argument("--json", action="store_true")
 
     market_index = subparsers.add_parser("market-index")
@@ -345,7 +363,14 @@ def build_parser() -> argparse.ArgumentParser:
         default=[],
         help="Manual price in the format TICKER=PRICE",
     )
-    report.add_argument("--live-prices", action="store_true")
+    report.add_argument(
+        "--live-prices",
+        action="store_true",
+        help=(
+            "Use configured/default live provider; manual --price overrides "
+            "fetched values."
+        ),
+    )
     report.add_argument("--market-index", choices=sorted(INDEX_SYMBOL_MAP.keys()))
     report.add_argument("--include-nasdaq", action="store_true")
     report.add_argument("--market-condition-days", type=int, default=400)
@@ -369,7 +394,14 @@ def build_parser() -> argparse.ArgumentParser:
         default=[],
         help="Manual price in the format TICKER=PRICE",
     )
-    scheduled.add_argument("--live-prices", action="store_true")
+    scheduled.add_argument(
+        "--live-prices",
+        action="store_true",
+        help=(
+            "Use configured/default live provider; manual --price overrides "
+            "fetched values."
+        ),
+    )
     scheduled.add_argument("--market-index", choices=sorted(INDEX_SYMBOL_MAP.keys()))
     scheduled.add_argument("--include-nasdaq", action="store_true")
     scheduled.add_argument("--market-condition-days", type=int, default=400)
@@ -383,7 +415,10 @@ def build_parser() -> argparse.ArgumentParser:
     security_check = subparsers.add_parser("security-check")
     security_check.add_argument("--json", action="store_true")
 
-    market_data_check = subparsers.add_parser("market-data-check")
+    market_data_check = subparsers.add_parser(
+        "market-data-check",
+        description="Check default or overridden market-data provider.",
+    )
     market_data_check.add_argument("--ticker", default="AAPL")
     market_data_check.add_argument(
         "--historical-days",
@@ -852,13 +887,21 @@ def print_fundamental_summary_report(report) -> None:
 def print_market_data_diagnostics(result: MarketDataDiagnosticResult) -> None:
     titles = {
         "provider_configuration": "Provider configuration",
+        "yfinance_availability": "Yfinance availability",
         "latest_quote": "Latest quote",
         "historical_prices": "Historical prices",
     }
     print("Market data diagnostics")
     print(f"Provider: {result.provider}")
+    print(f"Effective provider: {result.effective_provider}")
+    if result.primary_provider is not None:
+        print(f"Primary provider: {result.primary_provider}")
+    if result.fallback_provider is not None:
+        print(f"Fallback provider: {result.fallback_provider}")
     print(f"Timeout: {result.timeout_seconds}s")
     print(f"Sample ticker: {result.sample_ticker}")
+    status = diagnostics_status(result)
+    print(f"Live data availability: {status.availability}")
     print("")
     for check in result.checks:
         status = "ok" if check.ok else "failed"
@@ -992,7 +1035,9 @@ def run(argv: list[str] | None = None) -> int:
             historical_days=args.historical_days,
         )
         if args.json:
-            print(json.dumps(result.as_dict(), indent=2))
+            payload = result.as_dict()
+            payload["live_data_status"] = diagnostics_status(result).as_dict()
+            print(json.dumps(payload, indent=2))
         else:
             print_market_data_diagnostics(result)
         return 0 if result.ok else 1
@@ -1200,7 +1245,7 @@ def run(argv: list[str] | None = None) -> int:
             report = replace(report, watchlist=())
         if args.watchlist_only and not args.holdings_only:
             report = replace(report, holdings=())
-        if settings.news_provider.strip().lower() != "static":
+        if settings.news_provider.strip().lower() not in {"static", "yfinance"}:
             report = replace(
                 report,
                 warnings=report.warnings
@@ -1236,7 +1281,7 @@ def run(argv: list[str] | None = None) -> int:
             report = replace(report, watchlist=())
         if args.watchlist_only and not args.holdings_only:
             report = replace(report, holdings=())
-        if settings.news_provider.strip().lower() != "static":
+        if settings.news_provider.strip().lower() not in {"static", "yfinance"}:
             report = replace(
                 report,
                 warnings=report.warnings

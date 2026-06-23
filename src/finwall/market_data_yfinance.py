@@ -119,7 +119,7 @@ def _load_yfinance() -> tuple[object | None, str | None]:
     except ImportError:
         return (
             None,
-            "yfinance is not installed; install the optional yfinance extra",
+            "yfinance is not installed; install project dependencies",
         )
 
 

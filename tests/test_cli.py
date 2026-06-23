@@ -1,3 +1,4 @@
+import importlib
 import json
 import sqlite3
 from decimal import Decimal
@@ -151,6 +152,8 @@ def test_set_risk_profile(tmp_path) -> None:
 def test_snapshot_live_prices_with_manual_override(
     tmp_path, monkeypatch, capsys
 ) -> None:
+    import finwall.config as config_module
+
     database = tmp_path / "finwall.db"
 
     run(["--database", str(database), "add-holding", "NVDA", "2", "100"])
@@ -163,7 +166,18 @@ def test_snapshot_live_prices_with_manual_override(
         }
     )
 
-    monkeypatch.setattr("finwall.cli.build_market_data_provider", lambda *_: provider)
+    provider_args = {}
+
+    def fake_build_provider(provider_name, timeout_seconds):
+        provider_args["provider_name"] = provider_name
+        provider_args["timeout_seconds"] = timeout_seconds
+        return provider
+
+    monkeypatch.delenv("FINWALL_MARKET_DATA_PROVIDER", raising=False)
+    monkeypatch.delenv("FINWALL_MARKET_DATA_TIMEOUT_SECONDS", raising=False)
+    reloaded_config = importlib.reload(config_module)
+    monkeypatch.setattr("finwall.cli.settings", reloaded_config.Settings())
+    monkeypatch.setattr("finwall.cli.build_market_data_provider", fake_build_provider)
 
     run(
         [
@@ -181,6 +195,33 @@ def test_snapshot_live_prices_with_manual_override(
     assert "Warning: unable to fetch price for PLTR: provider down" in out
     assert '"ticker": "NVDA"' in out
     assert '"current_price": "130.00"' in out
+    assert provider_args == {
+        "provider_name": "yfinance",
+        "timeout_seconds": 5.0,
+    }
+
+
+def test_live_price_help_describes_default_provider(capsys) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        run(["snapshot", "--help"])
+    assert exc_info.value.code == 0
+    snapshot_help = capsys.readouterr().out
+    assert "Fetch prices from the default live provider unless" in snapshot_help
+    assert "overridden." in snapshot_help
+
+    with pytest.raises(SystemExit) as exc_info:
+        run(["report", "--help"])
+    assert exc_info.value.code == 0
+    report_help = capsys.readouterr().out
+    assert "Use configured/default live provider" in report_help
+    assert "manual --price" in report_help
+    assert "overrides fetched values" in report_help
+
+    with pytest.raises(SystemExit) as exc_info:
+        run(["market-data-check", "--help"])
+    assert exc_info.value.code == 0
+    diagnostics_help = capsys.readouterr().out
+    assert "Check default or overridden market-data provider." in diagnostics_help
 
 
 def test_market_index_command_with_mock_provider(tmp_path, monkeypatch, capsys) -> None:
@@ -382,13 +423,29 @@ def test_report_json_output(tmp_path, capsys) -> None:
 
 
 def test_report_live_prices_and_market_index(tmp_path, monkeypatch, capsys) -> None:
+    import finwall.config as config_module
+
     database = tmp_path / "finwall.db"
     run(["--database", str(database), "add-holding", "NVDA", "1", "100"])
     provider = StaticMarketDataProvider(
         prices={"NVDA": MarketPrice("NVDA", Decimal("120"), "USD", "static", True)},
         index_quotes={"SP500": IndexQuote("SP500", Decimal("5050.50"), "static", True)},
     )
-    monkeypatch.setattr("finwall.cli.build_market_data_provider", lambda *_: provider)
+    provider_args = {}
+
+    def fake_build_provider(provider_name, timeout_seconds):
+        provider_args["provider_name"] = provider_name
+        provider_args["timeout_seconds"] = timeout_seconds
+        return provider
+
+    monkeypatch.delenv("FINWALL_MARKET_DATA_PROVIDER", raising=False)
+    monkeypatch.delenv("FINWALL_MARKET_DATA_TIMEOUT_SECONDS", raising=False)
+    reloaded_config = importlib.reload(config_module)
+    monkeypatch.setattr("finwall.cli.settings", reloaded_config.Settings())
+    monkeypatch.setattr(
+        "finwall.report_pipeline.build_market_data_provider",
+        fake_build_provider,
+    )
     run(
         [
             "--database",
@@ -402,6 +459,10 @@ def test_report_live_prices_and_market_index(tmp_path, monkeypatch, capsys) -> N
     )
     out = capsys.readouterr().out
     assert '"status": "insufficient_data"' in out
+    assert provider_args == {
+        "provider_name": "yfinance",
+        "timeout_seconds": 5.0,
+    }
 
 
 def test_report_market_condition_uses_extended_lookback(tmp_path, monkeypatch) -> None:
@@ -692,6 +753,82 @@ def test_news_summary_text_json_and_filters(tmp_path, monkeypatch, capsys) -> No
     assert "Watchlist:" not in capsys.readouterr().out
     run(["--database", str(database), "news-summary", "--watchlist-only"])
     assert "Holdings:" not in capsys.readouterr().out
+
+
+def test_news_json_with_yfinance_provider(monkeypatch, tmp_path, capsys) -> None:
+    from dataclasses import replace
+
+    from finwall.cli import settings
+    from finwall.news import NewsArticle, NewsProviderResult, NewsTopicType
+
+    database = tmp_path / "finwall.db"
+    run(["--database", str(database), "add-holding", "NVDA", "1", "100"])
+
+    class FakeLiveProvider:
+        def get_company_news(self, ticker: str, limit: int):
+            return NewsProviderResult(
+                NewsTopicType.TICKER,
+                ticker,
+                (
+                    NewsArticle(
+                        "Live headline",
+                        "Reuters",
+                        "https://example.com/live",
+                        None,
+                        NewsTopicType.TICKER,
+                        ticker,
+                        ticker,
+                        None,
+                    ),
+                ),
+                "yfinance",
+                True,
+            )
+
+        def get_market_news(self, topic: str, limit: int):
+            return NewsProviderResult(
+                NewsTopicType.MARKET, topic, (), "yfinance", False, "unsupported"
+            )
+
+        def get_sector_news(self, sector: str, limit: int):
+            return NewsProviderResult(
+                NewsTopicType.SECTOR, sector, (), "yfinance", False, "unsupported"
+            )
+
+    monkeypatch.setattr(
+        "finwall.cli.build_news_data_provider", lambda *_: FakeLiveProvider()
+    )
+    monkeypatch.setattr(
+        "finwall.cli.settings", replace(settings, news_provider="yfinance")
+    )
+
+    run(
+        [
+            "--database",
+            str(database),
+            "news",
+            "--json",
+            "--include-market",
+            "--include-sectors",
+        ]
+    )
+    out = capsys.readouterr().out
+    assert '"source": "yfinance"' in out
+    assert "unsupported news provider" not in out
+
+    run(
+        [
+            "--database",
+            str(database),
+            "news-summary",
+            "--json",
+            "--include-market",
+            "--include-sectors",
+        ]
+    )
+    out = capsys.readouterr().out
+    assert '"warnings"' in out
+    assert "unsupported news provider" not in out
 
 
 def test_news_summary_warns_on_unsupported_provider(
@@ -1377,9 +1514,66 @@ def test_market_data_check_text_output_with_mock_provider(
     assert code == 0
     assert "Market data diagnostics" in out
     assert "Provider: yahoo" in out
+    assert "Effective provider: yahoo" in out
     assert "Timeout: 1.5s" in out
     assert "[ok] Latest quote: MSFT price available from static" in out
     assert "[ok] Historical prices: 1 bars returned" in out
+
+
+def test_market_data_check_uses_default_yfinance_provider(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    import finwall.config as config_module
+
+    provider = StaticMarketDataProvider(
+        prices={
+            "AAPL": MarketPrice("AAPL", Decimal("190.10"), "USD", "static", True),
+        },
+        historical_prices={
+            "AAPL": (
+                HistoricalPriceBar("AAPL", "2026-01-01", Decimal("188"), 100, "static"),
+            ),
+        },
+    )
+    provider_args = {}
+
+    def fake_build_provider(provider_name, timeout_seconds):
+        provider_args["provider_name"] = provider_name
+        provider_args["timeout_seconds"] = timeout_seconds
+        return provider
+
+    monkeypatch.setattr(
+        "finwall.market_data_diagnostics.build_market_data_provider",
+        fake_build_provider,
+    )
+    monkeypatch.setattr(
+        "finwall.market_data_diagnostics._is_yfinance_available",
+        lambda: True,
+    )
+    monkeypatch.delenv("FINWALL_MARKET_DATA_PROVIDER", raising=False)
+    monkeypatch.delenv("FINWALL_MARKET_DATA_TIMEOUT_SECONDS", raising=False)
+    reloaded_config = importlib.reload(config_module)
+    monkeypatch.setattr("finwall.cli.settings", reloaded_config.Settings())
+
+    code = run(
+        [
+            "--database",
+            str(tmp_path / "unused.db"),
+            "market-data-check",
+            "--json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert code == 0
+    assert payload["provider"] == "yfinance"
+    assert payload["effective_provider"] == "yfinance"
+    assert payload["checks"][1]["name"] == "yfinance_availability"
+    assert payload["checks"][1]["details"]["required"] is True
+    assert provider_args == {
+        "provider_name": "yfinance",
+        "timeout_seconds": 5.0,
+    }
 
 
 def test_market_data_check_json_output_reports_failures(
@@ -1409,11 +1603,12 @@ def test_market_data_check_json_output_reports_failures(
     assert code == 1
     assert payload["ok"] is False
     assert payload["provider"] == "static"
+    assert payload["effective_provider"] == "static"
     assert payload["sample_ticker"] == "AAPL"
-    assert payload["checks"][1]["name"] == "latest_quote"
-    assert payload["checks"][1]["details"]["safe_error"] == "price not configured"
+    assert payload["checks"][2]["name"] == "latest_quote"
+    assert payload["checks"][2]["details"]["safe_error"] == "price not configured"
     assert (
-        payload["checks"][2]["details"]["safe_message"] == "no historical bars returned"
+        payload["checks"][3]["details"]["safe_message"] == "no historical bars returned"
     )
 
 
@@ -1457,3 +1652,97 @@ def test_market_data_check_does_not_initialize_store(
 
     assert code == 0
     assert payload["ok"] is True
+
+
+def test_fundamentals_json_uses_live_provider_when_configured(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    from finwall.fundamentals import (
+        CompanyProfile,
+        FundamentalMetric,
+        FundamentalSnapshot,
+    )
+
+    database = tmp_path / "finwall.db"
+    run(["--database", str(database), "add-watchlist", "LIVE"])
+
+    class LiveProvider:
+        def get_fundamentals(self, ticker: str):
+            return FundamentalSnapshot(
+                ticker=ticker,
+                source="yfinance",
+                data_status="partial",
+                profile=CompanyProfile(
+                    ticker, "Live Corp", None, None, None, None, "yfinance", True
+                ),
+                revenue_growth=FundamentalMetric(
+                    "revenue_growth", "10%", True, "yfinance"
+                ),
+                earnings_growth=FundamentalMetric(
+                    "earnings_growth", None, False, "yfinance"
+                ),
+                profitability=(),
+                debt=(),
+                valuation=(),
+                warnings=(),
+            )
+
+    seen = {}
+
+    def fake_builder(provider_name, timeout_seconds):
+        seen["provider_name"] = provider_name
+        return LiveProvider()
+
+    monkeypatch.setattr("finwall.cli.build_fundamental_data_provider", fake_builder)
+
+    run(["--database", str(database), "fundamentals", "--json"])
+    out = capsys.readouterr().out
+
+    assert seen["provider_name"] == "yfinance"
+    assert '"source": "yfinance"' in out
+    assert '"company_name": "Live Corp"' in out
+
+
+def test_fundamentals_summary_json_handles_partial_live_snapshot(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    from finwall.fundamentals import (
+        CompanyProfile,
+        FundamentalMetric,
+        FundamentalSnapshot,
+    )
+
+    database = tmp_path / "finwall.db"
+    run(["--database", str(database), "add-watchlist", "PART"])
+
+    class PartialProvider:
+        def get_fundamentals(self, ticker: str):
+            return FundamentalSnapshot(
+                ticker=ticker,
+                source="yfinance",
+                data_status="partial",
+                profile=CompanyProfile(
+                    ticker, "Partial Corp", None, None, None, None, "yfinance", True
+                ),
+                revenue_growth=FundamentalMetric(
+                    "revenue_growth", None, False, "yfinance"
+                ),
+                earnings_growth=FundamentalMetric(
+                    "earnings_growth", None, False, "yfinance"
+                ),
+                profitability=(),
+                debt=(),
+                valuation=(),
+                warnings=("partial live fundamentals",),
+            )
+
+    monkeypatch.setattr(
+        "finwall.cli.build_fundamental_data_provider", lambda *_: PartialProvider()
+    )
+
+    run(["--database", str(database), "fundamentals-summary", "--json"])
+    out = capsys.readouterr().out
+
+    assert '"ticker": "PART"' in out
+    assert '"data_status": "partial"' in out
+    assert "revenue_growth" in out

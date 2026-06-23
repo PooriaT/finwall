@@ -234,10 +234,14 @@ def _trim_result(result: NewsProviderResult, limit: int) -> NewsProviderResult:
 def build_news_data_provider(
     provider_name: str, timeout_seconds: float
 ) -> NewsDataProvider:
-    del timeout_seconds
-    if provider_name.strip().lower() != "static":
-        return StaticNewsDataProvider(source=f"static-fallback:{provider_name}")
-    return StaticNewsDataProvider()
+    normalized_provider = provider_name.strip().lower()
+    if normalized_provider == "yfinance":
+        from finwall.news_yfinance import YFinanceNewsDataProvider
+
+        return YFinanceNewsDataProvider(timeout_seconds)
+    if normalized_provider == "static":
+        return StaticNewsDataProvider()
+    return StaticNewsDataProvider(source=f"static-fallback:{provider_name}")
 
 
 def _enrich_articles(

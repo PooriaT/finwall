@@ -41,6 +41,8 @@ poetry run finwall --database finwall.db set-risk moderate --notes "Example prof
 
 ## Analysis and reporting
 
+Live-price workflows use the default `yfinance` market-data provider unless `FINWALL_MARKET_DATA_PROVIDER` is set to `yahoo` or explicit `static`. Manual `--price TICKER=PRICE` values remain available and override fetched live prices where both are supplied.
+
 ```bash
 poetry run finwall --database finwall.db snapshot --price NVDA=120
 poetry run finwall --database finwall.db snapshot --live-prices --risk --json
@@ -48,6 +50,10 @@ poetry run finwall --database finwall.db evaluate-order NVDA buy limit --entry-p
 poetry run finwall --database finwall.db recommendations --live-prices --json
 poetry run finwall --database finwall.db report --live-prices --market-index SP500 --compare --save-run
 ```
+
+Fundamentals commands use the default `yfinance` fundamentals provider unless `FINWALL_FUNDAMENTAL_DATA_PROVIDER=static` is set. Live fundamentals are partial decision-support context only; they may be incomplete, stale, unavailable, or provider-dependent, and they do not change recommendation scoring unless integrated by a separate rule set.
+
+News commands use the default `yfinance` news provider unless `FINWALL_NEWS_PROVIDER=static` is set. `yfinance` supports ticker/company news when available; market and sector topics are safely reported as unavailable and commands continue. News source quality and recency are heuristic context only, not sentiment analysis, recommendation inputs, broker actions, or trading signals.
 
 Additional command examples:
 
@@ -69,3 +75,17 @@ poetry run finwall --database finwall.db scheduled-runs --limit 10 --json
 ```
 
 If API mode is enabled, audit events are available via API (`/api/v1/portfolio/audit`) and through the React frontend dashboard.
+
+
+## Live-data status contract
+
+Finwall exposes a shared `live_data_status` contract for frontend, API, CLI diagnostics, and report payloads. Status values are:
+
+- `live`: the evaluated data source returned the requested data for that surface.
+- `partial`: some requested items were available and some were missing.
+- `unavailable`: the evaluated source could not provide usable data.
+- `static`: the configured source is static/sample/manual fallback data rather than a live provider.
+- `manual`: user-supplied values were used instead of provider fetches.
+- `unknown`: only configuration is known or the domain has not been evaluated.
+
+Provider status is decision-support metadata only. It is not a guarantee that data is real-time, complete, broker-grade, or suitable for trading automation. The contract does not add caching, new providers, broker integration, or automatic trading.

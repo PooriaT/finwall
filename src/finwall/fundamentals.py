@@ -103,9 +103,11 @@ class StaticFundamentalDataProvider:
 def build_fundamental_data_provider(
     provider_name: str, timeout_seconds: float
 ) -> FundamentalDataProvider:
-    del timeout_seconds
-    if provider_name.strip().lower() != "static":
-        return StaticFundamentalDataProvider()
+    normalized_provider = provider_name.strip().lower()
+    if normalized_provider == "yfinance":
+        from finwall.fundamentals_yfinance import YFinanceFundamentalDataProvider
+
+        return YFinanceFundamentalDataProvider(timeout_seconds=timeout_seconds)
     return StaticFundamentalDataProvider()
 
 

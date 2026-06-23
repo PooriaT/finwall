@@ -62,7 +62,7 @@ Future portfolio mutation UI should be built in React against explicit backend A
 
 The analysis endpoints return deterministic JSON payloads used by the React dashboard charts and available to API clients. They do not mutate portfolios, place broker orders, add analytics rules, or change storage schema.
 
-These endpoints reuse the existing portfolio snapshot, risk assessment, market-data provider selection, latest-price fetching, and report-history storage services. Values are decision-support data only. Payloads can be partial when prices are missing or a market data provider fails; missing prices are represented with status fields, `null` values where appropriate, warnings, and metadata instead of raw tracebacks.
+These endpoints reuse the existing portfolio snapshot, risk assessment, market-data provider selection, latest-price fetching, and report-history storage services. Values are decision-support data only. Finwall defaults to `yfinance` for live market prices, while `FINWALL_MARKET_DATA_PROVIDER` is only an override/debug selector for `yfinance`, `yahoo`, or explicit `static`. Payloads can be partial when prices are missing or a market data provider fails; missing prices are represented with status fields, `null` values where appropriate, warnings, and metadata instead of raw tracebacks.
 
 Use the optional `report_history_limit` query parameter to bound report history in chart payloads. The API defaults to `10` and caps requests at `50`.
 
@@ -82,3 +82,17 @@ This mode is intended for internal/self-managed operation. Do not treat it as en
 - No multi-user SaaS auth model.
 - No public SaaS hardening.
 - No guaranteed outcomes or financial advice.
+
+
+## Live-data status contract
+
+Finwall exposes a shared `live_data_status` contract for frontend, API, CLI diagnostics, and report payloads. Status values are:
+
+- `live`: the evaluated data source returned the requested data for that surface.
+- `partial`: some requested items were available and some were missing.
+- `unavailable`: the evaluated source could not provide usable data.
+- `static`: the configured source is static/sample/manual fallback data rather than a live provider.
+- `manual`: user-supplied values were used instead of provider fetches.
+- `unknown`: only configuration is known or the domain has not been evaluated.
+
+Provider status is decision-support metadata only. It is not a guarantee that data is real-time, complete, broker-grade, or suitable for trading automation. The contract does not add caching, new providers, broker integration, or automatic trading.
