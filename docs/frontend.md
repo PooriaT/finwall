@@ -161,8 +161,10 @@ portfolio tables; if analysis or audit reads fail, the portfolio tables remain
 visible with targeted error messages for those sections.
 
 Missing or partial live data is displayed as status and warnings in the UI. The
-backend remains the source of deterministic portfolio state, finance logic,
-risk checks, and market-data/provider decisions.
+provider status contract and caveats are centralized in the
+[live-data provider reference](live-data-providers.md). The backend remains the
+source of deterministic portfolio state, finance logic, risk checks, and
+market-data/provider decisions.
 
 ## Chart data flow
 
@@ -197,9 +199,11 @@ they are not broker-grade data or trading signals.
   `/api/v1/portfolio` is pending or blocked in the network tab. Restart the
   backend/frontend dev servers and confirm the Vite proxy target is reachable.
 - **Missing live data**: provider data can be unavailable, delayed, partial,
-  malformed, rate-limited, or blocked. Review the live-data status displayed in
-  the dashboard and see [Configuration](configuration.md#market-data) for
-  provider settings and diagnostics.
+  malformed, rate-limited, or blocked. See the
+  [live-data provider reference](live-data-providers.md), review the live-data
+  status displayed in the dashboard, and see
+  [Configuration](configuration.md#market-data) for provider settings and
+  diagnostics.
 - **Stale OpenAPI client**: run `cd apps/web && npm run openapi:check`. If it
   reports diffs, commit the regenerated schema and TypeScript files with the
   backend API change.
