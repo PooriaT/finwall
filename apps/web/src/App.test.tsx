@@ -724,6 +724,46 @@ describe("App", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("preserves complete legacy price completeness fallback", async () => {
+    const analysis: Record<string, unknown> = structuredClone(analysisCharts);
+    delete analysis.live_data_status;
+    analysis.price_completeness_status = "complete";
+    mockFetch({ analysis });
+
+    renderAt("/dashboard");
+
+    const liveDataSection = await screen.findByRole("region", {
+      name: "Market data readiness",
+    });
+    expect(within(liveDataSection).getByText("Live")).toBeInTheDocument();
+    expect(
+      within(liveDataSection).getByText("Legacy chart metadata: Complete"),
+    ).toBeInTheDocument();
+    expect(
+      within(liveDataSection).queryByRole("button", { name: "Retry status check" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("preserves partial legacy price completeness fallback as retryable", async () => {
+    const analysis: Record<string, unknown> = structuredClone(analysisCharts);
+    delete analysis.live_data_status;
+    analysis.price_completeness_status = "partial";
+    mockFetch({ analysis });
+
+    renderAt("/dashboard");
+
+    const liveDataSection = await screen.findByRole("region", {
+      name: "Market data readiness",
+    });
+    expect(within(liveDataSection).getByText("Partial")).toBeInTheDocument();
+    expect(
+      within(liveDataSection).getByText("Legacy chart metadata: Partial"),
+    ).toBeInTheDocument();
+    expect(
+      within(liveDataSection).getByRole("button", { name: "Retry status check" }),
+    ).toBeInTheDocument();
+  });
+
   it("renders live-data provider details, fallback, warnings, and safe errors", async () => {
     const analysis = structuredClone(analysisCharts);
     analysis.data_warnings = ["AAPL price is delayed."];

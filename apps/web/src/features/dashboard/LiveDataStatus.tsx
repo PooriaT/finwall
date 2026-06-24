@@ -31,7 +31,10 @@ export function LiveDataStatus({
   isRetrying = false,
   onRetry,
 }: LiveDataStatusProps) {
-  const statuses = analysis.live_data_status ?? [];
+  const statuses =
+    analysis.live_data_status && analysis.live_data_status.length > 0
+      ? analysis.live_data_status
+      : [legacyPriceCompletenessStatus(analysis.price_completeness_status)];
   const seriesWarnings = Object.values(analysis.charts).flatMap(
     (series) => series.warnings ?? [],
   );
@@ -66,24 +69,7 @@ export function LiveDataStatus({
         or broker-grade data.
       </p>
       <div className="status-grid">
-        {statuses.length > 0 ? (
-          statuses.map((status) => <StatusCard key={status.domain} status={status} />)
-        ) : (
-          <StatusCard
-            status={{
-              availability: "unknown",
-              domain: "market_prices",
-              fallback_provider: null,
-              fallback_used: false,
-              last_attempted_at: "",
-              metadata: {},
-              provider: "Not configured",
-              source: "Legacy chart metadata",
-              safe_error_messages: [],
-              warnings: [],
-            }}
-          />
-        )}
+        {statuses.map((status) => <StatusCard key={status.domain} status={status} />)}
       </div>
       {warnings.length > 0 || safeErrorMessages.length > 0 ? (
         <div className="warning-banner" role="status">
@@ -181,6 +167,35 @@ function normalizeAvailability(availability: string | null | undefined) {
     return normalized;
   }
   return "unknown";
+}
+
+function legacyPriceCompletenessStatus(priceCompletenessStatus: string): LiveDataStatusItem {
+  return {
+    availability: legacyAvailability(priceCompletenessStatus),
+    domain: "market_prices",
+    fallback_provider: null,
+    fallback_used: false,
+    last_attempted_at: "",
+    metadata: {},
+    provider: "Not configured",
+    source: `Legacy chart metadata: ${formatLabel(priceCompletenessStatus)}`,
+    safe_error_messages: [],
+    warnings: [],
+  };
+}
+
+function legacyAvailability(priceCompletenessStatus: string) {
+  const normalized = priceCompletenessStatus.trim().toLowerCase();
+  if (normalized === "complete") {
+    return "live";
+  }
+  if (normalized === "partial") {
+    return "partial";
+  }
+  if (normalized === "unavailable" || normalized === "missing_prices") {
+    return "unavailable";
+  }
+  return normalizeAvailability(normalized);
 }
 
 function configuredValue(value: string | null | undefined) {
