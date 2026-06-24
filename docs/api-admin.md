@@ -21,7 +21,8 @@ If launching through CLI/API-enabled paths, also ensure `FINWALL_API_ENABLED=tru
 
 - Programmatic/internal API clients use `Authorization: Bearer <FINWALL_API_TOKEN>`.
 - The React frontend uses `POST /api/v1/auth/login` to exchange the local token for an HTTP-only `finwall_web_session` cookie.
-- Browser requests must use `credentials: include`; the token is not returned in JSON and must not be stored in browser-accessible storage.
+- Browser requests must use `credentials: include`; the token is not returned in JSON, but the `finwall_web_session` cookie carries it and must be treated as bearer-equivalent secret material.
+- Do not store the token in browser-accessible storage. Protect cookie jars, response headers, and proxy logs as secrets.
 
 This local/self-managed flow does not add OAuth, registration, password reset, RBAC, public SaaS auth, or multi-user accounts.
 
@@ -33,7 +34,7 @@ This local/self-managed flow does not add OAuth, registration, password reset, R
 - Portfolio analysis charts: `GET /api/v1/portfolio/analysis/*`
 - Portfolio audit list: `GET /api/v1/portfolio/audit`
 
-`GET /api/v1/auth/session` returns `401` when the frontend session cookie is missing or invalid. Successful login/logout responses only return authenticated state and do not include the configured token.
+`GET /api/v1/auth/session` returns `401` when the frontend session cookie is missing or invalid. Successful login/logout JSON response bodies only return authenticated state and do not include the configured token.
 
 ## Read and mutation split
 

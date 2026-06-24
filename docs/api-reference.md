@@ -29,9 +29,11 @@ Finwall has two authentication paths backed by the same configured
 The session cookie is set with `HttpOnly`, `SameSite=Lax`, `Path=/`, and
 `Secure` when `FINWALL_ENV=production`. Browser API requests must use
 `credentials: "include"` so the cookie is sent. The raw API token is not returned
-by login responses and must not be stored in `localStorage`, `sessionStorage`,
-URLs, logs, generated frontend configuration, or other browser-accessible
-storage.
+in the login JSON response body, but the `Set-Cookie` header stores the submitted
+token in the `finwall_web_session` cookie. Treat that cookie, browser cookie
+jars, response headers, and proxy logs as bearer-equivalent secret material. The
+token must not be stored in `localStorage`, `sessionStorage`, URLs, logs,
+generated frontend configuration, or other browser-accessible storage.
 
 Read endpoints needed by the React frontend accept either bearer auth or the
 browser session cookie. Portfolio mutation endpoints remain **bearer-token only**
@@ -59,7 +61,7 @@ and do not accept the frontend session cookie.
 
 | Method | Path | Purpose | Auth accepted | Request body | Query params | Response summary | Mutates state? | Frontend-used? |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `POST` | `/api/v1/auth/login` | Exchange the configured local API token for an HTTP-only browser session cookie. | Submitted token in JSON body. | `{ "token": "..." }`. | None. | `{ "authenticated": true }` and `Set-Cookie: finwall_web_session=...` on success. | Yes, browser cookie only | Yes |
+| `POST` | `/api/v1/auth/login` | Exchange the configured local API token for an HTTP-only browser session cookie. | Submitted token in JSON body. | `{ "token": "..." }`. | None. | `{ "authenticated": true }` and `Set-Cookie: finwall_web_session=...` on success; the JSON body omits the token, but the session cookie carries it. | Yes, browser cookie only | Yes |
 | `POST` | `/api/v1/auth/logout` | Clear the browser session cookie. | None required. | None. | None. | `{ "authenticated": false }` and an expired session cookie. | Yes, browser cookie only | Yes |
 | `GET` | `/api/v1/auth/session` | Check whether the browser session cookie is currently valid. | Valid `finwall_web_session` cookie only. | None. | None. | `{ "authenticated": true }`; missing/invalid sessions return `401`. | No | Yes |
 
