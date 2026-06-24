@@ -2,7 +2,7 @@
 
 > Status: **Supported primary** for CLI portfolio maintenance and deterministic report generation. Technical/fundamental/news/market-condition commands are **experimental/optional decision-support inputs** and should not be treated as prediction certainty or execution signals.
 
-This guide focuses on common command patterns. For full options, run `poetry run finwall <command> --help`.
+This guide remains workflow-focused and shows common command patterns. For full command arguments, flags, output modes, and live-data behavior, see the [CLI reference](cli-reference.md) or run `poetry run finwall <command> --help`.
 
 ## Portfolio maintenance
 
@@ -41,7 +41,7 @@ poetry run finwall --database finwall.db set-risk moderate --notes "Example prof
 
 ## Analysis and reporting
 
-Live-price workflows use the default `yfinance` market-data provider unless `FINWALL_MARKET_DATA_PROVIDER` is set to `yahoo` or explicit `static`. Manual `--price TICKER=PRICE` values remain available and override fetched live prices where both are supplied.
+Live-price workflows use the default `yfinance` market-data provider unless `FINWALL_MARKET_DATA_PROVIDER` is used as an override/debug selector for `yahoo` or explicit `static`. Manual `--price TICKER=PRICE` values remain available and override fetched live prices where both are supplied. See the [live-data provider reference](live-data-providers.md).
 
 ```bash
 poetry run finwall --database finwall.db snapshot --price NVDA=120
@@ -51,9 +51,7 @@ poetry run finwall --database finwall.db recommendations --live-prices --json
 poetry run finwall --database finwall.db report --live-prices --market-index SP500 --compare --save-run
 ```
 
-Fundamentals commands use the default `yfinance` fundamentals provider unless `FINWALL_FUNDAMENTAL_DATA_PROVIDER=static` is set. Live fundamentals are partial decision-support context only; they may be incomplete, stale, unavailable, or provider-dependent, and they do not change recommendation scoring unless integrated by a separate rule set.
-
-News commands use the default `yfinance` news provider unless `FINWALL_NEWS_PROVIDER=static` is set. `yfinance` supports ticker/company news when available; market and sector topics are safely reported as unavailable and commands continue. News source quality and recency are heuristic context only, not sentiment analysis, recommendation inputs, broker actions, or trading signals.
+Fundamentals and news commands use the default `yfinance` providers unless their provider environment variables are set to `static` for fixtures/unavailable static behavior. Fundamentals and news are partial decision-support context only; see the [live-data provider reference](live-data-providers.md) for provider support, status meanings, and limitations.
 
 Additional command examples:
 

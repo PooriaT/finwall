@@ -28,34 +28,23 @@ Finwall reads runtime settings from environment variables. `.env.example` provid
 
 ## Market data
 
-Market/fundamentals/news inputs are decision-support enrichments. They can be stale, partial, or unavailable depending on provider behavior and runtime conditions.
-
-| Variable | Purpose | Default | Required (local-only) | Required (scheduled/email/API) | Example |
-|---|---|---|---|---|---|
+| Variable | Description | Default | Required? | Used by | Example |
+| --- | --- | --- | --- | --- | --- |
 | `FINWALL_MARKET_DATA_PROVIDER` | Market quote provider override/debug selector. Supported values: `yfinance`, `yahoo`, `static`. Unknown values use safe static provider behavior. | `yfinance` | No | Optional | `yfinance` |
-| `FINWALL_MARKET_DATA_TIMEOUT_SECONDS` | Quote-provider timeout in seconds. | `5` | No | Optional | `5` |
+| `FINWALL_MARKET_DATA_TIMEOUT_SECONDS` | Per-request timeout for live market-data providers. Invalid, empty, or non-positive values fall back to 5 seconds. | `5.0` | No | Optional | `3` |
 
-Finwall defaults to `yfinance` for live market prices. Users do not need to set `FINWALL_MARKET_DATA_PROVIDER` for normal `--live-prices`, `technicals`, `market-index`, or `market-condition` workflows.
+Finwall defaults to `yfinance` for live market prices, with a direct Yahoo public-endpoint fallback for the default market-data provider. Normal users do not need to set `FINWALL_MARKET_DATA_PROVIDER`; use it only to debug or force `yfinance`, `yahoo`, or explicit `static` behavior. See the [live-data provider reference](live-data-providers.md) for the provider matrix, fallback behavior, status meanings, caveats, and static/manual override guidance.
 
-`yfinance` is the normal runtime provider behind Finwall's market-data provider interface. The `yfinance` project is unofficial and is not affiliated with, endorsed by, or vetted by Yahoo. Its project documentation points users to Yahoo terms for usage rights. Treat `yfinance` data as decision-support only: it may be unavailable, delayed, stale, partial, malformed, rate-limited, or blocked, and it is not guaranteed production, institutional, real-time, or broker-grade market data. It does not add broker integration, automatic trading, or order execution. Missing installs, provider exceptions, missing latest prices, and malformed historical responses are reported as unavailable results rather than raw third-party exceptions.
-
-`yahoo` uses Yahoo public endpoints through Python's standard library and remains available as a direct public-endpoint provider for local/self-managed decision-support workflows, including live portfolio prices, market index quotes, technicals, and market-condition inputs.
-
-`static` uses only manually supplied prices, such as `--price NVDA=120`, and is intended for tests, demos, and explicit manual override workflows. Manual `--price TICKER=PRICE` values still override fetched live prices in existing CLI flows.
-
-Examples:
+Diagnostics:
 
 ```bash
-poetry run finwall --database finwall.db snapshot --live-prices
-poetry run finwall --database finwall.db report --live-prices
-poetry run finwall --database finwall.db technicals
-poetry run finwall --database finwall.db market-index SP500
 poetry run finwall market-data-check --ticker AAPL --historical-days 30
+poetry run finwall market-data-check --json
 FINWALL_MARKET_DATA_PROVIDER=yahoo poetry run finwall market-data-check --json
 FINWALL_MARKET_DATA_PROVIDER=static poetry run finwall --database finwall.db snapshot --price NVDA=120
 ```
 
-Run `market-data-check` to diagnose default live-provider availability, provider overrides, or local connectivity. It reports the selected provider, effective provider, timeout, yfinance availability where practical, a sample latest quote check, and a sample historical-price check without initializing portfolio storage.
+Run `market-data-check` to diagnose default live-provider availability, provider overrides, or local connectivity. It reports provider selection, effective provider, timeout, yfinance availability where practical, a sample latest quote check, a sample historical-price check, and fallback/live-data status where available. Diagnostic examples are network-dependent and should not be required to pass in CI.
 
 ## Fundamentals
 
@@ -64,7 +53,7 @@ Run `market-data-check` to diagnose default live-provider availability, provider
 | `FINWALL_FUNDAMENTAL_DATA_PROVIDER` | Fundamentals provider selector. Supported values: `yfinance`, `static`. Unknown values use safe static provider behavior. | `yfinance` | No | Optional | `yfinance` |
 | `FINWALL_FUNDAMENTAL_DATA_TIMEOUT_SECONDS` | Fundamentals timeout. | `5` | No | Optional | `5` |
 
-Finwall defaults to a small `yfinance` fundamentals provider. It reads company profile fields and a limited set of growth, profitability, debt/liquidity, and valuation metrics when available. These fundamentals are live, partial decision-support inputs and may be incomplete, stale, unavailable, malformed, rate-limited, or provider-dependent. Missing or unparseable values are reported as unavailable metrics rather than raw provider errors or tracebacks.
+Finwall defaults to a small `yfinance` fundamentals provider. Normal users do not need to set this variable; use `static` for fixtures or unavailable static behavior. See the [live-data provider reference](live-data-providers.md) for supported fields, limitations, and status guidance.
 
 Fundamentals are not authoritative recommendation drivers unless explicitly integrated into deterministic rules elsewhere. The static fundamentals provider remains available for tests, demos, and explicit manual overrides. Neither provider supplies financial advice, paid-provider coverage, broker-grade guarantees, full financial statement modeling, broker integration, caching, or automatic trading.
 
@@ -77,9 +66,7 @@ Fundamentals are not authoritative recommendation drivers unless explicitly inte
 | `FINWALL_NEWS_MAX_ARTICLES_PER_TOPIC` | Max news items per topic. | `5` | No | Optional | `5` |
 | `FINWALL_NEWS_MAX_AGE_HOURS` | Max age filter for news freshness window. | `72` | No | Optional | `72` |
 
-Finwall defaults to live `yfinance` ticker/company news when provider data is available. Market-wide and sector news are reported as safely unavailable for `yfinance` rather than synthesized. News is decision-support context only: source quality and recency are heuristic classifications, news is not sentiment analysis unless implemented separately, and news is not integrated into recommendations or automated actions.
-
-`yfinance` news availability may be incomplete, stale, malformed, blocked, rate-limited, or provider-dependent. Missing optional fields are normalized where possible, malformed items are skipped, and provider failures are returned as unavailable results without raw tracebacks. The `static` provider remains available for tests, demos, and manual fixtures.
+Finwall defaults to live `yfinance` ticker/company news when provider data is available. Normal users do not need to set this variable; use `static` for fixtures or unavailable static behavior. See the [live-data provider reference](live-data-providers.md) for the news provider contract, caveats, and static/manual guidance.
 
 ## Narrative
 
