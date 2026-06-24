@@ -5,6 +5,7 @@ import type {
   Portfolio,
   PortfolioAudit,
   PortfolioAuditQuery,
+  SetupHealth,
 } from "./types";
 
 const DEFAULT_API_BASE_URL = "/api";
@@ -102,6 +103,10 @@ export function getPortfolioAudit(
   query: PortfolioAuditQuery = {},
 ): Promise<PortfolioAudit> {
   return requestJson<PortfolioAudit>("/v1/portfolio/audit", query);
+}
+
+export function getSetupHealth(): Promise<SetupHealth> {
+  return requestJson<SetupHealth>("/v1/setup/health");
 }
 
 export function login(token: string): Promise<AuthSession> {

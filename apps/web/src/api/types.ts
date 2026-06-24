@@ -32,6 +32,10 @@ export type PortfolioAudit = JsonResponse<
   operations["read_portfolio_audit_api_v1_portfolio_audit_get"]
 >;
 
+export type SetupHealth = JsonResponse<
+  operations["setup_health_api_v1_setup_health_get"]
+>;
+
 export type AnalysisChartsQuery = QueryParams<
   operations["portfolio_analysis_charts_api_v1_portfolio_analysis_charts_get"]
 >;

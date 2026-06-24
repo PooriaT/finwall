@@ -3,6 +3,7 @@ import {
   getAnalysisCharts,
   getPortfolio,
   getPortfolioAudit,
+  getSetupHealth,
   getSession,
   login,
   logout,
@@ -54,6 +55,23 @@ describe("API client", () => {
       "/api/v1/portfolio/analysis/charts?report_history_limit=5",
     );
     expect(fetchMock.mock.calls[1][0]).toBe("/api/v1/portfolio/audit?limit=25");
+  });
+
+  it("fetches setup health with cookie credentials and no API token header", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ backend: { status: "ok" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getSetupHealth()).resolves.toEqual({ backend: { status: "ok" } });
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/v1/setup/health", {
+      credentials: "include",
+      headers: {
+        Accept: "application/json",
+      },
+    });
+    expect(fetchMock.mock.calls[0][1]?.headers).not.toHaveProperty("Authorization");
   });
 
   it("logs in with a JSON body and cookie credentials", async () => {

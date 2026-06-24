@@ -14,6 +14,7 @@ import { OnboardingChecklist } from "../features/dashboard/OnboardingChecklist";
 import { useDashboardData } from "../features/dashboard/useDashboardData";
 import { WatchlistTable } from "../features/dashboard/WatchlistTable";
 import { DashboardCharts } from "../features/charts/DashboardCharts";
+import { SetupHealthPanel } from "../features/setup/SetupHealthPanel";
 
 type DashboardPageProps = {
   authError?: string | null;
@@ -86,6 +87,8 @@ export default function DashboardPage({ authError, onLogout }: DashboardPageProp
         portfolio={portfolio}
         analysis={analysisChartsQuery.data}
       />
+
+      <SetupHealthPanel />
 
       <DashboardSummary
         portfolio={portfolio}

@@ -446,6 +446,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/setup/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Setup Health */
+        get: operations["setup_health_api_v1_setup_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -738,6 +755,42 @@ export interface components {
             level: components["schemas"]["RiskLevel"];
             /** Notes */
             notes?: string | null;
+        };
+        /** SetupHealthBackendResponse */
+        SetupHealthBackendResponse: {
+            /** Status */
+            status: string;
+        };
+        /** SetupHealthDatabaseResponse */
+        SetupHealthDatabaseResponse: {
+            /** Status */
+            status: string;
+            /** Store */
+            store: string;
+        };
+        /** SetupHealthDiagnosticsResponse */
+        SetupHealthDiagnosticsResponse: {
+            /** Available */
+            available: boolean;
+            /** Next Step */
+            next_step?: string | null;
+            /** Summary */
+            summary: string;
+        };
+        /** SetupHealthResponse */
+        SetupHealthResponse: {
+            backend: components["schemas"]["SetupHealthBackendResponse"];
+            database: components["schemas"]["SetupHealthDatabaseResponse"];
+            diagnostics: components["schemas"]["SetupHealthDiagnosticsResponse"];
+            live_data: components["schemas"]["LiveDataStatusListResponse"];
+            session: components["schemas"]["SetupHealthSessionResponse"];
+            /** Warnings */
+            warnings?: string[];
+        };
+        /** SetupHealthSessionResponse */
+        SetupHealthSessionResponse: {
+            /** Authenticated */
+            authenticated: boolean;
         };
         /** TimelineRequest */
         TimelineRequest: {
@@ -1691,6 +1744,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    setup_health_api_v1_setup_health_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                finwall_web_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetupHealthResponse"];
                 };
             };
             /** @description Validation Error */

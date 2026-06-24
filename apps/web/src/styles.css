@@ -575,6 +575,59 @@ a {
   margin-top: 0;
 }
 
+.setup-health-panel .section-heading .retry-button {
+  margin-top: 0;
+}
+
+.setup-health-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+  margin-top: 0.85rem;
+}
+
+.setup-health-detail-grid > div {
+  min-width: 0;
+  border: 1px solid #d8e2dd;
+  border-radius: 8px;
+  padding: 0.85rem;
+  background: #fbfcfc;
+}
+
+.setup-health-detail-grid h3 {
+  margin: 0 0 0.65rem;
+  color: #1e3148;
+  font-size: 1rem;
+}
+
+.setup-live-summary {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.setup-live-summary li {
+  display: grid;
+  grid-template-columns: minmax(110px, 1fr) auto minmax(90px, 0.5fr);
+  gap: 0.55rem;
+  align-items: center;
+  min-width: 0;
+}
+
+.setup-live-summary span:first-child,
+.setup-live-summary small {
+  min-width: 0;
+  color: #5a6a78;
+  font-weight: 750;
+}
+
+.setup-live-summary small {
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
 .retry-button:hover,
 .retry-button:focus-visible {
   border-color: #143529;
@@ -774,8 +827,18 @@ tbody th {
   .detail-grid,
   .status-grid,
   .dashboard-grid,
+  .setup-health-detail-grid,
   .chart-grid {
     grid-template-columns: 1fr;
+  }
+
+  .setup-live-summary li {
+    grid-template-columns: 1fr;
+    gap: 0.25rem;
+  }
+
+  .setup-live-summary small {
+    text-align: left;
   }
 
   .secondary-button {
