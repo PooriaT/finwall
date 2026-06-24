@@ -170,6 +170,19 @@ const analysisCharts = {
   },
 };
 
+function analysisWithMarketAvailability(availability: string) {
+  const analysis = structuredClone(analysisCharts);
+  analysis.live_data_status = [
+    {
+      ...analysis.live_data_status[0],
+      availability,
+      provider: "test-provider",
+      source: "test-source",
+    },
+  ];
+  return analysis;
+}
+
 const auditPreview = {
   events: [
     {
@@ -189,6 +202,12 @@ const auditPreview = {
     },
   ],
 };
+
+function getChecklistItem(title: string) {
+  const item = screen.getByText(title).closest("li");
+  expect(item).toBeInTheDocument();
+  return item as HTMLElement;
+}
 
 type MockFetchOptions = {
   authenticated?: boolean;
@@ -370,6 +389,132 @@ describe("App", () => {
     expect(screen.getByText("No holdings available.")).toBeInTheDocument();
     expect(screen.getByText("No cash balances available.")).toBeInTheDocument();
   });
+
+  it("shows onboarding checklist guidance for an empty portfolio", async () => {
+    const storageGetItem = vi.spyOn(Storage.prototype, "getItem");
+    const storageSetItem = vi.spyOn(Storage.prototype, "setItem");
+    const fetchMock = mockFetch({ portfolio: emptyPortfolio, audit: { events: [] } });
+
+    renderAt("/dashboard");
+
+    expect(
+      await screen.findByRole("heading", { name: "Set up your dashboard" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Onboarding progress")).toHaveTextContent(
+      "0 of 6 complete",
+    );
+    expect(
+      screen.getByText("Add at least one cash balance so Finwall can show available cash."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Add at least one holding so dashboard valuation and allocation can become useful.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Set a risk profile so warnings and recommendation context can reflect your tolerance.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Set a goal so reports have a target context."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Add a timeline so reports can understand your target date."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Add a holding first, then use live-data status to confirm price availability.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("poetry run finwall --database finwall.db add-cash USD 1000"),
+    ).toBeInTheDocument();
+    expect(storageGetItem).not.toHaveBeenCalled();
+    expect(storageSetItem).not.toHaveBeenCalled();
+    expect(
+      fetchMock.mock.calls.every((call) => {
+        const init = call[1];
+        return !init?.method || init.method === "GET";
+      }),
+    ).toBe(true);
+  });
+
+  it("marks portfolio setup onboarding items complete when data exists", async () => {
+    mockFetch();
+
+    renderAt("/dashboard");
+
+    expect(
+      await screen.findByRole("heading", { name: "Set up your dashboard" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Onboarding progress")).toHaveTextContent(
+      "6 of 6 complete",
+    );
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Setup checklist complete.",
+    );
+    expect(getChecklistItem("Add cash")).toHaveTextContent(
+      "At least one cash balance is available.",
+    );
+    expect(getChecklistItem("Add first holding")).toHaveTextContent(
+      "At least one holding is available.",
+    );
+    expect(getChecklistItem("Set risk profile")).toHaveTextContent(
+      "Risk profile context is available.",
+    );
+    expect(getChecklistItem("Set goal")).toHaveTextContent(
+      "At least one goal is available.",
+    );
+    expect(getChecklistItem("Set timeline")).toHaveTextContent(
+      "The primary goal includes a timeline start date.",
+    );
+    expect(getChecklistItem("Verify live market data")).toHaveTextContent(
+      "Market prices are Live for dashboard analysis.",
+    );
+  });
+
+  it("treats partial market price status as complete onboarding data", async () => {
+    mockFetch({ analysis: analysisWithMarketAvailability("partial") });
+
+    renderAt("/dashboard");
+
+    expect(
+      await screen.findByRole("heading", { name: "Set up your dashboard" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Onboarding progress")).toHaveTextContent(
+      "6 of 6 complete",
+    );
+    expect(getChecklistItem("Verify live market data")).toHaveTextContent(
+      "Market prices are Partial for dashboard analysis.",
+    );
+  });
+
+  it.each(["unavailable", "static", "manual", "unknown"])(
+    "marks %s market price status as incomplete onboarding data",
+    async (availability) => {
+      mockFetch({ analysis: analysisWithMarketAvailability(availability) });
+
+      renderAt("/dashboard");
+
+      expect(
+        await screen.findByRole("heading", { name: "Set up your dashboard" }),
+      ).toBeInTheDocument();
+      expect(screen.getByLabelText("Onboarding progress")).toHaveTextContent(
+        "5 of 6 complete",
+      );
+      expect(getChecklistItem("Verify live market data")).toHaveTextContent(
+        `Market price availability is ${availability.replace(/\b\w/g, (letter) =>
+          letter.toUpperCase(),
+        )}. Provider/source: test-provider / test-source.`,
+      );
+      expect(
+        screen.getByText(
+          "poetry run finwall market-data-check --ticker AAPL --historical-days 30 --json",
+        ),
+      ).toBeInTheDocument();
+    },
+  );
 
   it("renders portfolio summary and backend-owned dashboard sections", async () => {
     mockFetch();
