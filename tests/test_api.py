@@ -245,6 +245,57 @@ def test_web_session_endpoint_requires_valid_cookie(tmp_path):
     assert "secret" not in valid.text
 
 
+def test_setup_health_requires_auth(tmp_path):
+    client = build_client(tmp_path)
+
+    response = client.get("/api/v1/setup/health")
+
+    assert response.status_code == 401
+
+
+def test_setup_health_accepts_session_cookie_auth(tmp_path):
+    client = build_client(tmp_path)
+    login = client.post("/api/v1/auth/login", json={"token": "secret"})
+
+    response = client.get("/api/v1/setup/health")
+
+    assert login.status_code == 200
+    assert response.status_code == 200
+    body = response.json()
+    assert body["session"] == {"authenticated": True}
+    assert body["backend"] == {"status": "ok"}
+    assert body["database"] == {"status": "ok", "store": "sqlite"}
+    assert "secret" not in response.text
+    assert str(tmp_path) not in response.text
+
+
+def test_setup_health_accepts_bearer_auth_and_returns_sections(tmp_path):
+    client = build_client(tmp_path)
+
+    response = client.get("/api/v1/setup/health", headers=auth_headers())
+
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body) == {
+        "backend",
+        "session",
+        "database",
+        "live_data",
+        "diagnostics",
+        "warnings",
+    }
+    assert body["backend"]["status"] == "ok"
+    assert body["session"]["authenticated"] is True
+    assert body["database"]["status"] == "ok"
+    assert body["database"]["store"] == "sqlite"
+    assert len(body["live_data"]["statuses"]) == 4
+    assert body["diagnostics"]["available"] is False
+    assert body["diagnostics"]["summary"]
+    assert body["diagnostics"]["next_step"]
+    assert "secret" not in response.text
+    assert str(tmp_path) not in response.text
+
+
 def test_web_logout_clears_session_cookie(tmp_path):
     client = build_client(tmp_path)
     client.post("/api/v1/auth/login", json={"token": "secret"})

@@ -825,6 +825,114 @@
         "title": "RiskProfileResponse",
         "type": "object"
       },
+      "SetupHealthBackendResponse": {
+        "properties": {
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "SetupHealthBackendResponse",
+        "type": "object"
+      },
+      "SetupHealthDatabaseResponse": {
+        "properties": {
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "store": {
+            "title": "Store",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "store"
+        ],
+        "title": "SetupHealthDatabaseResponse",
+        "type": "object"
+      },
+      "SetupHealthDiagnosticsResponse": {
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "next_step": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Step"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "available",
+          "summary"
+        ],
+        "title": "SetupHealthDiagnosticsResponse",
+        "type": "object"
+      },
+      "SetupHealthResponse": {
+        "properties": {
+          "backend": {
+            "$ref": "#/components/schemas/SetupHealthBackendResponse"
+          },
+          "database": {
+            "$ref": "#/components/schemas/SetupHealthDatabaseResponse"
+          },
+          "diagnostics": {
+            "$ref": "#/components/schemas/SetupHealthDiagnosticsResponse"
+          },
+          "live_data": {
+            "$ref": "#/components/schemas/LiveDataStatusListResponse"
+          },
+          "session": {
+            "$ref": "#/components/schemas/SetupHealthSessionResponse"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "backend",
+          "session",
+          "database",
+          "live_data",
+          "diagnostics"
+        ],
+        "title": "SetupHealthResponse",
+        "type": "object"
+      },
+      "SetupHealthSessionResponse": {
+        "properties": {
+          "authenticated": {
+            "title": "Authenticated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "authenticated"
+        ],
+        "title": "SetupHealthSessionResponse",
+        "type": "object"
+      },
       "TimelineRequest": {
         "properties": {
           "start_date": {
@@ -2544,6 +2652,68 @@
           }
         },
         "summary": "Watchlist Remove"
+      }
+    },
+    "/api/v1/setup/health": {
+      "get": {
+        "operationId": "setup_health_api_v1_setup_health_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "finwall_web_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Finwall Web Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetupHealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Setup Health"
       }
     },
     "/health": {

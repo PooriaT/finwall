@@ -1,4 +1,5 @@
 import type { Portfolio } from "../../api/types";
+import { ActionableEmptyState } from "./ActionableEmptyState";
 import { formatLabel, formatNumber } from "./format";
 
 type ActiveOrdersTableProps = {
@@ -15,7 +16,11 @@ export function ActiveOrdersTable({ activeOrders }: ActiveOrdersTableProps) {
         </div>
       </div>
       {activeOrders.length === 0 ? (
-        <p className="table-empty">No active orders available.</p>
+        <ActionableEmptyState
+          title="No planned orders recorded"
+          message="Orders in Finwall are local planning records only; they are not broker orders."
+          nextStep="Use this section only when you want saved buy or sell plans to appear beside your holdings context."
+        />
       ) : (
         <div className="table-wrap">
           <table>

@@ -1,4 +1,5 @@
 import type { AnalysisCharts } from "../../api/types";
+import { ActionableEmptyState } from "./ActionableEmptyState";
 import { formatDateTime, formatLabel, formatText } from "./format";
 
 type LatestReportCardProps = {
@@ -26,7 +27,12 @@ export function LatestReportCard({ analysis }: LatestReportCardProps) {
         </div>
       </div>
       {!latestReport ? (
-        <p className="table-empty">No report history available.</p>
+        <ActionableEmptyState
+          title="No saved report history yet"
+          message="Saved report metadata will appear here after a report run is persisted."
+          nextStep="Run a report with --save-run to populate this section."
+          commandHint="poetry run finwall --database finwall.db report --save-run"
+        />
       ) : (
         <dl className="report-list">
           <div>

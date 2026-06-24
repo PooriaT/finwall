@@ -1,3 +1,5 @@
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "../api/queryClient";
 import { ActiveOrdersTable } from "../features/dashboard/ActiveOrdersTable";
 import { AuditPreview } from "../features/dashboard/AuditPreview";
 import { CashTable } from "../features/dashboard/CashTable";
@@ -8,9 +10,11 @@ import { HoldingsTable } from "../features/dashboard/HoldingsTable";
 import { LatestReportCard } from "../features/dashboard/LatestReportCard";
 import { LiveDataStatus } from "../features/dashboard/LiveDataStatus";
 import { LoadingState } from "../features/dashboard/LoadingState";
+import { OnboardingChecklist } from "../features/dashboard/OnboardingChecklist";
 import { useDashboardData } from "../features/dashboard/useDashboardData";
 import { WatchlistTable } from "../features/dashboard/WatchlistTable";
 import { DashboardCharts } from "../features/charts/DashboardCharts";
+import { SetupHealthPanel } from "../features/setup/SetupHealthPanel";
 
 type DashboardPageProps = {
   authError?: string | null;
@@ -18,8 +22,18 @@ type DashboardPageProps = {
 };
 
 export default function DashboardPage({ authError, onLogout }: DashboardPageProps) {
+  const queryClient = useQueryClient();
   const { portfolioQuery, analysisChartsQuery, auditPreviewQuery } =
     useDashboardData();
+  const refreshDashboardData = () => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.portfolio });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.analysisCharts });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.auditPreview(5) });
+  };
+  const isRefreshingDashboard =
+    portfolioQuery.isFetching ||
+    analysisChartsQuery.isFetching ||
+    auditPreviewQuery.isFetching;
 
   if (portfolioQuery.isPending) {
     return (
@@ -69,6 +83,13 @@ export default function DashboardPage({ authError, onLogout }: DashboardPageProp
 
       {isEmptyPortfolio ? <EmptyState /> : null}
 
+      <OnboardingChecklist
+        portfolio={portfolio}
+        analysis={analysisChartsQuery.data}
+      />
+
+      <SetupHealthPanel />
+
       <DashboardSummary
         portfolio={portfolio}
         analysis={analysisChartsQuery.data}
@@ -81,13 +102,28 @@ export default function DashboardPage({ authError, onLogout }: DashboardPageProp
             message="Loading backend chart metadata and live-data status."
           />
         ) : analysisChartsQuery.isError ? (
-          <ErrorState
-            title="Analysis status could not load"
-            message="Portfolio data is visible, but chart metadata and live-data status are unavailable."
-          />
+          <div className="state-card error-state">
+            <h2>Analysis status could not load</h2>
+            <p>
+              Portfolio data is visible, but chart metadata and live-data status
+              are unavailable.
+            </p>
+            <button
+              className="retry-button"
+              type="button"
+              onClick={refreshDashboardData}
+              disabled={isRefreshingDashboard}
+            >
+              {isRefreshingDashboard ? "Refreshing..." : "Refresh dashboard data"}
+            </button>
+          </div>
         ) : (
           <>
-            <LiveDataStatus analysis={analysisChartsQuery.data} />
+            <LiveDataStatus
+              analysis={analysisChartsQuery.data}
+              isRetrying={isRefreshingDashboard}
+              onRetry={refreshDashboardData}
+            />
             <LatestReportCard analysis={analysisChartsQuery.data} />
           </>
         )}
@@ -99,10 +135,21 @@ export default function DashboardPage({ authError, onLogout }: DashboardPageProp
           message="Loading chart-ready portfolio analysis series."
         />
       ) : analysisChartsQuery.isError ? (
-        <ErrorState
-          title="Dashboard charts could not load"
-          message="Portfolio tables are visible, but chart-ready analysis data is unavailable."
-        />
+        <div className="state-card error-state">
+          <h2>Dashboard charts could not load</h2>
+          <p>
+            Portfolio tables are visible, but chart-ready analysis data is
+            unavailable.
+          </p>
+          <button
+            className="retry-button"
+            type="button"
+            onClick={refreshDashboardData}
+            disabled={isRefreshingDashboard}
+          >
+            {isRefreshingDashboard ? "Refreshing..." : "Refresh dashboard data"}
+          </button>
+        </div>
       ) : (
         <DashboardCharts analysis={analysisChartsQuery.data} />
       )}

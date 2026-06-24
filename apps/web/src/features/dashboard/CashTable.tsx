@@ -1,4 +1,5 @@
 import type { Portfolio } from "../../api/types";
+import { ActionableEmptyState } from "./ActionableEmptyState";
 import { formatNumber } from "./format";
 
 type CashTableProps = {
@@ -15,7 +16,12 @@ export function CashTable({ cashBalances }: CashTableProps) {
         </div>
       </div>
       {cashBalances.length === 0 ? (
-        <p className="table-empty">No cash balances available.</p>
+        <ActionableEmptyState
+          title="No cash balances yet"
+          message="Add cash so Finwall can distinguish available cash from invested value."
+          nextStep="Record at least one currency balance before using cash-vs-invested summaries."
+          commandHint="poetry run finwall --database finwall.db add-cash USD 1000"
+        />
       ) : (
         <div className="table-wrap">
           <table>

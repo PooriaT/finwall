@@ -212,6 +212,34 @@ class LiveDataStatusListResponse(BaseModel):
     statuses: list[LiveDataStatusResponse]
 
 
+class SetupHealthBackendResponse(BaseModel):
+    status: str
+
+
+class SetupHealthSessionResponse(BaseModel):
+    authenticated: bool
+
+
+class SetupHealthDatabaseResponse(BaseModel):
+    status: str
+    store: str
+
+
+class SetupHealthDiagnosticsResponse(BaseModel):
+    available: bool
+    summary: str
+    next_step: str | None = None
+
+
+class SetupHealthResponse(BaseModel):
+    backend: SetupHealthBackendResponse
+    session: SetupHealthSessionResponse
+    database: SetupHealthDatabaseResponse
+    live_data: LiveDataStatusListResponse
+    diagnostics: SetupHealthDiagnosticsResponse
+    warnings: list[str] = Field(default_factory=list)
+
+
 class PortfolioAnalysisChartsResponse(BaseModel):
     portfolio_name: str
     valuation_status: str
@@ -266,6 +294,14 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
 
     def _delete_web_session_cookie(response: Response) -> None:
         response.delete_cookie(WEB_SESSION_COOKIE_NAME, path="/", samesite="lax")
+
+    def _safe_store_label() -> str:
+        normalized = app.state.settings.storage_backend.strip().lower()
+        if normalized in {"sqlite", "sqlite3"}:
+            return "sqlite"
+        if normalized in {"postgres", "postgresql"}:
+            return "postgres"
+        return "unknown"
 
     def auth(request: Request, authorization: str | None = Header(default=None)) -> str:
         token = request.app.state.settings.api_token
@@ -412,30 +448,7 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
     def health() -> dict[str, str]:
         return {"status": "ok"}
 
-    @app.post("/api/v1/auth/login", response_model=AuthSessionResponse)
-    def auth_login(payload: AuthLoginRequest):
-        token = app.state.settings.api_token
-        if not token:
-            raise HTTPException(401, detail="authentication is not configured")
-        submitted_token = payload.token.strip()
-        if not _token_is_valid(submitted_token):
-            raise HTTPException(401, detail="invalid authentication credentials")
-        response = JSONResponse({"authenticated": True})
-        _set_web_session_cookie(response, submitted_token)
-        return response
-
-    @app.post("/api/v1/auth/logout", response_model=AuthSessionResponse)
-    def auth_logout():
-        response = JSONResponse({"authenticated": False})
-        _delete_web_session_cookie(response)
-        return response
-
-    @app.get("/api/v1/auth/session", response_model=AuthSessionResponse)
-    def auth_session(_: str = Depends(web_session_auth)):
-        return {"authenticated": True}
-
-    @app.get("/api/v1/live-data/status", response_model=LiveDataStatusListResponse)
-    def live_data_status(_: str = Depends(read_auth)):
+    def _configured_live_data_statuses() -> list[dict[str, object]]:
         statuses = (
             configured_status(
                 domain=LiveDataDomain.MARKET_PRICES,
@@ -461,7 +474,58 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
                 metadata={"configured_only": True},
             ),
         )
-        return {"statuses": [status.as_dict() for status in statuses]}
+        return [status.as_dict() for status in statuses]
+
+    def _database_health() -> tuple[dict[str, str], list[str]]:
+        try:
+            app.state.store.get_portfolio(DEFAULT_PORTFOLIO)
+            return {"status": "ok", "store": _safe_store_label()}, []
+        except Exception:
+            return {"status": "unavailable", "store": _safe_store_label()}, [
+                "Database/store health check failed; check server logs for details."
+            ]
+
+    @app.post("/api/v1/auth/login", response_model=AuthSessionResponse)
+    def auth_login(payload: AuthLoginRequest):
+        token = app.state.settings.api_token
+        if not token:
+            raise HTTPException(401, detail="authentication is not configured")
+        submitted_token = payload.token.strip()
+        if not _token_is_valid(submitted_token):
+            raise HTTPException(401, detail="invalid authentication credentials")
+        response = JSONResponse({"authenticated": True})
+        _set_web_session_cookie(response, submitted_token)
+        return response
+
+    @app.post("/api/v1/auth/logout", response_model=AuthSessionResponse)
+    def auth_logout():
+        response = JSONResponse({"authenticated": False})
+        _delete_web_session_cookie(response)
+        return response
+
+    @app.get("/api/v1/auth/session", response_model=AuthSessionResponse)
+    def auth_session(_: str = Depends(web_session_auth)):
+        return {"authenticated": True}
+
+    @app.get("/api/v1/live-data/status", response_model=LiveDataStatusListResponse)
+    def live_data_status(_: str = Depends(read_auth)):
+        return {"statuses": _configured_live_data_statuses()}
+
+    @app.get("/api/v1/setup/health", response_model=SetupHealthResponse)
+    def setup_health(_: str = Depends(read_auth)):
+        database, warnings = _database_health()
+        return {
+            "backend": {"status": "ok"},
+            "session": {"authenticated": True},
+            "database": database,
+            "live_data": {"statuses": _configured_live_data_statuses()},
+            "diagnostics": {
+                "available": False,
+                "summary": "No saved diagnostic result is available yet.",
+                "next_step": "Run `poetry run finwall market-data-check --json` from the CLI.",
+            },
+            "warnings": warnings,
+        }
 
     @app.get("/api/v1/portfolio", response_model=PortfolioResponse)
     def read_portfolio(_: str = Depends(read_auth)):
