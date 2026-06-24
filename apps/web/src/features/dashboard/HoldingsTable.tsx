@@ -1,4 +1,5 @@
 import type { Portfolio } from "../../api/types";
+import { ActionableEmptyState } from "./ActionableEmptyState";
 import { formatNumber, formatText } from "./format";
 
 type HoldingsTableProps = {
@@ -15,7 +16,12 @@ export function HoldingsTable({ holdings }: HoldingsTableProps) {
         </div>
       </div>
       {holdings.length === 0 ? (
-        <p className="table-empty">No holdings available.</p>
+        <ActionableEmptyState
+          title="No holdings yet"
+          message="Add a holding through the CLI so Finwall can calculate allocation, valuation, and risk context."
+          nextStep="Start with one small example holding, then check live-data status before relying on valuation views."
+          commandHint="poetry run finwall --database finwall.db add-holding AAPL 1 190 --sector Technology"
+        />
       ) : (
         <div className="table-wrap">
           <table>

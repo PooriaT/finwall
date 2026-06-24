@@ -1,4 +1,5 @@
 import type { Portfolio } from "../../api/types";
+import { ActionableEmptyState } from "./ActionableEmptyState";
 import { formatText } from "./format";
 
 type WatchlistTableProps = {
@@ -15,7 +16,11 @@ export function WatchlistTable({ watchlist }: WatchlistTableProps) {
         </div>
       </div>
       {watchlist.length === 0 ? (
-        <p className="table-empty">No watchlist items available.</p>
+        <ActionableEmptyState
+          title="No watchlist items yet"
+          message="Add tickers you want to monitor without adding them as holdings."
+          nextStep="Use watchlist entries for ideas you are tracking but have not added to the portfolio."
+        />
       ) : (
         <div className="table-wrap">
           <table>

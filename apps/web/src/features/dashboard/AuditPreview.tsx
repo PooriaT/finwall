@@ -1,4 +1,5 @@
 import type { PortfolioAudit } from "../../api/types";
+import { ActionableEmptyState } from "./ActionableEmptyState";
 import { formatDateTime, formatLabel, formatText } from "./format";
 
 type AuditPreviewProps = {
@@ -15,7 +16,11 @@ export function AuditPreview({ audit }: AuditPreviewProps) {
         </div>
       </div>
       {audit.events.length === 0 ? (
-        <p className="table-empty">No audit events available.</p>
+        <ActionableEmptyState
+          title="No audit events yet"
+          message="Portfolio changes made through API paths will appear here."
+          nextStep="After API-backed portfolio updates exist, use this preview to confirm recent change history."
+        />
       ) : (
         <div className="table-wrap">
           <table>
