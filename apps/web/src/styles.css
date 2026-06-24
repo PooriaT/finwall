@@ -219,6 +219,7 @@ a {
 
 .dashboard-hero,
 .dashboard-section,
+.onboarding-card,
 .state-card {
   border: 1px solid #d3ddd8;
   border-radius: 8px;
@@ -248,11 +249,13 @@ a {
 }
 
 .dashboard-section,
+.onboarding-card,
 .state-card {
   padding: clamp(1rem, 2.5vw, 1.5rem);
 }
 
 .dashboard-section h2,
+.onboarding-card h2,
 .state-card h2 {
   margin: 0;
   color: #1e3148;
@@ -273,6 +276,90 @@ a {
 .empty-state {
   border-color: #c9d8e8;
   background: #f5f9fd;
+}
+
+.onboarding-card {
+  border-color: #bdd3ca;
+}
+
+.onboarding-progress {
+  flex: 0 0 auto;
+  margin: 0;
+  border: 1px solid #b7c5bf;
+  border-radius: 999px;
+  padding: 0.25rem 0.65rem;
+  color: #1d5845;
+  background: #edf8f3;
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.onboarding-success {
+  margin: 0.85rem 0 0;
+  border: 1px solid #8eb9a8;
+  border-radius: 8px;
+  padding: 0.75rem 0.85rem;
+  color: #1d5845;
+  background: #edf8f3;
+  font-weight: 700;
+}
+
+.onboarding-list {
+  display: grid;
+  gap: 0.75rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.onboarding-item {
+  display: grid;
+  gap: 0.55rem;
+  border: 1px solid #e0d4b2;
+  border-radius: 8px;
+  padding: 0.85rem;
+  background: #fffaf0;
+}
+
+.onboarding-item-complete {
+  border-color: #c7d7d0;
+  background: #f7faf8;
+}
+
+.onboarding-item-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.onboarding-item-header strong {
+  color: #142236;
+}
+
+.onboarding-item-header span {
+  flex: 0 0 auto;
+  color: #263449;
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.onboarding-item p {
+  margin: 0;
+  color: #4b5b6b;
+}
+
+.onboarding-command {
+  display: block;
+  overflow-x: auto;
+  border: 1px solid #d8e2dd;
+  border-radius: 8px;
+  padding: 0.55rem 0.65rem;
+  color: #142236;
+  background: #ffffff;
+  font-size: 0.88rem;
+  white-space: nowrap;
 }
 
 .section-heading {
@@ -510,9 +597,14 @@ tbody th {
   }
 
   .dashboard-hero,
+  .onboarding-item-header,
   .panel-heading {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .onboarding-progress {
+    align-self: flex-start;
   }
 
   .summary-grid,

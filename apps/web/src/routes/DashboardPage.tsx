@@ -8,6 +8,7 @@ import { HoldingsTable } from "../features/dashboard/HoldingsTable";
 import { LatestReportCard } from "../features/dashboard/LatestReportCard";
 import { LiveDataStatus } from "../features/dashboard/LiveDataStatus";
 import { LoadingState } from "../features/dashboard/LoadingState";
+import { OnboardingChecklist } from "../features/dashboard/OnboardingChecklist";
 import { useDashboardData } from "../features/dashboard/useDashboardData";
 import { WatchlistTable } from "../features/dashboard/WatchlistTable";
 import { DashboardCharts } from "../features/charts/DashboardCharts";
@@ -68,6 +69,11 @@ export default function DashboardPage({ authError, onLogout }: DashboardPageProp
       ) : null}
 
       {isEmptyPortfolio ? <EmptyState /> : null}
+
+      <OnboardingChecklist
+        portfolio={portfolio}
+        analysis={analysisChartsQuery.data}
+      />
 
       <DashboardSummary
         portfolio={portfolio}
