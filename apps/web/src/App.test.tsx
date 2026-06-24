@@ -776,6 +776,32 @@ describe("App", () => {
     ).toBeInTheDocument();
   });
 
+  it("maps missing legacy price completeness fallback to unavailable", async () => {
+    const analysis: Record<string, unknown> = structuredClone(analysisCharts);
+    delete analysis.live_data_status;
+    analysis.price_completeness_status = "missing";
+    mockFetch({ analysis });
+
+    renderAt("/dashboard");
+
+    const liveDataSection = await screen.findByRole("region", {
+      name: "Market data readiness",
+    });
+    expect(screen.getByLabelText("Onboarding progress")).toHaveTextContent(
+      "5 of 6 complete",
+    );
+    expect(getChecklistItem("Verify live market data")).toHaveTextContent(
+      "Market price availability is Unavailable.",
+    );
+    expect(within(liveDataSection).getByText("Unavailable")).toBeInTheDocument();
+    expect(
+      within(liveDataSection).getByText("Legacy chart metadata: Missing"),
+    ).toBeInTheDocument();
+    expect(
+      within(liveDataSection).getByRole("button", { name: "Retry status check" }),
+    ).toBeInTheDocument();
+  });
+
   it("renders live-data provider details, fallback, warnings, and safe errors", async () => {
     const analysis = structuredClone(analysisCharts);
     analysis.data_warnings = ["AAPL price is delayed."];

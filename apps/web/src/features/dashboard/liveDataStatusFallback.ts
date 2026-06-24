@@ -55,7 +55,11 @@ function legacyAvailability(priceCompletenessStatus: string) {
   if (normalized === "partial") {
     return "partial";
   }
-  if (normalized === "unavailable" || normalized === "missing_prices") {
+  if (
+    normalized === "unavailable" ||
+    normalized === "missing" ||
+    normalized === "missing_prices"
+  ) {
     return "unavailable";
   }
   return normalizeAvailability(normalized);
