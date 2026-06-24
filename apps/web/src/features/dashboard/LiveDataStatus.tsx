@@ -1,13 +1,16 @@
 import type { AnalysisCharts } from "../../api/types";
 import { formatDateTime, formatLabel } from "./format";
+import {
+  legacyPriceCompletenessStatus,
+  normalizeAvailability,
+  type LiveDataStatusItem,
+} from "./liveDataStatusFallback";
 
 type LiveDataStatusProps = {
   analysis: AnalysisCharts;
   isRetrying?: boolean;
   onRetry?: () => void;
 };
-
-type LiveDataStatusItem = NonNullable<AnalysisCharts["live_data_status"]>[number];
 
 const STATUS_DESCRIPTIONS: Record<string, string> = {
   live: "Live: data was returned for this dashboard surface.",
@@ -152,50 +155,6 @@ function StatusCard({ status }: { status: LiveDataStatusItem }) {
       </dl>
     </div>
   );
-}
-
-function normalizeAvailability(availability: string | null | undefined) {
-  const normalized = availability?.trim().toLowerCase();
-  if (
-    normalized === "live" ||
-    normalized === "partial" ||
-    normalized === "unavailable" ||
-    normalized === "static" ||
-    normalized === "manual" ||
-    normalized === "unknown"
-  ) {
-    return normalized;
-  }
-  return "unknown";
-}
-
-function legacyPriceCompletenessStatus(priceCompletenessStatus: string): LiveDataStatusItem {
-  return {
-    availability: legacyAvailability(priceCompletenessStatus),
-    domain: "market_prices",
-    fallback_provider: null,
-    fallback_used: false,
-    last_attempted_at: "",
-    metadata: {},
-    provider: "Not configured",
-    source: `Legacy chart metadata: ${formatLabel(priceCompletenessStatus)}`,
-    safe_error_messages: [],
-    warnings: [],
-  };
-}
-
-function legacyAvailability(priceCompletenessStatus: string) {
-  const normalized = priceCompletenessStatus.trim().toLowerCase();
-  if (normalized === "complete") {
-    return "live";
-  }
-  if (normalized === "partial") {
-    return "partial";
-  }
-  if (normalized === "unavailable" || normalized === "missing_prices") {
-    return "unavailable";
-  }
-  return normalizeAvailability(normalized);
 }
 
 function configuredValue(value: string | null | undefined) {

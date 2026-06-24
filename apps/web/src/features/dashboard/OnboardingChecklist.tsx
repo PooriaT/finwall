@@ -1,5 +1,9 @@
 import type { AnalysisCharts, Portfolio } from "../../api/types";
 import { formatLabel } from "./format";
+import {
+  marketPriceStatusFromAnalysis,
+  normalizeAvailability,
+} from "./liveDataStatusFallback";
 
 type OnboardingChecklistProps = {
   portfolio: Portfolio;
@@ -143,10 +147,8 @@ function buildLiveMarketDataItem(
   hasHoldings: boolean,
   analysis?: AnalysisCharts,
 ): ChecklistItem {
-  const marketStatus = analysis?.live_data_status?.find(
-    (status) => status.domain.toLowerCase() === "market_prices",
-  );
-  const availability = marketStatus?.availability?.toLowerCase() ?? "unknown";
+  const marketStatus = marketPriceStatusFromAnalysis(analysis);
+  const availability = normalizeAvailability(marketStatus?.availability);
   const complete = LIVE_MARKET_AVAILABILITIES.has(availability);
 
   if (!hasHoldings) {

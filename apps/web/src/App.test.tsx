@@ -735,6 +735,12 @@ describe("App", () => {
     const liveDataSection = await screen.findByRole("region", {
       name: "Market data readiness",
     });
+    expect(screen.getByLabelText("Onboarding progress")).toHaveTextContent(
+      "6 of 6 complete",
+    );
+    expect(getChecklistItem("Verify live market data")).toHaveTextContent(
+      "Market prices are Live for dashboard analysis.",
+    );
     expect(within(liveDataSection).getByText("Live")).toBeInTheDocument();
     expect(
       within(liveDataSection).getByText("Legacy chart metadata: Complete"),
@@ -755,6 +761,12 @@ describe("App", () => {
     const liveDataSection = await screen.findByRole("region", {
       name: "Market data readiness",
     });
+    expect(screen.getByLabelText("Onboarding progress")).toHaveTextContent(
+      "6 of 6 complete",
+    );
+    expect(getChecklistItem("Verify live market data")).toHaveTextContent(
+      "Market prices are Partial for dashboard analysis.",
+    );
     expect(within(liveDataSection).getByText("Partial")).toBeInTheDocument();
     expect(
       within(liveDataSection).getByText("Legacy chart metadata: Partial"),
